@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Desasignación de Proyecto</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f6f8;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background-color: #004481;
+            color: #ffffff;
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 30px 20px;
+            line-height: 1.6;
+        }
+        .content h2 {
+            color: #004481;
+            margin-top: 0;
+        }
+        .project-details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #ff4444; /* Red for removal/alert */
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .footer {
+            background-color: #f4f6f8;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HormiWatch</h1>
+        </div>
+        <div class="content">
+            <h2>¡Hola, {{name}}!</h2>
+            <p>Se te ha desasignado del siguiente proyecto en <strong>HormiWatch</strong>.</p>
+            
+            <div class="project-details">
+                <p><strong>Proyecto:</strong> {{projectName}}</p>
+            </div>
+
+            <p>Ya no tienes acceso a este proyecto ni a sus tareas asociadas.</p>
+            
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{url}}" style="background-color: #004481; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; font-weight: bold;">Ir a la Plataforma</a>
+            </div>
+
+            <p>Si crees que esto es un error, por favor contacta con tu supervisor.</p>
+        </div>
+        <div class="footer">
+            <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+        </div>
+    </div>
+</body>
+</html>
