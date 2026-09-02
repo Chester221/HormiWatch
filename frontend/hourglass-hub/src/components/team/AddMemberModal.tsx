@@ -9,7 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
+import { usersApi } from '@/lib/api';
 import { 
   UserPlus, Mail, Shield, Loader2, UserCheck,
   UserCog, Search, Users, X, Crown, Briefcase, Wrench
@@ -59,7 +59,7 @@ export function AddMemberModal({ open, onOpenChange, onSuccess }: AddMemberModal
 
   const loadUsers = async () => {
     setIsLoadingUsers(true);
-    const { data, error } = await supabase.from('profiles').select('id, email, full_name, role, avatar_url').order('full_name', { ascending: true });
+    const data = await usersApi.getAll()
     if (error) { toast.error('Error al cargar usuarios'); }
     else { setUserList(data || []); setShowUserList(true); }
     setIsLoadingUsers(false);
@@ -79,7 +79,7 @@ export function AddMemberModal({ open, onOpenChange, onSuccess }: AddMemberModal
     if (isManager && role === 'Admin') { toast.error('No tienes permisos para asignar Administrador'); setIsLoading(false); return; }
     if (isManager && foundUser.role === 'Admin') { toast.error('No puedes modificar un Administrador'); setIsLoading(false); return; }
 
-    const { error: updateError } = await supabase.from('profiles').update({ role: role }).eq('id', foundUser.id);
+    await usersApi.update(foundUser.id, { role })
     if (updateError) { toast.error(`Error: ${updateError.message}`); setIsLoading(false); return; }
 
     const roleLabel = roleOptions.find(opt => opt.value === role)?.label || role;

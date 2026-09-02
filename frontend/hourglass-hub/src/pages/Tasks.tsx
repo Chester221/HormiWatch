@@ -467,7 +467,7 @@ const Tasks = () => {
     nombreZip?: string
   ): Promise<{ blob: Blob; nombre: string } | void> => {
     const ExcelJS = await import('exceljs');
-    const response = await fetch('https://ldjuetrvmvmrudtzypyr.supabase.co/storage/v1/object/public/logos/Plantilla.xlsx');
+    const response = await fetch('https://hormiwatch-production.up.railway.app/api/storage/Plantilla.xlsx');
     const arrayBuffer = await response.arrayBuffer();
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(arrayBuffer);

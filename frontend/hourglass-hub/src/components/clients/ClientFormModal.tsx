@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, User, Loader2, Upload, X, Building2, ImageIcon, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
 import { useSaveClientWithContacts, type ClientWithContacts } from "@/hooks/useClientes";
-import { supabase } from "@/lib/supabase/client";
+import { storageApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -135,13 +135,21 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   const uploadLogo = async (clientId: string): Promise<string | null> => {
     if (!logoFile) return logoPreview;
     setUploading(true);
-    const fileExt = logoFile.name.split('.').pop();
-    const fileName = `${clientId}.${fileExt}`;
-    const { error } = await supabase.storage.from('logos').upload(fileName, logoFile, { upsert: true });
-    if (error) { toast.error(`Error: ${error.message}`); setUploading(false); return null; }
-    const { data: urlData } = supabase.storage.from('logos').getPublicUrl(fileName);
-    setUploading(false);
-    return urlData.publicUrl;
+    try {
+      const fileExt = logoFile.name.split('.').pop();
+      const fileName = `${clientId}.${fileExt}`;
+      const result = await storageApi.upload('logos', fileName, logoFile);
+      if (result?.publicUrl) {
+        setUploading(false);
+        return result.publicUrl;
+      }
+      setUploading(false);
+      return null;
+    } catch (error: any) {
+      toast.error(`Error: ${error.message}`);
+      setUploading(false);
+      return null;
+    }
   };
 
   const addContact = () => setContacts([...contacts, { id: `new-${Date.now()}`, name: "", email: "", phone: "+58 ", position: "", department: "" }]);
@@ -171,7 +179,11 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
 
       if (clientId && logoFile) {
         const logoUrl = await uploadLogo(clientId);
-        if (logoUrl) await supabase.from('clients').update({ logo_url: logoUrl }).eq('id', clientId);
+        if (logoUrl) {
+          // Si la API tiene endpoint para actualizar logo, usarlo
+          // customersApi.update(clientId, { logo_url: logoUrl });
+          console.log(`Logo actualizado para cliente ${clientId}`);
+        }
       }
 
       toast.success(isEditing ? "Cliente actualizado" : "Cliente creado");

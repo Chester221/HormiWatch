@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase/client'
+import { usersApi } from '@/lib/api'
 import type { UserRole } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
@@ -24,36 +24,26 @@ export const useTeamMembers = (options?: {
 
     const fetchMembers = async (): Promise<TeamMember[]> => {
         try {
-            let query = supabase
-                .from('profiles')
-                .select('*')
-                .order('full_name', { ascending: true })
+            let members = await usersApi.getAll();
 
             if (role && role !== 'all') {
-                query = query.eq('role', role)
+                members = members.filter((m: any) => m.role === role);
             }
 
-            const { data, error } = await query
-
-            if (error) {
-                if (error.code === '42P01' || error.message.includes('does not exist')) {
-                    console.warn('La tabla profiles no existe en Supabase.')
-                    return []
-                }
-                console.error('Error fetching team members:', error)
-                throw new Error(error.message)
-            }
-
-            let members = (data || []) as TeamMember[]
             if (searchQuery) {
                 const search = searchQuery.toLowerCase()
-                members = members.filter(m =>
+                members = members.filter((m: any) =>
                     (m.full_name && m.full_name.toLowerCase().includes(search)) ||
                     (m.email && m.email.toLowerCase().includes(search))
                 )
             }
 
-            return members
+            // Ordenar por full_name
+            members.sort((a: any, b: any) => {
+                return (a.full_name || '').localeCompare(b.full_name || '');
+            });
+
+            return members as TeamMember[];
         } catch (err) {
             console.error('Error en useTeamMembers:', err)
             return []
@@ -75,22 +65,12 @@ export const useUpdateTeamMember = () => {
         mutationFn: async ({ id, data }: { id: string; data: Partial<TeamMember> }) => {
             console.log('Actualizando miembro:', id, data)
             
-            const { data: updated, error } = await supabase
-                .from('profiles')
-                .update({
-                    ...data,
-                    updated_at: new Date().toISOString(),
-                })
-                .eq('id', id)
-                .select()
-                .single()
-
-            if (error) {
-                console.error('Error al actualizar perfil:', error)
-                throw error
-            }
+            const updated = await usersApi.update(id, {
+                ...data,
+                updated_at: new Date().toISOString(),
+            });
             
-            return updated
+            return updated;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['team_members'] })
@@ -110,18 +90,8 @@ export const useDeleteTeamMember = () => {
     return useMutation({
         mutationFn: async (id: string) => {
             console.log('Eliminando miembro:', id)
-            
-            const { error } = await supabase
-                .from('profiles')
-                .delete()
-                .eq('id', id)
-
-            if (error) {
-                console.error('Error al eliminar perfil:', error)
-                throw error
-            }
-            
-            return id
+            await usersApi.delete(id);
+            return id;
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['team_members'] })

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Wrench, Plus, Check, Eye, EyeOff, Settings, Code, Database, Bug, Headphones, Briefcase, Users, PenTool, Server, Shield } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase/client";
+import { servicesApi } from "@/lib/api";
 
 // Iconos disponibles para categorías
 const SERVICE_ICONS: Record<string, any> = {
@@ -83,15 +83,13 @@ export function CreateServiceModal({ open, onOpenChange, onSuccess }: CreateServ
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from("services")
-        .insert({
-          name: selectedCategory.name,
-          default_hourly_rate: selectedCategory.rate,
-          description: selectedCategory.description,
-        });
-
-      if (error) throw error;
+      await servicesApi.create({
+        name: selectedCategory.name,
+        default_hourly_rate: selectedCategory.rate,
+        description: selectedCategory.description,
+        is_active: true,
+        category_id: selectedCategory.id || selectedCategory.name,
+      });
 
       toast.success(`Servicio "${selectedCategory.name}" creado correctamente`);
       setSelectedCategory(null);
@@ -132,6 +130,9 @@ export function CreateServiceModal({ open, onOpenChange, onSuccess }: CreateServ
     setNewCategory({ name: "", rate: "", description: "", icon: "Code" });
     setShowAddModal(false);
     toast.success("Categoría agregada");
+    
+    // Seleccionar automáticamente la nueva categoría
+    setSelectedCategory(newCat);
   };
 
   const handleToggleCategory = (categoryName: string) => {

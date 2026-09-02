@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase/client'
-import { toast } from 'sonner'
+import { tasksApi } from '@/lib/api'import { toast } from 'sonner'
 import type { Tables, InsertTables } from '@/types/supabase'
 
 export type Task = Tables<'tasks'> & {
@@ -14,39 +13,22 @@ export type CreateTaskData = InsertTables<'tasks'>
 export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
   const fetchTasks = async (): Promise<Task[]> => {
     try {
-      let query = supabase
-        .from('tasks')
-        .select(`
-          *,
-          projects:project_id(name),
-          services:service_id(name),
-          technicians:technician_id(full_name, avatar_url)
-        `)
-        .order('created_at', { ascending: false })
+      let tasks = await tasksApi.getAll();
 
       if (projectId && projectId !== 'all') {
-        query = query.eq('project_id', projectId)
+        tasks = tasks.filter((t: any) => t.project_id === projectId);
       }
 
       if (technicianId) {
-        query = query.eq('technician_id', technicianId)
+        tasks = tasks.filter((t: any) => t.technician_id === technicianId);
       }
 
-      const { data, error } = await query
+      // Ordenar por created_at descendente
+      tasks.sort((a: any, b: any) => {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
 
-      if (error) {
-        console.error('Error fetching tasks:', error)
-        return []
-      }
-
-      const transformedData = (data || []).map((item: any) => ({
-        ...item,
-        projects: item.projects || null,
-        services: item.services || null,
-        technician: item.technicians || null
-      }))
-
-      return transformedData as Task[]
+      return tasks as Task[];
     } catch (err) {
       console.error('Error fetching tasks:', err)
       return []
@@ -64,14 +46,8 @@ export const useCreateTask = () => {
 
   return useMutation({
     mutationFn: async (newTask: any) => {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert([newTask])
-        .select()
-        .single();
-      
-      if (error) throw new Error(error.message);
-      return data;
+      const task = await tasksApi.create(newTask);
+      return task;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -89,16 +65,15 @@ export const useCreateTasks = () => {
   return useMutation({
     mutationFn: async (newTasks: any[]) => {
       if (newTasks.length === 0) throw new Error('No hay tareas para crear');
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert(newTasks)
-        .select();
-      
-      if (error) throw new Error(error.message);
-      return data;
+      // Crear tareas una por una o en batch si la API lo soporta
+      const results = await Promise.all(
+        newTasks.map(task => tasksApi.create(task))
+      );
+      return results;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      toast.success('Tareas creadas correctamente');
     },
     onError: (error: Error) => {
       toast.error(`Error: ${error.message}`);
@@ -111,15 +86,8 @@ export const useUpdateTask = () => {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: number | string; data: Partial<CreateTaskData> }) => {
-      const { data: updated, error } = await supabase
-        .from('tasks')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single()
-
-      if (error) throw new Error(error.message)
-      return updated
+      const updated = await tasksApi.update(id.toString(), data);
+      return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -136,13 +104,7 @@ export const useDeleteTask = () => {
 
   return useMutation({
     mutationFn: async (taskId: string) => {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
-      
-      if (error) throw error;
-      
+      await tasksApi.delete(taskId);
       return true;
     },
     onSuccess: () => {

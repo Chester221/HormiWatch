@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, Mail, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/lib/supabase/client";
+import { authApi, usersApi } from "@/lib/api";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -48,7 +48,7 @@ const Auth = () => {
 
       if (profile.is_active === false) {
         toast.error("Tu cuenta está desactivada. Contacta al administrador.");
-        supabase.auth.signOut();
+        authApi.logout();
         return;
       }
 
@@ -109,22 +109,22 @@ const Auth = () => {
       }
 
       if (data?.user) {
-        // 2. Verificar perfil en Supabase
-        const { data: profileData, error: profileError } = await supabase
-          .from('profiles')
-          .select('is_active, role')
-          .eq('id', data.user.id)
-          .single();
+        const profileData = await usersApi.getById(data.user.id);
+        if (!profileData) {
+          toast.error("Error al verificar tu cuenta");
+          await authApi.logout();
+          return;
+        }
 
         if (profileError) {
           console.error("Error al verificar perfil:", profileError);
           toast.error("Error al verificar tu cuenta");
-          await supabase.auth.signOut();
+          await authApi.logout();
           return;
         }
 
         if (profileData?.is_active === false) {
-          await supabase.auth.signOut();
+          await authApi.logout();
           toast.error("Tu cuenta está desactivada. Contacta al administrador.");
           return;
         }
@@ -165,7 +165,7 @@ const Auth = () => {
         if (!role) {
           console.error("❌ El usuario no tiene rol asignado");
           toast.error("Error: No tienes un rol asignado");
-          await supabase.auth.signOut();
+          await authApi.logout();
           return;
         }
 

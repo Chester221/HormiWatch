@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, UserPlus, Mail, Shield, Phone, User, Key, CreditCard, Settings2, Briefcase, Wrench, CheckCircle, Camera } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase/client";
+import { usersApi, authApi } from "@/lib/api";
 import { motion } from "framer-motion";
 
 const HORMI_BLUE = '#0DA2E7';
@@ -138,7 +138,6 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validaciones
     const newErrors = { fullName: "", email: "", password: "" };
     let hasError = false;
     
@@ -164,46 +163,19 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
     setIsSubmitting(true);
     
     try {
-      // 🔥 OBTENER TOKEN DEL BACKEND (desde localStorage)
-      const token = localStorage.getItem('auth_token');
-
-      if (!token) {
-        toast.error('No tienes sesión activa. Inicia sesión de nuevo.');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // 🔥 URL CORRECTA (siempre con /api/v1)
-      const apiUrl = 'https://hormiwatch2-main-production.up.railway.app/api/v1';
-      
-      const response = await fetch(`${apiUrl}/users`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: email,
-          password: password,
-          full_name: fullName,
-          role: role,
-          phone: phone || null,
-          cedula: cedula || null,
-          avatar_url: null,
-          is_active: true
-        })
+      // Usar authApi para crear usuario
+      await authApi.signUp(email, password, {
+        full_name: fullName,
+        role: role,
+        phone: phone || null,
+        cedula: cedula || null,
+        is_active: true
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al crear usuario');
-      }
-
-      // ✅ ÉXITO - Sin redirección, solo cerrar modal
       toast.success(`¡${fullName} creado exitosamente!`);
       resetForm();
-      onSuccess?.(); // Actualizar lista de usuarios
-      onOpenChange(false); // Cerrar modal
+      onSuccess?.();
+      onOpenChange(false);
       
     } catch (error: any) {
       console.error('Error en handleSubmit:', error);

@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase/client";
+import { usersApi } from "@/lib/api";
 import { 
   Users, Shield, Loader2, UserCog, Search, X, Check, EyeOff, 
   Crown, Briefcase, Wrench, AlertTriangle
@@ -71,19 +71,16 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
   const loadUsers = async () => {
     setIsLoading(true);
     try {
-      let query = supabase
-        .from('profiles')
-        .select('id, email, full_name, role, avatar_url, is_active')
-        .order('full_name', { ascending: true });
-
+      let data = await usersApi.getAll();
+      
       // 🔥 Si NO es Admin, excluir Admins de la lista
       if (!isAdmin) {
-        query = query.neq('role', 'Admin');
+        data = data.filter((u: any) => u.role !== 'Admin');
       }
-
-      const { data, error } = await query;
       
-      if (error) throw error;
+      // Ordenar por full_name
+      data.sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || ''));
+      
       setUsers(data || []);
       setFilteredUsers(data || []);
       setShowUserList(true);
@@ -134,13 +131,11 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
       return; 
     }
     
-    // 🔥 Admin o Manager pueden cambiar roles
     if (!canManageRoles) { 
       toast.error('No tienes permisos para cambiar roles'); 
       return; 
     }
     
-    // 🔥 Si es Manager, no puede asignar Admin
     if (currentUserRole === 'Manager' && newRole === 'Admin') {
       toast.error('Un Manager no puede asignar el rol de Administrador');
       return;
@@ -148,12 +143,7 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
     
     setIsLoading(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', selectedUser.id);
-      
-      if (error) throw error;
+      await usersApi.update(selectedUser.id, { role: newRole });
       
       toast.success(`✅ Rol actualizado para ${selectedUser.full_name || selectedUser.email}`);
       setSelectedUser(null);
@@ -168,12 +158,7 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
 
   const handleToggleActive = async (userId: string, currentActive: boolean) => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_active: !currentActive })
-        .eq('id', userId);
-      
-      if (error) throw error;
+      await usersApi.update(userId, { is_active: !currentActive });
       
       toast.success(`Usuario ${!currentActive ? 'activado' : 'desactivado'}`);
       loadUsers();

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
+import { projectsApi, tasksApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 export type Project = {
@@ -24,50 +24,30 @@ export const useProjects = () => {
     queryKey: ['projects'],
     queryFn: async (): Promise<Project[]> => {
       try {
-        // 🔥 OBTENER PROYECTOS CON CLIENTES
-        const { data: projects, error: projectsError } = await supabase
-          .from('projects')
-          .select(`
-            *,
-            clients:client_id (
-              id,
-              name,
-              logo_url
-            )
-          `)
-          .order('created_at', { ascending: false });
-        
-        if (projectsError) {
-          console.error('Error fetching projects:', projectsError);
-          return [];
-        }
+        // Obtener proyectos desde la API
+        const projects = await projectsApi.getAll();
         
         if (!projects || projects.length === 0) {
           return [];
         }
 
-        // 🔥 OBTENER TAREAS POR SEPARADO
-        const projectIds = projects.map(p => p.id);
-        const { data: tasksData, error: tasksError } = await supabase
-          .from('tasks')
-          .select('*')
-          .in('project_id', projectIds);
-
-        // 🔥 AGRUPAR TAREAS POR PROYECTO
+        // Obtener tareas para todos los proyectos
+        const tasks = await tasksApi.getAll();
         const tasksByProject: Record<string, any[]> = {};
-        (tasksData || []).forEach((task: any) => {
-          if (!tasksByProject[task.project_id]) {
+        (tasks || []).forEach((task: any) => {
+          if (task.project_id && !tasksByProject[task.project_id]) {
             tasksByProject[task.project_id] = [];
           }
-          tasksByProject[task.project_id].push(task);
+          if (task.project_id) {
+            tasksByProject[task.project_id].push(task);
+          }
         });
 
-        // 🔥 MAPEAR PROYECTOS CON SUS TAREAS
+        // Mapear proyectos con sus tareas
         return projects.map((project: any) => {
-          const tasks = tasksByProject[project.id] || [];
+          const projectTasks = tasksByProject[project.id] || [];
           
-          // Calcular horas consumidas
-          const totalHours = tasks.reduce((total: number, task: any) => {
+          const totalHours = projectTasks.reduce((total: number, task: any) => {
             if (task.duration_in_minutes) {
               return total + (task.duration_in_minutes / 60);
             }
@@ -85,9 +65,8 @@ export const useProjects = () => {
 
           return {
             ...project,
-            clients: project.clients || null,
             hours_consumed: totalHours,
-            tasks: tasks,
+            tasks: projectTasks,
           };
         });
       } catch (err) {
@@ -111,18 +90,13 @@ export const useCreateProject = () => {
       start_date?: string;
       end_date?: string;
     }) => {
-      const { data, error } = await supabase
-        .from('projects')
-        .insert([{ 
-          ...newProject, 
-          status: newProject.status || 'In Progress',
-          pool_hours: newProject.pool_hours || 0,
-          hourly_rate: newProject.hourly_rate || 0,
-        }])
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      const project = await projectsApi.create({
+        ...newProject,
+        status: newProject.status || 'In Progress',
+        pool_hours: newProject.pool_hours || 0,
+        hourly_rate: newProject.hourly_rate || 0,
+      });
+      return project;
     },
     onSuccess: () => { 
       queryClient.invalidateQueries({ queryKey: ['projects'] }); 
@@ -136,13 +110,7 @@ export const useUpdateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<Project> }) => {
-      const { data: updated, error } = await supabase
-        .from('projects')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
+      const updated = await projectsApi.update(id, data);
       return updated;
     },
     onSuccess: () => {
@@ -158,39 +126,32 @@ export const useDeleteProject = () => {
 
   return useMutation({
     mutationFn: async ({ projectId, userId }: { projectId: string; userId: string }) => {
-      const { data: project, error: projectError } = await supabase
-        .from('projects')
-        .select('status, created_by, name')
-        .eq('id', projectId)
-        .single();
+      // Obtener el proyecto para verificar permisos
+      const project = await projectsApi.getById(projectId);
       
-      if (projectError) throw new Error('Proyecto no encontrado');
+      if (!project) throw new Error('Proyecto no encontrado');
 
       if (project.created_by && project.created_by !== userId) {
         throw new Error('Solo el creador del proyecto puede eliminarlo');
       }
 
-      const { count: totalTasks } = await supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .eq('project_id', projectId);
+      // Obtener tareas del proyecto
+      const tasks = await tasksApi.getAll();
+      const projectTasks = tasks.filter((t: any) => t.project_id === projectId);
 
-      if (totalTasks && totalTasks > 0) {
+      if (projectTasks.length > 0) {
         if (project.status !== 'Completed' && project.status !== 'Cancelled') {
-          throw new Error(`No puedes eliminar "${project.name}" porque tiene ${totalTasks} tarea(s). Solo se pueden eliminar proyectos completados o cancelados.`);
+          throw new Error(`No puedes eliminar "${project.name}" porque tiene ${projectTasks.length} tarea(s). Solo se pueden eliminar proyectos completados o cancelados.`);
         }
       }
 
-      await supabase.from('project_members').delete().eq('project_id', projectId);
-      await supabase.from('tasks').delete().eq('project_id', projectId);
-      const { error } = await supabase.from('projects').delete().eq('id', projectId);
-      if (error) throw new Error('Error al eliminar el proyecto');
+      // Eliminar el proyecto (la API debería manejar las dependencias)
+      await projectsApi.delete(projectId);
 
       return true;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['project_members'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Proyecto eliminado correctamente');
     },

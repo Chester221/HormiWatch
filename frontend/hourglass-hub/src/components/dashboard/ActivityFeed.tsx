@@ -4,8 +4,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useServices } from "@/hooks/useServices";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
-import { supabase } from "@/lib/supabase/client";
-import { 
+import { projectsApi, tasksApi } from "@/lib/api";import { 
   FolderKanban, 
   Clock, 
   Download,
@@ -68,22 +67,49 @@ const ActivityList = ({
   useEffect(() => {
     const fetchProjectEvents = async () => {
       if (!user?.id) return;
-      let query = supabase.from('project_activities').select('*, projects(name)').order('created_at', { ascending: false }).limit(30);
-      if (isTechnician) query = query.eq('user_id', user.id);
-      const { data, error } = await query;
-      if (!error && data) {
-        setProjectEvents(data.map((event: any) => {
-          let actionText = "";
-          switch (event.action_type) {
-            case 'assigned': actionText = "Fuiste asignado al proyecto"; break;
-            case 'removed': actionText = "Fuiste eliminado del proyecto"; break;
-            case 'member_added': actionText = "Nuevo miembro en el proyecto"; break;
-            case 'member_removed': actionText = "Miembro eliminado del proyecto"; break;
-            case 'updated': actionText = "Proyecto actualizado"; break;
-            default: actionText = "Actividad en el proyecto";
-          }
-          return { id: event.id, type: "project_event", action: event.action_type, title: event.projects?.name || "Proyecto", description: actionText, projectName: event.projects?.name || "Proyecto", projectId: event.project_id, user: profile?.full_name || "Usuario", time: event.created_at };
-        }));
+      try {
+        // Obtener proyectos y tareas para generar actividades
+        const projects = await projectsApi.getAll();
+        const tasks = await tasksApi.getAll();
+        
+        // Generar actividades a partir de los datos
+        const events: ProjectEvent[] = [];
+        
+        // Eventos de proyectos (creación)
+        projects.slice(0, 10).forEach((project: any) => {
+          events.push({
+            id: `project-${project.id}`,
+            type: "project_event",
+            action: "updated",
+            title: project.name || "Proyecto",
+            description: "Proyecto creado",
+            projectName: project.name || "Proyecto",
+            projectId: project.id,
+            user: profile?.full_name || "Usuario",
+            time: project.created_at || new Date().toISOString(),
+          });
+        });
+        
+        // Eventos de tareas
+        tasks.slice(0, 20).forEach((task: any) => {
+          events.push({
+            id: `task-${task.id}`,
+            type: "project_event",
+            action: "updated",
+            title: task.description || "Tarea",
+            description: `Tarea ${task.status || 'creada'}`,
+            projectName: task.project_name || "Proyecto",
+            projectId: task.project_id,
+            user: profile?.full_name || "Usuario",
+            time: task.created_at || new Date().toISOString(),
+          });
+        });
+        
+        // Ordenar por tiempo y limitar
+        events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+        setProjectEvents(events.slice(0, 30));
+      } catch (error) {
+        console.error('Error fetching project events:', error);
       }
     };
     fetchProjectEvents();

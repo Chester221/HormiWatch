@@ -3,8 +3,8 @@ import { saveAs } from 'file-saver';
 import { toast } from 'sonner';
 
 // ✅ URL PÚBLICA DE LA PLANTILLA
-const PLANTILLA_URL = 'https://tniprkdojqzpicukqvbe.supabase.co/storage/v1/object/public/logos/plantilla_reporte.xlsx';
-
+// Usar el nuevo storage de Railway
+const PLANTILLA_URL = 'https://hormiwatch2-main-production.up.railway.app/api/v1/storage/templates/plantilla_reporte.xlsx';
 export const useProjectExport = () => {
   
   const exportProjectReport = async (project: any) => {

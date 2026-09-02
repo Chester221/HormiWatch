@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
+import { servicesApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 export interface Service {
@@ -18,22 +18,19 @@ export const useServices = (searchQuery?: string) => {
     queryKey: ['services', searchQuery],
     queryFn: async () => {
       try {
-        let query = supabase
-          .from('services')
-          .select(`*, categories:service_categories(name)`)
-          .eq('is_active', true)
-          .order('name');
-
-        const { data, error } = await query;
-        if (error) return [];
+        let services = await servicesApi.getAll();
         
-        let services = data || [];
+        // Filtrar solo activos
+        services = services.filter((s: any) => s.is_active !== false);
+        
+        // Ordenar por nombre
+        services.sort((a: any, b: any) => a.name.localeCompare(b.name));
+
         if (searchQuery) {
           const search = searchQuery.toLowerCase();
-          services = services.filter(s =>
+          services = services.filter((s: any) =>
             s.name.toLowerCase().includes(search) ||
-            (s.description && s.description.toLowerCase().includes(search)) ||
-            (s.categories?.name && s.categories.name.toLowerCase().includes(search))
+            (s.description && s.description.toLowerCase().includes(search))
           );
         }
         return services;
@@ -50,12 +47,19 @@ export const useServiceCategories = () => {
     queryKey: ['service_categories'],
     queryFn: async () => {
       try {
-        const { data, error } = await supabase
-          .from('service_categories')
-          .select('*')
-          .order('name');
-        if (error) return [];
-        return data || [];
+        // Si la API tiene endpoint para categorías, usarlo
+        // Si no, obtener servicios y extraer categorías únicas
+        const services = await servicesApi.getAll();
+        const categories = services
+          .map((s: any) => s.category)
+          .filter((c: any) => c)
+          .reduce((acc: any[], cat: any) => {
+            if (!acc.find(c => c.id === cat.id)) {
+              acc.push(cat);
+            }
+            return acc;
+          }, []);
+        return categories.sort((a: any, b: any) => a.name.localeCompare(b.name));
       } catch {
         return [];
       }
@@ -68,16 +72,18 @@ export const useCreateService = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (newService: any) => {
-      const { data, error } = await supabase
-        .from('services')
-        .insert([{ ...newService, is_active: true }])
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      const service = await servicesApi.create({
+        ...newService,
+        is_active: true
+      });
+      return service;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      toast.success('Servicio creado correctamente');
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
     },
   });
 };
@@ -87,17 +93,15 @@ export const useUpdateService = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const { data: updated, error } = await supabase
-        .from('services')
-        .update(data)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
+      const updated = await servicesApi.update(id, data);
       return updated;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+      toast.success('Servicio actualizado correctamente');
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
     },
   });
 };
@@ -107,18 +111,7 @@ export const useDeleteService = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('services')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        if (error.message?.includes('foreign key constraint')) {
-          throw new Error('No puedes eliminar este servicio porque tiene tareas asociadas. Elimina o reasigna las tareas primero.');
-        }
-        throw new Error(error.message);
-      }
-      
+      await servicesApi.delete(id);
       return true;
     },
     onSuccess: () => {
@@ -126,7 +119,7 @@ export const useDeleteService = () => {
       toast.success('Servicio eliminado correctamente');
     },
     onError: (error: Error) => {
-      toast.error(error.message);
+      toast.error(error.message || 'Error al eliminar el servicio');
     },
   });
 };
@@ -136,16 +129,9 @@ export const useCreateServiceCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (newCategory: { name: string; description?: string | null }) => {
-      const { data, error } = await supabase
-        .from('service_categories')
-        .insert([{ 
-          name: newCategory.name.trim(), 
-          description: newCategory.description || null 
-        }])
-        .select()
-        .single();
-      if (error) throw new Error(error.message);
-      return data;
+      // Si la API tiene endpoint para categorías, usarlo
+      // Si no, crear el servicio con la categoría y extraerla
+      throw new Error('Crear categorías no está implementado en la API');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service_categories'] });
@@ -162,12 +148,8 @@ export const useDeleteServiceCategory = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('service_categories')
-        .delete()
-        .eq('id', id);
-      if (error) throw new Error(error.message);
-      return true;
+      // Si la API tiene endpoint para eliminar categorías
+      throw new Error('Eliminar categorías no está implementado en la API');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['service_categories'] });

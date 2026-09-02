@@ -25,8 +25,7 @@ import {
   Phone, User, Upload, Camera, X, CreditCard, MoreVertical, Filter,
   Table, Grid3x3
 } from "lucide-react";
-import { supabase } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
+import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
 import { AddUserModal } from "@/components/team/AddUserModal";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -71,8 +70,13 @@ export default function AdminDashboard() {
 
   const fetchUsers = async () => {
     setIsLoading(true);
-    const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
-    if (data) setUsers(data);
+    try {
+      const data = await usersApi.getAll();
+      if (data) setUsers(data);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Error al cargar usuarios");
+    }
     setIsLoading(false);
   };
 
@@ -143,26 +147,30 @@ export default function AdminDashboard() {
     let avatarUrl = editModal.user.avatar_url;
 
     if (editAvatarFile) {
-      const fileExt = editAvatarFile.name.split(".").pop();
-      const fileName = `${editModal.user.id}-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(fileName, editAvatarFile, { upsert: true });
-      if (!uploadError) {
-        const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(fileName);
-        avatarUrl = publicUrl;
+      try {
+        const fileName = `${editModal.user.id}-${Date.now()}`;
+        const result = await storageApi.upload('avatars', fileName, editAvatarFile);
+        if (result?.publicUrl) {
+          avatarUrl = result.publicUrl;
+        }
+      } catch (error) {
+        console.error("Error uploading avatar:", error);
       }
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
+    try {
+      await usersApi.update(editModal.user.id, {
         full_name: editFullName,
         email: editEmail,
         phone: editPhone || null,
         cedula: editCedula || null,
         avatar_url: avatarUrl,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", editModal.user.id);
+      });
+    } catch (error) {
+      // El error se maneja en el catch de abajo
+      throw error;
+    }
 
     if (error) {
       toast.error("Error al guardar cambios");
@@ -176,10 +184,14 @@ export default function AdminDashboard() {
 
   const handleToggleActive = async (user: any) => {
     const newStatus = !user.is_active;
-    await supabase.from("profiles").update({ is_active: newStatus }).eq("id", user.id);
-    toast.success(`Usuario ${newStatus ? "activado" : "desactivado"}`);
-    fetchUsers();
-    setSuspendDialog({ open: false, user: null });
+    try {
+      await usersApi.update(user.id, { is_active: newStatus });
+      toast.success(`Usuario ${newStatus ? "activado" : "desactivado"}`);
+      fetchUsers();
+      setSuspendDialog({ open: false, user: null });
+    } catch (error) {
+      toast.error("Error al cambiar estado del usuario");
+    }
   };
 
   const handleDeleteUser = async (user: any) => {
@@ -191,16 +203,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      await supabase.from("project_members").delete().eq("user_id", user.id);
-      await supabase.from("profiles").delete().eq("id", user.id);
-
-      const response = await fetch(`https://hormiwatch2-main-production.up.railway.app/api/v1/users/${user.id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-      });
+      await usersApi.delete(user.id);
 
       if (!response.ok) {
         const errorData = await response.json();

@@ -63,7 +63,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase/client";
+import { servicesApi } from "@/lib/api";
 // ✅ IMPORT CORREGIDO
 import { useServiceCategories } from "@/hooks/useServices";
 
@@ -181,14 +181,20 @@ export function ServiceFormModal({
   const fetchCategories = async () => {
     setLoadingCategories(true);
     try {
-      // Usar el hook en lugar de supabase directamente
-      // Pero para mantener la compatibilidad, usamos supabase directamente
-      const { data, error } = await supabase
-        .from('service_categories')
-        .select('*')
-        .order('name');
-      if (error) throw error;
-      setCategories(data || []);
+      // Usar el hook useServiceCategories que ya usa la API
+      // Pero como categoriesData viene del hook, podemos usarlo directamente
+      if (categoriesData) {
+        setCategories(categoriesData);
+      } else {
+        // Fallback: obtener desde la API directamente
+        // Nota: servicesApi.getAll() devuelve servicios, no categorías
+        // Necesitamos un endpoint específico para categorías
+        const response = await fetch('/api/v1/service-categories');
+        if (response.ok) {
+          const data = await response.json();
+          setCategories(data);
+        }
+      }
     } catch (error) {
       console.error('Error al cargar categorías:', error);
       toast.error('Error al cargar categorías');
@@ -245,16 +251,25 @@ export function ServiceFormModal({
 
     setIsSubmitting(true);
     try {
-      const { data, error } = await supabase
-        .from('service_categories')
-        .insert({
+      // Crear categoría usando la API
+      const response = await fetch('/api/v1/service-categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+        },
+        body: JSON.stringify({
           name: trimmedName,
           description: newCategoryDesc.trim() || null,
-        })
-        .select()
-        .single();
+        }),
+      });
 
-      if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al crear categoría');
+      }
+
+      const data = await response.json();
 
       await fetchCategories();
 
@@ -304,33 +319,26 @@ export function ServiceFormModal({
     setIsSubmitting(true);
     try {
       if (isEditing && service) {
-        // Editar
-        const { error } = await supabase
-          .from('services')
-          .update({
-            name: data.name,
-            category_id: data.category_id,
-            description: data.description || null,
-            default_hourly_rate: data.default_hourly_rate,
-            is_active: data.is_active,
-            icon: selectedIconName || data.icon,
-          })
-          .eq('id', service.id);
-        if (error) throw error;
+        // Editar usando la API
+        await servicesApi.update(service.id, {
+          name: data.name,
+          category_id: data.category_id,
+          description: data.description || null,
+          default_hourly_rate: data.default_hourly_rate,
+          is_active: data.is_active,
+          icon: selectedIconName || data.icon,
+        });
         toast.success("✅ Servicio actualizado exitosamente");
       } else {
-        // Crear
-        const { error } = await supabase
-          .from('services')
-          .insert({
-            name: data.name,
-            category_id: data.category_id,
-            description: data.description || null,
-            default_hourly_rate: data.default_hourly_rate,
-            is_active: data.is_active,
-            icon: selectedIconName,
-          });
-        if (error) throw error;
+        // Crear usando la API
+        await servicesApi.create({
+          name: data.name,
+          category_id: data.category_id,
+          description: data.description || null,
+          default_hourly_rate: data.default_hourly_rate,
+          is_active: data.is_active,
+          icon: selectedIconName,
+        });
         toast.success("✅ Servicio creado exitosamente");
       }
       

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase/client';
+import { holidaysApi } from '@/lib/api';
 import { toast } from 'sonner';
 
 export interface Holiday {
@@ -22,18 +22,12 @@ export const useHolidays = () => {
     const queryClient = useQueryClient();
 
     const fetchHolidays = async (): Promise<Holiday[]> => {
-        const { data, error } = await supabase
-            .from('holidays')
-            .select('*')
-            .order('date', { ascending: true });
-
-        if (error) throw error;
+        const data = await holidaysApi.getAll();
         return data || [];
     };
 
     const addHolidayMutation = useMutation({
         mutationFn: async (holiday: Omit<Holiday, 'id'>) => {
-            // Convertir la fecha a UTC con mediodía para evitar desplazamiento
             const correctedHoliday = {
                 ...holiday,
                 date: toUTCDateString(holiday.date)
@@ -41,12 +35,7 @@ export const useHolidays = () => {
             
             console.log('Enviando feriado con fecha:', correctedHoliday.date);
             
-            const { data, error } = await (supabase as any)
-                .from('holidays')
-                .insert(correctedHoliday)
-                .select()
-                .single();
-            if (error) throw error;
+            const data = await holidaysApi.create(correctedHoliday);
             return data;
         },
         onSuccess: () => {
@@ -60,11 +49,7 @@ export const useHolidays = () => {
 
     const deleteHolidayMutation = useMutation({
         mutationFn: async (id: number) => {
-            const { error } = await (supabase as any)
-                .from('holidays')
-                .delete()
-                .eq('id', id);
-            if (error) throw error;
+            await holidaysApi.delete(id);
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['holidays'] });
@@ -82,7 +67,6 @@ export const useHolidays = () => {
             
             const publicHolidays = await response.json();
 
-            // Corregir las fechas a UTC con mediodía
             const holidaysToInsert = publicHolidays.map((h: any) => ({
                 date: toUTCDateString(h.date),
                 name: h.localName,
@@ -91,12 +75,13 @@ export const useHolidays = () => {
 
             console.log('Sincronizando feriados:', holidaysToInsert);
 
-            const { error } = await (supabase as any)
-                .from('holidays')
-                .upsert(holidaysToInsert, { onConflict: 'date', ignoreDuplicates: true });
+            // Usar el endpoint de sync si existe, o crear uno por uno
+            const results = await Promise.all(
+                holidaysToInsert.map(h => holidaysApi.create(h).catch(() => null))
+            );
+            const successCount = results.filter(r => r !== null).length;
 
-            if (error) throw error;
-            return holidaysToInsert.length;
+            return successCount;
         },
         onSuccess: (count) => {
             queryClient.invalidateQueries({ queryKey: ['holidays'] });

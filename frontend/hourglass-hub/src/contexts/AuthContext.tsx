@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { User, Session, AuthError } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase/client'
+import { AuthError } from '@supabase/supabase-js'
+import { authApi, usersApi, storageApi } from '@/lib/api'
 
 export type UserRole = 'Technician' | 'Manager' | 'Admin'
 
@@ -27,8 +27,8 @@ export interface UserProfile {
 }
 
 interface AuthContextType {
-    user: User | null
-    session: Session | null
+    user: any | null  // Cambiar a tipo de tu API
+    session: any | null  // Cambiar a tipo de tu API
     profile: UserProfile | null
     loading: boolean
     isManager: boolean
@@ -108,66 +108,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [user, profile])
 
-    const fetchProfile = useCallback(async (userId: string, userData?: User): Promise<UserProfile | null> => {
+    const fetchProfile = useCallback(async (userId: string, userData?: any): Promise<UserProfile | null> => {
         try {
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .maybeSingle()
+            // Obtener perfil usando usersApi
+            const profileData = await usersApi.getById(userId);
+            
+            if (!profileData) {
+                console.log('Perfil no encontrado, creando uno nuevo...');
+                const newProfile = {
+                    id: userId,
+                    email: userData?.email || '',
+                    full_name: userData?.user_metadata?.full_name || userData?.email?.split('@')[0] || 'Usuario',
+                    avatar_url: userData?.user_metadata?.avatar_url || null,
+                    role: 'Technician' as UserRole,
+                    dark_mode: false,
+                    preferences: {
+                        tasks_view: 'list',
+                        projects_view: 'grid',
+                    },
+                    is_active: true,
+                    updated_at: new Date().toISOString(),
+                };
 
-            if (error) {
-                if (error.code === 'PGRST116' && userData) {
-                    console.log('Perfil no encontrado, creando uno nuevo...');
-                    const newProfile = {
-                        id: userId,
-                        email: userData.email,
-                        full_name: userData.user_metadata?.full_name || userData.email?.split('@')[0],
-                        avatar_url: userData.user_metadata?.avatar_url,
-                        role: 'Technician' as UserRole,
-                        dark_mode: false,
-                        preferences: {
-                            tasks_view: 'list',
-                            projects_view: 'grid',
-                        },
-                        is_active: true,
-                        updated_at: new Date().toISOString(),
-                    };
-
-                    const { data: createdProfile, error: createError } = await supabase
-                        .from('profiles')
-                        .insert(newProfile)
-                        .select()
-                        .single();
-
-                    if (createError) {
-                        console.error('Error FATAL creando perfil automático:', createError);
-                        throw new Error(`No se pudo crear tu perfil: ${createError.message}`);
-                    }
-
-                    return createdProfile as UserProfile;
-                }
-                throw error;
+                // Crear perfil usando usersApi
+                const createdProfile = await usersApi.create(newProfile);
+                return createdProfile as UserProfile;
             }
 
-            return data as UserProfile
+            return profileData as UserProfile;
         } catch (err: any) {
             console.error('Error crítico en fetchProfile:', err)
             throw err;
         }
-    }, [])
+    }, []);
 
     const initializeAuth = useCallback(async () => {
         try {
             setLoading(true);
             setAuthError(null);
-            const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) throw sessionError;
-            setSession(currentSession);
-            setUser(currentSession?.user ?? null);
-            if (currentSession?.user) {
+            
+            // Obtener sesión usando authApi
+            const sessionData = await authApi.getSession();
+            
+            if (sessionData?.user) {
+                setUser(sessionData.user);
+                setSession(sessionData);
+                
                 try {
-                    const profileData = await fetchProfile(currentSession.user.id, currentSession.user);
+                    const profileData = await fetchProfile(sessionData.user.id, sessionData.user);
                     setProfile(profileData);
                     
                     if (profileData?.dark_mode) {
@@ -181,6 +169,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     setProfile(null);
                 }
             } else {
+                setUser(null);
+                setSession(null);
                 setProfile(null);
             }
         } catch (err: any) {
@@ -193,7 +183,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         initializeAuth();
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+        
+        // Suscribirse a cambios de autenticación usando authApi
+        const unsubscribe = authApi.onAuthStateChange(async (event, newSession) => {
             console.log("Auth Event:", event);
             
             if (isCreatingUser) {
@@ -202,12 +194,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             
             if (event === 'SIGNED_OUT') {
-                setSession(null); setUser(null); setProfile(null); setLoading(false);
+                setSession(null); 
+                setUser(null); 
+                setProfile(null); 
+                setLoading(false);
             } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                 initializeAuth();
             }
         });
-        return () => { subscription.unsubscribe(); };
+        
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
     }, [initializeAuth, isCreatingUser]);
 
     const signIn = async (email: string, password: string) => {
