@@ -70,6 +70,16 @@ export class Project extends BaseUuidEntity {
   })
   endDate: Temporal.PlainDate;
 
+  // 🔥 CAMPOS PARA EL FRONTEND
+  @Column({ type: 'varchar', nullable: true, name: 'client_id' })
+  clientId: string;
+
+  @Column({ type: 'varchar', nullable: true, name: 'customer_id' })
+  customerId: string;
+
+  @Column({ type: 'int', nullable: true, name: 'hours_consumed', default: 0 })
+  hoursConsumed: number;
+
   //entity relations
   @ManyToOne(() => User, (u) => u.leaderProjects, {
     nullable: false,

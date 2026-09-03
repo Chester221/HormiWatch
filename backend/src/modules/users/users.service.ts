@@ -359,6 +359,20 @@ export class UsersService {
     return plainToInstance(UserResponseDto, user);
   }
 
+    // 🔥 NUEVO MÉTODO: findOneById para AuthService
+    async findOneById(id: string): Promise<User> {
+      const user = await this.userRepository.findOne({
+        where: { id },
+        relations: ['profile', 'role'],
+      });
+  
+      if (!user) {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+  
+      return user;
+    }
+
   async update(
     id: string,
     updateDto: UpdateUserDto,

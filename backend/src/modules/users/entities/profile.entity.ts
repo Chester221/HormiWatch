@@ -62,6 +62,13 @@ export class Profile {
   @Column({ type: 'varchar', nullable: true })
   profilePicture: string;
 
+  // 🔥 CAMPOS ADICIONALES PARA EL FRONTEND
+  @Column({ type: 'varchar', nullable: true })
+  avatar_url: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  full_name: string;
+
   //entity relations
   @OneToOne(() => User, (u) => u.profile, {
     nullable: false,

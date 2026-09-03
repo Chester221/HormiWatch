@@ -16,9 +16,8 @@ export class AuthService {
   async login(user: User) {
     const payload = { sub: user.id, role: user.role.name };
     const accessToken = this.jwtService.sign(payload);
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' }); // Generate Refresh Token
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-    // Update last connection and set refresh token asynchronously
     await Promise.all([
       this.usersService.updateLastConnection(user.id),
       this.usersService.setCurrentRefreshToken(user.id, refreshToken),
@@ -42,6 +41,31 @@ export class AuthService {
     return { message: 'Logged out successfully' };
   }
 
+  // ============================================
+  // 🟢 NUEVO MÉTODO - getSession()
+  // ============================================
+  async getSession(userId: string) {
+    const user = await this.usersService.findOneById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role.name,
+      is_active: user.is_active,
+      profile: user.profile ? {
+        first_name: user.profile.name,
+        last_name: user.profile.lastName,
+        avatar_url: user.profile.avatarUrl,
+        phone: user.profile.phone,
+        position: user.profile.position,
+      } : null,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
+    };
+  }
+
   async refreshToken(refreshToken: string) {
     try {
       const payload = this.jwtService.verify<IJwtPayload>(refreshToken);
@@ -60,7 +84,6 @@ export class AuthService {
         expiresIn: '7d',
       });
 
-      // Rotate Refresh Token and update last connection
       await Promise.all([
         this.usersService.updateLastConnection(validUser.id),
         this.usersService.setCurrentRefreshToken(validUser.id, newRefreshToken),
@@ -75,13 +98,10 @@ export class AuthService {
     }
   }
 
-  // Helper method to validate user (typically used by LocalStrategy if we had one, or manual login)
   async validateUser(email: string, pass: string): Promise<User | null> {
     const user = await this.usersService.findOneByEmailForAuth(email);
     if (user && (await this.hashingService.compare(pass, user.password))) {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password, ...result } = user;
-      return result as User;
+      return user as User;
     }
     return null;
   }

@@ -43,6 +43,18 @@ export class User extends BaseUuidEntity {
   @Column({ type: 'varchar', nullable: true, name: 'auth_user_id' })
   authUserId: string;
 
+  // 🔥 Preferencias del usuario para el frontend
+  @Column({ type: 'jsonb', nullable: true, default: {} })
+  preferences: {
+    tasks_view?: 'list' | 'calendar';
+    projects_view?: 'grid' | 'table';
+    tasks_filters?: {
+      project?: string;
+      status?: string;
+    };
+    dark_mode?: boolean;
+  };
+
   //entity relations
   @ManyToOne(() => Role, (rol) => rol.users, { nullable: false })
   @JoinColumn({ name: 'role_id' })

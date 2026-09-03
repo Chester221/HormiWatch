@@ -1,6 +1,7 @@
 import {
   Controller,
   Post,
+  Get,  // ← AGREGAR ESTE IMPORT
   Body,
   UnauthorizedException,
   UseGuards,
@@ -109,5 +110,13 @@ export class AuthController {
     return {
       accessToken: newTokens.accessToken,
     };
+  }
+  
+  @UseGuards(JwtAuthGuard)
+  @Get('session')
+  @ApiOperation({ summary: 'Get current session' })
+  @ApiOkResponse({ description: 'Returns current user session data' })
+  async getSession(@Request() req: { user: IActiveUser }) {
+    return this.authService.getSession(req.user.userId);
   }
 }
