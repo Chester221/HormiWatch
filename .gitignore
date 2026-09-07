@@ -1,0 +1,30 @@
+# Node
+node_modules/
+dist/
+build/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Backend
+backend/dist/
+backend/node_modules/
+backend/.env
+
+# Frontend
+frontend/hourglass-hub/dist/
+frontend/hourglass-hub/node_modules/
+frontend/hourglass-hub/.env
+frontend/hourglass-hub/.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

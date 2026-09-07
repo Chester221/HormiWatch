@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuevo Proyecto Asignado</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f6f8;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background-color: #004481; /* Blue color */
+            color: #ffffff; /* White color */
+            padding: 30px 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .content {
+            padding: 30px 20px;
+            line-height: 1.6;
+        }
+        .content h2 {
+            color: #004481;
+            margin-top: 0;
+        }
+        .project-details {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-left: 4px solid #004481;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .project-details p {
+            margin: 5px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #004481;
+            color: #ffffff;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .footer {
+            background-color: #f4f6f8;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            border-top: 1px solid #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HormiWatch</h1>
+        </div>
+        <div class="content">
+            <h2>¡Hola, {{name}}!</h2>
+            <p>Has sido asignado a un nuevo proyecto en <strong>HormiWatch</strong>.</p>
+            
+            <div class="project-details">
+                <p><strong>Proyecto:</strong> {{projectName}}</p>
+                <p><strong>Descripción:</strong> {{projectDescription}}</p>
+                {{#if poolHours}}
+                <p><strong>Pool de Horas:</strong> {{poolHours}} hrs</p>
+                {{/if}}
+                {{#if startDate}}
+                <p><strong>Fecha de Inicio:</strong> {{startDate}}</p>
+                {{/if}}
+            </div>
+
+            <p>Puedes acceder a la plataforma para ver más detalles y comenzar tus tareas.</p>
+
+            <div style="text-align: center;">
+                <a href="{{url}}/projects/{{projectId}}" class="button">Ver Proyecto</a>
+            </div>
+            
+            <p>Si tienes alguna duda, contacta con el administrador del proyecto.</p>
+        </div>
+        <div class="footer">
+            <p>Este es un correo automático, por favor no respondas a este mensaje.</p>
+        </div>
+    </div>
+</body>
+</html>
