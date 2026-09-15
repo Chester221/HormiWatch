@@ -225,6 +225,7 @@ export default function AdminDashboard() {
     } catch (error: any) {
       console.error("Error en handleDeleteUser:", error);
       const msg = error?.message || "";
+      console.log("DEBUG DELETE:", error, "status:", error?.status, "code:", error?.statusCode, "msg:", msg);
       if (
         msg.includes("No se puede eliminar") ||
         msg.includes("tareas o proyectos") ||
