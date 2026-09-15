@@ -59,7 +59,11 @@ const apiClient = async (endpoint: string, options: RequestInit = {}, retry = tr
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Error del servidor (${response.status})`);
+    const err = new Error(error.message || `Error del servidor (${response.status})`) as any;
+    err.status = response.status;
+    err.statusCode = response.status;
+    err.statusText = response.statusText;
+    throw err;
   }
 
   // ✅ 204 No Content: no hay cuerpo que parsear
