@@ -133,7 +133,7 @@ export default function AdminDashboard() {
     technicians: users.filter((u) => u.role === "Technician").length,
   };
 
-  const handleOpenEdit = (user: any) => {
+  const handleOpenEdit = useCallback((user: any) => {
     setEditFullName(user.full_name || "");
     setEditEmail(user.email || "");
     setEditPhone(user.phone || "");
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
     setEditAvatar(user.avatar_url || null);
     setEditAvatarFile(null);
     setEditModal({ open: true, user });
-  };
+  }, []);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -199,7 +199,7 @@ export default function AdminDashboard() {
     setIsSaving(false);
   };
 
-  const handleToggleActive = async (user: any) => {
+  const handleToggleActive = useCallback(async (user: any) => {
     const newStatus = !user.isActive;
     try {
       await usersApi.update(user.id, { isActive: newStatus });
@@ -209,7 +209,8 @@ export default function AdminDashboard() {
     } catch (error) {
       toast.error("Error al cambiar estado del usuario");
     }
-  };
+  }, [fetchUsers]);
+
 
   const handleDeleteUser = async (user: any) => {
     try {
@@ -230,7 +231,7 @@ export default function AdminDashboard() {
         msg.includes("tareas o proyectos asignados") ||
         msg.includes("Desactívalo en su lugar") ||
         msg.toLowerCase().includes("recurso referenciado") ||
-        (typeof error?.status === "number" && error.status === 409)
+        (typeof error?.status === "number" && (error.status === 409 || error.status === 422))
       ) {
         setDeleteDialog({ open: false, user: null });
         setCannotDeleteDialog({ open: true, user, message: msg });
@@ -238,7 +239,7 @@ export default function AdminDashboard() {
       }
       if (
         msg.toLowerCase().includes("recurso referenciado") ||
-        (typeof error?.status === "number" && error.status === 404)
+        (typeof error?.status === "number" && (error.status === 409 || error.status === 422))
       ) {
         try {
           await usersApi.update(user.id, { isActive: false });
