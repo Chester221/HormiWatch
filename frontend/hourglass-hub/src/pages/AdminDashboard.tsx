@@ -103,8 +103,8 @@ export default function AdminDashboard() {
     const matchesRole = roleFilter === "all" || user.role === roleFilter;
     const matchesStatus =
       statusFilter === "all" ||
-      (statusFilter === "active" && user.is_active !== false) ||
-      (statusFilter === "inactive" && user.is_active === false);
+        (statusFilter === "active" && user.isActive !== false) ||
+        (statusFilter === "inactive" && user.isActive === false);
     return matchesRole && matchesStatus;
   });
 
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
 
   const stats = {
     total: users.length,
-    active: users.filter((u) => u.is_active !== false).length,
+      active: users.filter((u) => u.isActive !== false).length,
     admins: users.filter((u) => u.role === "Admin").length,
     managers: users.filter((u) => u.role === "Manager").length,
     technicians: users.filter((u) => u.role === "Technician").length,
@@ -468,7 +468,7 @@ export default function AdminDashboard() {
                   {paginatedUsers.map((user, idx) => {
                     const badge = getRoleBadge(user.role);
                     const RoleIcon = badge.icon;
-                    const isActive = user.is_active !== false;
+                    const isActive = user.isActive !== false;
 
                     return (
                       <motion.div
@@ -620,7 +620,7 @@ export default function AdminDashboard() {
                     {allUsers.map((user) => {
                       const badge = getRoleBadge(user.role);
                       const RoleIcon = badge.icon;
-                      const isActive = user.is_active !== false;
+                      const isActive = user.isActive !== false;
 
                       return (
                         <tr key={user.id} className="border-b border-border/20 hover:bg-muted/5 transition-colors group">

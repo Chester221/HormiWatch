@@ -25,7 +25,6 @@ import { CustomerContactService } from '../services/customer_contact.service';
 import { CreateCustomerContactDto } from '../dto/create-customer-contact.dto';
 import { UpdateCustomerContactDto } from '../dto/update-customer-contact.dto';
 import { FindAllCustomerContactsQueryDto } from '../dto/find-all-customer-contacts-query.dto';
-import { SkipAuth } from 'src/modules/auth/decorator/skipAuth.decorator';
 
 @ApiBearerAuth()
 @ApiTags('Customer Contacts')
@@ -36,7 +35,6 @@ export class CustomerContactController {
   ) {}
 
   @Post()
-  @SkipAuth()
   @ApiOperation({ summary: 'Create a new contact for a specific customer' })
   @ApiResponse({ status: 201, description: 'Contact created successfully.' })
   @ApiParam({ name: 'customerId', description: 'UUID of the customer' })
@@ -52,7 +50,6 @@ export class CustomerContactController {
   }
 
   @Get()
-  @SkipAuth()
   @ApiOperation({ summary: 'Get all contacts for a specific customer' })
   @ApiResponse({ status: 200, description: 'List of contacts.' })
   @ApiParam({ name: 'customerId', description: 'UUID of the customer' })
@@ -75,7 +72,6 @@ export class CustomerContactController {
   }
 
   @Get(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Get a contact by ID' })
   @ApiResponse({ status: 200, description: 'The contact details.' })
   @ApiResponse({ status: 404, description: 'Contact not found.' })
@@ -85,7 +81,6 @@ export class CustomerContactController {
   }
 
   @Patch(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Update a contact' })
   @ApiResponse({ status: 200, description: 'Contact updated successfully.' })
   @ApiParam({ name: 'id', description: 'UUID of the contact' })
@@ -98,7 +93,6 @@ export class CustomerContactController {
   }
 
   @Delete(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Soft delete a contact' })
   @ApiResponse({ status: 200, description: 'Contact deleted successfully.' })
   @ApiParam({ name: 'id', description: 'UUID of the contact' })
