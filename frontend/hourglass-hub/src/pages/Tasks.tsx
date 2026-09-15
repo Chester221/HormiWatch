@@ -132,8 +132,9 @@ export default function Tasks() {
   }, [teamMembers]);
 
   const holidayDates = useMemo(() => {
-    return (holidays.data || [])
-      .filter((h: { is_working_day?: boolean }) => !h.is_working_day)
+    return ((
+      Array.isArray(holidays.data) ? holidays.data : (holidays.data as any)?.records || []
+    ) as any[]).filter((h: { is_working_day?: boolean }) => !h.is_working_day)"
       .map((h: { date: string }) => h.date.split("T")[0]);
   }, [holidays.data]);
 
