@@ -93,7 +93,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
     usersApi.getAll().then((data: any) => {
       const list = Array.isArray(data) ? data : data?.records || data?.data || [];
       const admins = list.filter(
-        (u: any) => (u.role?.name === "Admin" || u.role_name === "Admin") && u.is_active !== false && u.isActive !== false
+        (u: any) => (u.role?.name === "Admin" || u.role_name === "Admin") && u.isActive !== false && u.isActive !== false
       ).length;
       setActiveAdmins(admins);
     }).catch(() => {});
