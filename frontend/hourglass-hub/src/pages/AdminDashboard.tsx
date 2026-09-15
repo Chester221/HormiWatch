@@ -235,6 +235,7 @@ export default function AdminDashboard() {
         (typeof error?.status === "number" && (error.status === 409 || error.status === 422))
       ) {
         setDeleteDialog({ open: false, user: null });
+        console.log("DEBUG: Abriendo diálogo cannotDelete", { open: true, user: user?.full_name || user?.email || user?.id, message: msg });
         setCannotDeleteDialog({ open: true, user, message: msg });
         return;
       }
@@ -864,6 +865,30 @@ export default function AdminDashboard() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialog({ open: false, user: null })}>Cancelar</Button>
             <Button variant="destructive" onClick={() => handleDeleteUser(deleteDialog.user)}><Trash2 className="h-4 w-4 mr-1.5" /> Eliminar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo No se puede eliminar (backend 422/409 - recurso referenciado) — render FALTANTE corregido */}
+      {console.log("DEBUG: Renderizando diálogo cannotDelete", cannotDeleteDialog)}
+      <Dialog open={cannotDeleteDialog.open} onOpenChange={(open) => setCannotDeleteDialog({ open, user: open ? cannotDeleteDialog.user : null, message: open ? cannotDeleteDialog.message : "" })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">No se puede eliminar</DialogTitle>
+            <DialogDescription className="text-sm">{cannotDeleteDialog.message || "El usuario tiene tareas o proyectos asociados."}</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {cannotDeleteDialog.user && (
+              <p className="text-sm text-muted-foreground">
+                <strong className="text-foreground">{cannotDeleteDialog.user.full_name || cannotDeleteDialog.user.email}</strong> tiene datos referenciados (tareas/proyectos). Desactívalo en su lugar para conservar el historial.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCannotDeleteDialog({ open: false, user: null, message: "" })}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => handleToggleActive(cannotDeleteDialog.user)} className="bg-amber-600 hover:bg-amber-700">
+              <UserX className="h-4 w-4 mr-1.5" /> Desactivar Usuario
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
