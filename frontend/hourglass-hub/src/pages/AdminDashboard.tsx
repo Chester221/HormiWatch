@@ -229,10 +229,25 @@ export default function AdminDashboard() {
         msg.includes("tareas o proyectos") ||
         msg.includes("tareas o proyectos asignados") ||
         msg.includes("Desactívalo en su lugar") ||
+        msg.toLowerCase().includes("recurso referenciado") ||
         (typeof error?.status === "number" && error.status === 409)
       ) {
         setDeleteDialog({ open: false, user: null });
         setCannotDeleteDialog({ open: true, user, message: msg });
+        return;
+      }
+      if (
+        msg.toLowerCase().includes("recurso referenciado") ||
+        (typeof error?.status === "number" && error.status === 404)
+      ) {
+        try {
+          await usersApi.update(user.id, { isActive: false });
+          toast.info(`Usuario "${user.full_name || user.email}" desactivado (tiene datos asociados)`);
+          fetchUsers();
+        } catch {
+          toast.error(msg || "Error al eliminar usuario");
+        }
+        setDeleteDialog({ open: false, user: null });
         return;
       }
       toast.error(msg || "Error al eliminar usuario");
