@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Plus, Trash2, User, Loader2, Upload, X, Building2, ImageIcon, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
 import { useSaveClientWithContacts, type ClientWithContacts } from "@/hooks/useClientes";
 import { customersApi, storageApi } from "@/lib/api";
-import { customersApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
