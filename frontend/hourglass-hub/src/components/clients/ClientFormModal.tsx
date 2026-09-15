@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, User, Loader2, Upload, X, Building2, ImageIcon, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
 import { useSaveClientWithContacts, type ClientWithContacts } from "@/hooks/useClientes";
-import { storageApi } from "@/lib/api";
+import { customersApi, storageApi } from "@/lib/api";
+import { customersApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -108,7 +109,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   const requiredFields = ['name', 'rif', 'address'];
   const filledFields = requiredFields.filter(f => {
     const val = formData[f as keyof typeof formData];
-    return val !== undefined && val !== null && val !== '' && val !== 0;
+    return val !== undefined && val !== null && val !== '';
   });
 
   const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -141,7 +142,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     try {
       const fileExt = logoFile.name.split('.').pop();
       const fileName = `${clientId}.${fileExt}`;
-      const result = await storageApi.upload('logos', fileName, logoFile);
+      const result = await storageApi.upload(logoFile, fileName);
       if (result?.publicUrl) {
         setUploading(false);
         return result.publicUrl;

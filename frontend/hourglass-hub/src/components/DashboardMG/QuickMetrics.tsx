@@ -71,12 +71,59 @@ export function QuickMetrics({ tasks, projects }: QuickMetricsProps) {
         ? 100
         : 0);
 
+    const lastAvgHours =
+      lastTasks.length > 0
+        ? lastTasks.reduce((s, t: any) => s + Number(t.duration_hours || 0), 0) / lastTasks.length
+        : 0;
+    const prevAvgHours =
+      prevTasks.length > 0
+        ? prevTasks.reduce((s, t: any) => s + Number(t.duration_hours || 0), 0) / prevTasks.length
+        : 0;
+    const avgDelta = lastAvgHours - prevAvgHours;
+    const avgTime =
+      Math.abs(avgDelta) > 0
+        ? { value: Math.abs(Math.round(avgDelta * 100) / 100), positive: avgDelta >= 0 }
+        : undefined;
+
+    const today = new Date();
+    const onTimeRate = (projs: any[]) => {
+      if (projs.length === 0) return 0;
+      const delayed = projs.filter((p: any) => {
+        if (!p.end_date) return false;
+        const endDate = safeParseDate(p.end_date);
+        if (!endDate) return false;
+        const pt = tasks.filter((t: any) => t.project_id === p.id);
+        const done = pt.filter((t: any) => t.status === "Completed").length;
+        const progress = pt.length > 0 ? (done / pt.length) * 100 : 0;
+        return endDate < today && progress < 100;
+      }).length;
+      return ((projs.length - delayed) / projs.length) * 100;
+    };
+    const lastProjRate = onTimeRate(projects);
+    const projectsOnTime =
+      lastProjRate > 0 ? { value: Math.round(lastProjRate), positive: true } : undefined;
+
+    const perTechRate = (list: any[]) => {
+      const techs = new Set(list.map((t: any) => t.technician_id).filter(Boolean));
+      return techs.size > 0 ? list.length / techs.size : 0;
+    };
+    const lastPerTech = perTechRate(lastTasks);
+    const prevPerTech = perTechRate(prevTasks);
+    const perTechDelta = lastPerTech - prevPerTech;
+    const tasksPerTech =
+      Math.abs(perTechDelta) > 0
+        ? { value: Math.abs(Math.round(perTechDelta)), positive: perTechDelta >= 0 }
+        : undefined;
+
     return {
       efficiency: Math.abs(efficiencyTrend) > 0
         ? { value: Math.abs(efficiencyTrend), positive: efficiencyTrend >= 0 }
         : undefined,
+      avgTime,
+      projectsOnTime,
+      tasksPerTech,
     };
-  }, [tasks]);
+  }, [tasks, projects]);
 
   const metrics = [
     {
