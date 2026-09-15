@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { FileSpreadsheet, Search, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectExport } from "@/hooks/useProjectExport";
+import { useClients, useClientContacts } from "@/hooks/useClientes";
 import { toast } from "sonner";
 
 interface ProjectExportDialogProps {
@@ -25,6 +26,12 @@ export function ProjectExportDialog({
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const { exportProjectReport } = useProjectExport();
+  const { data: clients = [] } = useClients("");
+  const selectedProject = useMemo(
+    () => projects.find(p => p.id === selectedProjectId),
+    [projects, selectedProjectId],
+  );
+  const { data: contacts = [] } = useClientContacts(selectedProject?.clientId);
 
   // Filtrar proyectos
   const filteredProjects = projects.filter(p => {
@@ -48,7 +55,23 @@ export function ProjectExportDialog({
     
     const projectToExport = projects.find(p => p.id === selectedProjectId);
     if (projectToExport) {
-      exportProjectReport(projectToExport);
+      const client = clients.find(c => c.id === projectToExport.clientId || c.name === projectToExport.client);
+      const contact = contacts[0];
+      const enriched = {
+        ...projectToExport,
+        clientId: projectToExport.clientId || client?.id || '',
+        clientContact: contact?.name || client?.name || '',
+        cargo: contact?.position || client?.position || client?.department || '',
+        departamento: contact?.department || client?.department || '',
+        telefono: contact?.phone || client?.phone || '',
+        canal: client?.channel || '',
+        type: projectToExport.type || 'Consultoría',
+        gerencia: client?.department || '',
+        codigo: client?.ruc || client?.code || '',
+        otros: projectToExport.others || '',
+        notes: projectToExport.description || '',
+      };
+      exportProjectReport(enriched);
       setSelectedProjectId(null);
       onOpenChange(false);
     }

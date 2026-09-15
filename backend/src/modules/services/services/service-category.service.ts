@@ -30,7 +30,7 @@ export class ServiceCategoryService {
   async findOne(id: string): Promise<ServiceCategoryResponseDto> {
     const category = await this.categoryRepository.findOneBy({ id });
     if (!category) {
-      throw new NotFoundException(`Service Category with ID ${id} not found`);
+      throw new NotFoundException(`Categoría de servicio con ID ${id} no encontrada`);
     }
     return plainToInstance(ServiceCategoryResponseDto, category);
   }
@@ -41,7 +41,7 @@ export class ServiceCategoryService {
   ): Promise<ServiceCategoryResponseDto> {
     const category = await this.categoryRepository.findOneBy({ id });
     if (!category) {
-      throw new NotFoundException(`Service Category with ID ${id} not found`);
+      throw new NotFoundException(`Categoría de servicio con ID ${id} no encontrada`);
     }
     this.categoryRepository.merge(category, updateDto);
     const updatedCategory = await this.categoryRepository.save(category);
@@ -51,7 +51,7 @@ export class ServiceCategoryService {
   async remove(id: string): Promise<ServiceCategoryResponseDto> {
     const category = await this.categoryRepository.findOneBy({ id });
     if (!category) {
-      throw new NotFoundException(`Service Category with ID ${id} not found`);
+      throw new NotFoundException(`Categoría de servicio con ID ${id} no encontrada`);
     }
     const removedCategory = await this.categoryRepository.softRemove(category);
     return plainToInstance(ServiceCategoryResponseDto, removedCategory);

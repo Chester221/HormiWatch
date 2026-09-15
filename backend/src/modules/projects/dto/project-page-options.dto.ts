@@ -1,36 +1,26 @@
-import { PageOptionsDto } from 'src/common/pagination/pagination-options.dto';
-import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, IsEnum } from 'class-validator';
 import { ProjectStatus } from '../enums/project-status.enum';
+import { PageOptionsDto } from '../../../common/pagination/page-options.dto';
 
 export class ProjectPageOptionsDto extends PageOptionsDto {
-  @ApiPropertyOptional({
-    description: 'Filter by project status',
-    enum: ProjectStatus,
-    enumName: 'ProjectStatus',
-  })
+  @ApiProperty({ required: false, enum: ProjectStatus })
   @IsOptional()
   @IsEnum(ProjectStatus)
-  readonly status?: ProjectStatus;
+  status?: ProjectStatus;
 
-  @ApiPropertyOptional({
-    description: 'Filter by leader ID',
-  })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsUUID()
-  readonly leaderId?: string;
+  leaderId?: string;
 
-  @ApiPropertyOptional({
-    description: 'Filter by technician ID',
-  })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsUUID()
-  readonly technicianId?: string;
+  technicianId?: string;
 
-  @ApiPropertyOptional({
-    description: 'Search query (title)',
-  })
+  @ApiProperty({ required: false })
   @IsOptional()
   @IsString()
-  declare readonly q?: string;
+  q?: string;
 }

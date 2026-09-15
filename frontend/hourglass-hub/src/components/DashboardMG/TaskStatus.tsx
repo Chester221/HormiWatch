@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import {
@@ -5,236 +6,314 @@ import {
   Activity,
   Clock,
   XCircle,
-  TrendingUp,
-  TrendingDown,
   PieChart,
+  Lightbulb,
+  ArrowRight,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { PieChart as RechartsPie, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
+import {
+  PieChart as RechartsPie,
+  Pie,
+  Cell,
+  Sector,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import type { Task } from "@/hooks/useTasks";
 
 interface TaskStatusProps {
-  tasks: any[];
+  tasks: Task[];
 }
 
-const COLORS = {
-  completed: "#10b981",
-  inProgress: "#3b82f6",
-  pending: "#f59e0b",
-  cancelled: "#ef4444",
-};
+interface StatusMeta {
+  key: string;
+  status: Task["status"];
+  label: string;
+  color: string;
+  icon: LucideIcon;
+  query: string;
+}
 
-const COLORS_ARRAY = ["#10b981", "#3b82f6", "#f59e0b", "#ef4444"];
+const STATUS_META: StatusMeta[] = [
+  { key: "completed", status: "Completed", label: "Completadas", color: "#10b981", icon: CheckCircle, query: "completed" },
+  { key: "inProgress", status: "InProgress", label: "En Progreso", color: "#0DA2E7", icon: Activity, query: "in-progress" },
+  { key: "pending", status: "Pending", label: "Pendientes", color: "#f59e0b", icon: Clock, query: "pending" },
+  { key: "cancelled", status: "Cancelled", label: "Eliminadas", color: "#ef4444", icon: XCircle, query: "cancelled" },
+];
 
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case "Completed": return CheckCircle;
-    case "InProgress": return Activity;
-    case "Pending": return Clock;
-    case "Cancelled": return XCircle;
-    default: return Clock;
-  }
-};
+interface ChartDatum {
+  name: string;
+  value: number;
+  color: string;
+  percentage: number;
+}
 
-const getStatusLabel = (status: string) => {
-  switch (status) {
-    case "Completed": return "Completadas";
-    case "InProgress": return "En Progreso";
-    case "Pending": return "Pendientes";
-    case "Cancelled": return "Canceladas";
-    default: return status;
-  }
-};
+interface SegmentProps {
+  cx?: number;
+  cy?: number;
+  innerRadius?: number;
+  outerRadius?: number;
+  startAngle?: number;
+  endAngle?: number;
+  fill?: string;
+}
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case "Completed": return COLORS.completed;
-    case "InProgress": return COLORS.inProgress;
-    case "Pending": return COLORS.pending;
-    case "Cancelled": return COLORS.cancelled;
-    default: return "#6b7280";
-  }
-};
+const ActiveSector = (props: SegmentProps) => (
+  <Sector
+    cx={props.cx}
+    cy={props.cy}
+    innerRadius={props.innerRadius}
+    outerRadius={(props.outerRadius ?? 0) + 9}
+    startAngle={props.startAngle}
+    endAngle={props.endAngle}
+    cornerRadius={7}
+    fill={props.fill}
+    style={{ stroke: "#000000", strokeWidth: 2, filter: "drop-shadow(0 0 10px rgba(0,0,0,0.45))" }}
+  />
+);
 
-const CustomTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-white dark:bg-card border border-border/40 rounded-xl shadow-lg p-3 text-sm min-w-[140px]">
-        <p className="font-semibold text-foreground">{data.name}</p>
-        <p className="text-lg font-bold" style={{ color: data.color }}>
-          {data.value} tareas
-        </p>
-        <p className="text-xs text-muted-foreground">{data.percentage}% del total</p>
+function StatusRow({
+  label,
+  icon: Icon,
+  color,
+  count,
+  percentage,
+  onClick,
+  delay,
+}: {
+  label: string;
+  icon: LucideIcon;
+  color: string;
+  count: number;
+  percentage: number;
+  onClick: () => void;
+  delay: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay }}
+      onClick={onClick}
+      className="group cursor-pointer rounded-lg border border-transparent p-2.5 transition-all duration-200 hover:border-border/40 hover:bg-muted/10"
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-105"
+          style={{ backgroundColor: `${color}15` }}
+        >
+          <Icon className="h-4 w-4" style={{ color }} />
+        </div>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {label}
+        </span>
+        <span className="text-sm font-bold text-foreground tabular-nums">{count}</span>
+        <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">
+          {percentage}%
+        </span>
       </div>
-    );
-  }
-  return null;
-};
+      <div className="ml-11 mt-2 h-1.5 overflow-hidden rounded-full bg-muted/50">
+        <motion.div
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ delay: delay + 0.15, duration: 0.7, ease: "easeOut" }}
+          className="h-full rounded-full"
+          style={{ backgroundColor: color, boxShadow: "inset 0 0 0 1px rgba(17,24,39,0.5)" }}
+        />
+      </div>
+    </motion.div>
+  );
+}
 
 export function TaskStatus({ tasks }: TaskStatusProps) {
   const navigate = useNavigate();
+  const [activeIndex, setActiveIndex] = useState<number>(-1);
 
-  const total = tasks.length || 1;
-  const completed = tasks.filter((t: any) => t.status === "Completed").length;
-  const inProgress = tasks.filter((t: any) => t.status === "InProgress").length;
-  const pending = tasks.filter((t: any) => t.status === "Pending").length;
-  const cancelled = tasks.filter((t: any) => t.status === "Cancelled").length;
+  const total = tasks.length;
 
-  // Datos para el gráfico donut
-  const chartData = [
-    { name: "Completadas", value: completed, color: COLORS.completed, percentage: Math.round((completed / total) * 100) },
-    { name: "En Progreso", value: inProgress, color: COLORS.inProgress, percentage: Math.round((inProgress / total) * 100) },
-    { name: "Pendientes", value: pending, color: COLORS.pending, percentage: Math.round((pending / total) * 100) },
-    { name: "Canceladas", value: cancelled, color: COLORS.cancelled, percentage: Math.round((cancelled / total) * 100) },
-  ];
+  const counts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const meta of STATUS_META) map[meta.status] = 0;
+    for (const t of tasks) {
+      if (t.status && map[t.status] !== undefined) map[t.status] += 1;
+    }
+    return map;
+  }, [tasks]);
 
-  // Calcular tendencias (comparativa con período anterior)
-  // Simulamos tendencias basadas en los datos actuales
-  const trends = {
-    completed: completed > 0 ? { value: Math.round(Math.random() * 20 + 5), positive: true } : { value: 0, positive: true },
-    inProgress: inProgress > 0 ? { value: Math.round(Math.random() * 15 + 3), positive: Math.random() > 0.5 } : { value: 0, positive: true },
-    pending: pending > 0 ? { value: Math.round(Math.random() * 20 + 5), positive: Math.random() < 0.3 } : { value: 0, positive: true },
-    cancelled: cancelled > 0 ? { value: Math.round(Math.random() * 10 + 2), positive: Math.random() < 0.5 } : { value: 0, positive: true },
-  };
+  const chartData: ChartDatum[] = STATUS_META.map((meta) => ({
+    name: meta.label,
+    value: counts[meta.status] ?? 0,
+    color: meta.color,
+    percentage: total > 0 ? Math.round(((counts[meta.status] ?? 0) / total) * 100) : 0,
+  }));
 
-  // Renderizar la leyenda con las tarjetas de estado
-  const renderLegend = () => {
-    const statuses = [
-      { key: "completed", label: "Completadas", count: completed, color: COLORS.completed, icon: CheckCircle },
-      { key: "inProgress", label: "En Progreso", count: inProgress, color: COLORS.inProgress, icon: Activity },
-      { key: "pending", label: "Pendientes", count: pending, color: COLORS.pending, icon: Clock },
-      { key: "cancelled", label: "Canceladas", count: cancelled, color: COLORS.cancelled, icon: XCircle },
-    ];
-
-    return statuses.map((item, idx) => {
-      const percentage = total > 0 ? Math.round((item.count / total) * 100) : 0;
-      const Icon = item.icon;
-      const trend = trends[item.key as keyof typeof trends];
-      const TrendIcon = trend.positive ? TrendingUp : TrendingDown;
-
-      return (
-        <motion.div
-          key={item.key}
-          initial={{ opacity: 0, x: 10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: idx * 0.05 }}
-          onClick={() => navigate(`/tasks?status=${item.key}`)}
-          className="flex items-center justify-between p-2.5 rounded-lg hover:bg-muted/10 transition-colors cursor-pointer group"
-        >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="p-1.5 rounded-lg flex-shrink-0"
-              style={{ backgroundColor: `${item.color}15` }}
-            >
-              <Icon className="h-3.5 w-3.5" style={{ color: item.color }} />
-            </div>
-            <span className="text-sm text-foreground">
-              {item.label}
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-bold text-foreground">
-              {item.count}
-            </span>
-            <span className="text-xs text-muted-foreground w-12 text-right">
-              {percentage}%
-            </span>
-            {trend.value > 0 && (
-              <div className={`flex items-center gap-0.5 text-[10px] font-medium ${trend.positive ? 'text-emerald-500' : 'text-red-500'}`}>
-                <TrendIcon className="h-3 w-3" />
-                {trend.positive ? "+" : ""}{trend.value}%
-              </div>
-            )}
-          </div>
-        </motion.div>
-      );
-    });
-  };
-
-  // ============================================
-  // ESTADO VACÍO
-  // ============================================
+  const completionRate = total > 0 ? Math.round(((counts.Completed ?? 0) / total) * 100) : 0;
 
   if (total === 0) {
     return (
-      <div className="rounded-xl border border-border/40 bg-white dark:bg-card p-6 shadow-sm text-center">
-        <div className="flex flex-col items-center justify-center py-6">
-          <div className="h-14 w-14 rounded-full bg-muted/30 flex items-center justify-center mb-4">
-            <PieChart className="h-7 w-7 text-muted-foreground/50" />
+      <div className="rounded-xl border border-border/40 bg-white p-6 shadow-sm dark:bg-card">
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <div className="bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] mb-4 flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm shadow-[#0DA2E7]/30">
+            <PieChart className="h-7 w-7 text-white" />
           </div>
-          <p className="text-base font-medium text-foreground">Sin tareas registradas</p>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-base font-semibold text-foreground">Sin tareas registradas</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             No hay tareas para mostrar en el gráfico
           </p>
-          <Badge variant="outline" className="mt-3 text-[10px] border-border/40">
-            💡 Comienza a crear tareas
+          <Badge variant="outline" className="mt-3 gap-1.5 border-border/40 text-xs">
+            <Lightbulb className="h-3 w-3 text-amber-500" />
+            Comienza a crear tareas
           </Badge>
         </div>
       </div>
     );
   }
 
-  // ============================================
-  // RENDER PRINCIPAL
-  // ============================================
-
   return (
-    <div className="rounded-xl border border-border/40 bg-white dark:bg-card p-4 shadow-sm hover:shadow-md transition-all duration-300">
+    <div className="relative overflow-hidden rounded-xl border border-border/40 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg dark:bg-card">
+      {/* Blob decorativo */}
+      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[#0DA2E7] opacity-[0.06] blur-2xl" />
+
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-[#0DA2E7]/10">
-            <PieChart className="h-4 w-4 text-[#0DA2E7]" />
+      <div className="relative mb-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] rounded-xl p-2 shadow-sm shadow-[#0DA2E7]/30">
+            <PieChart className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
               Estado de Tareas
             </h3>
-            <p className="text-[10px] text-muted-foreground">
-              {total} tareas totales
+            <p className="text-xs text-muted-foreground">
+              {total} tareas · {completionRate}% completadas
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="text-[10px] border-border/40" onClick={() => navigate("/tasks")}>
-          Ver todas →
+        <Badge
+          variant="outline"
+          className="cursor-pointer border-border/40 text-xs transition-colors hover:bg-muted/50"
+          onClick={() => navigate("/tasks")}
+        >
+          Ver todas
+          <ArrowRight className="ml-1 h-3 w-3" />
         </Badge>
       </div>
 
-      {/* GRÁFICO DONUT + LEYENDA */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center">
+      {/* DONUT + LEYENDA */}
+      <div className="relative flex flex-col items-center gap-4 sm:flex-row">
         {/* Donut */}
-        <div className="w-[180px] h-[180px] flex-shrink-0">
+        <div className="relative h-[200px] w-[200px] flex-shrink-0">
+          {/* Anillos decorativos tipo espiral */}
+          <div
+            className="absolute -inset-3 rounded-full"
+            style={{
+              background: "conic-gradient(from 0deg, rgba(13,162,231,0.10), rgba(13,162,231,0.02), rgba(13,162,231,0.10))",
+              filter: "blur(6px)",
+            }}
+          />
+          <div className="absolute inset-0 rounded-full border border-dashed border-[#0DA2E7]/25">
+            <motion.div
+              className="absolute inset-0 rounded-full border-2 border-dotted border-[#0DA2E7]/20"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 40, ease: "linear" }}
+            />
+          </div>
           <ResponsiveContainer width="100%" height="100%">
             <RechartsPie>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={50}
-                outerRadius={75}
-                paddingAngle={2}
+                innerRadius={56}
+                outerRadius={86}
+                paddingAngle={2.5}
+                cornerRadius={6}
                 dataKey="value"
+                activeIndex={activeIndex >= 0 ? activeIndex : undefined}
+                activeShape={ActiveSector}
+                onMouseEnter={(_, index) => setActiveIndex(index)}
+                onMouseLeave={() => setActiveIndex(-1)}
               >
-                {chartData.map((entry, index) => (
+                {chartData.map((entry) => (
                   <Cell
-                    key={`cell-${index}`}
+                    key={entry.name}
                     fill={entry.color}
-                    style={{
-                      filter: entry.value > 0 ? `drop-shadow(0 0 6px ${entry.color}40)` : "none",
-                    }}
+                    stroke="#111827"
+                    strokeWidth={2.5}
                   />
                 ))}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
             </RechartsPie>
           </ResponsiveContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-3xl font-bold text-foreground tabular-nums">{total}</span>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              tareas
+            </span>
+            {completionRate > 0 && (
+              <span className="mt-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-500 tabular-nums">
+                {completionRate}% ok
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Leyenda */}
-        <div className="flex-1 w-full space-y-1">
-          {renderLegend()}
+        <div className="w-full flex-1 space-y-1">
+          {STATUS_META.map((meta, idx) => (
+            <StatusRow
+              key={meta.key}
+              label={meta.label}
+              icon={meta.icon}
+              color={meta.color}
+              count={counts[meta.status] ?? 0}
+              percentage={total > 0 ? Math.round(((counts[meta.status] ?? 0) / total) * 100) : 0}
+              delay={idx * 0.05}
+              onClick={() => navigate(`/tasks?status=${meta.query}`)}
+            />
+          ))}
         </div>
       </div>
     </div>
   );
 }
+
+const CustomTooltip = ({ active, payload }: {
+  active?: boolean;
+  payload?: Array<{ payload?: ChartDatum }>;
+}) => {
+  if (!active || !payload?.length) return null;
+  const data = payload[0]?.payload;
+  if (!data) return null;
+
+  return (
+    <div
+      className="min-w-[140px] rounded-xl border border-border/60 bg-white/95 px-3.5 py-2.5 shadow-xl backdrop-blur-sm dark:bg-card/95"
+      style={{ boxShadow: "0 10px 30px -10px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(17,24,39,0.12)" }}
+    >
+      <div className="flex items-center gap-1.5">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: data.color, boxShadow: "inset 0 0 0 1px rgba(17,24,39,0.6)" }} />
+        <p className="text-xs font-medium text-foreground">{data.name}</p>
+      </div>
+      <p className="mt-1.5 text-xl font-bold text-foreground tabular-nums">
+        {data.value}
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+          tareas
+        </span>
+      </p>
+      <div className="mt-1.5 border-t border-border/40 pt-1.5">
+        <p className="text-[11px] text-muted-foreground tabular-nums">
+          {data.percentage}% del total
+        </p>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
+          <div
+            className="h-full rounded-full"
+            style={{ width: `${data.percentage}%`, backgroundColor: data.color, boxShadow: "inset 0 0 0 1px rgba(17,24,39,0.4)" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};

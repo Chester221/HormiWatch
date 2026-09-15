@@ -1,10 +1,10 @@
+import { useEffect } from "react";
 import { NavLink } from "@/components/NavLink";
 import {
   LayoutDashboard,
   FolderKanban,
   CheckSquare,
   Users,
-  UserCircle,
   Briefcase,
   Settings,
   Clock,
@@ -13,6 +13,9 @@ import {
   BarChart3,
   Building2,
   Wrench,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,24 +28,14 @@ interface NavItem {
 }
 
 const navigation: NavItem[] = [
-  // 1. Dashboard (según rol)
   { name: "Dashboard", href: "/gerencial", icon: BarChart3, roles: ["Manager"] },
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["Technician"] },
   { name: "Dashboard", href: "/control-usuarios", icon: Shield, roles: ["Admin"] },
-  
-  // 2. Clientes (Manager y Admin)
+
   { name: "Clientes", href: "/clients", icon: Building2, roles: ["Manager", "Admin"] },
-  
-  // 3. Proyectos (Manager, Admin y Technician)
   { name: "Proyectos", href: "/projects", icon: FolderKanban, roles: ["Manager", "Admin", "Technician"] },
-  
-  // 4. Tareas (todos)
   { name: "Tareas", href: "/tasks", icon: CheckSquare, roles: ["Manager", "Admin", "Technician"] },
-  
-  // Equipo (Manager y Admin)
   { name: "Equipo", href: "/team", icon: Users, roles: ["Manager", "Admin"] },
-  
-  // Servicios (Manager, Admin y Technician)
   { name: "Servicios", href: "/services", icon: Wrench, roles: ["Manager", "Admin", "Technician"] },
 ];
 
@@ -51,19 +44,42 @@ const bottomNavigation: NavItem[] = [
   { name: "Configuración", href: "/settings", icon: Settings, roles: ["Manager", "Admin", "Technician"] },
 ];
 
-export function Sidebar() {
+const ACTIVE_CLASSES =
+  "bg-[#0DA2E7]/10 text-[#0DA2E7] font-semibold hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] shadow-[inset_2.5px_0_0_0_#0DA2E7]";
+
+interface SidebarProps {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  mobileOpen?: boolean;
+  onCloseMobile?: () => void;
+}
+
+export function Sidebar({
+  collapsed = false,
+  onToggleCollapse,
+  mobileOpen = false,
+  onCloseMobile,
+}: SidebarProps) {
   const { profile } = useAuth();
   const userRole = profile?.role || "Technician";
 
-  const filteredNavigation = navigation.filter(item => {
+  const filteredNavigation = navigation.filter((item) => {
     if (!item.roles) return true;
     return item.roles.includes(userRole);
   });
 
-  const filteredBottomNavigation = bottomNavigation.filter(item => {
+  const filteredBottomNavigation = bottomNavigation.filter((item) => {
     if (!item.roles) return true;
     return item.roles.includes(userRole);
   });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseMobile?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCloseMobile]);
 
   const getRoleDisplay = () => {
     switch (userRole) {
@@ -93,87 +109,147 @@ export function Sidebar() {
   };
 
   const RoleIcon = getRoleIcon();
+  const displayName = profile?.full_name || "Usuario";
+  const initials = displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const itemClasses = cn(
+    "group relative flex items-center rounded-lg py-2.5 text-sm font-medium transition-all duration-200",
+    "text-sidebar-foreground/90 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+    collapsed
+      ? "gap-3.5 px-3.5 lg:justify-center lg:gap-0 lg:px-2"
+      : "gap-3.5 px-3.5 hover:translate-x-0.5",
+    "opacity-0 animate-slide-in-left",
+  );
 
   return (
-    <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar">
-      <div className="flex h-full flex-col">
-        {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b border-sidebar-border px-6">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#0DA2E7]">
-            <Clock className="h-5 w-5 text-white" />
+    <>
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden bg-sidebar transition-all duration-300 ease-in-out",
+          "w-64",
+          collapsed && "lg:w-[76px]",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
+      >
+        {/* Logo + acciones */}
+        <div className="flex h-16 shrink-0 items-center border-b border-sidebar-border px-4">
+          <div className={cn("flex min-w-0 items-center gap-3", collapsed && "lg:justify-center")}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7] shadow-glow">
+              <Clock className="h-5 w-5 text-white" />
+            </div>
+            <span className={cn("truncate text-lg font-bold tracking-tight text-sidebar-accent-foreground", collapsed && "lg:hidden")}>
+              Hormiwatch
+            </span>
           </div>
-          <span className="text-xl font-bold text-sidebar-accent-foreground">
-            Hormiwatch
-          </span>
+
+          <div className="ml-auto flex items-center gap-1">
+            {onCloseMobile && (
+              <button
+                type="button"
+                onClick={onCloseMobile}
+                aria-label="Cerrar menú"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+                title={collapsed ? "Expandir menú" : "Colapsar menú"}
+                className="hidden h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground transition-all hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:flex"
+              >
+                {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Indicador de Rol */}
-        <div className="px-3 py-3">
-          <div className={cn(
-            "rounded-lg px-3 py-2 text-xs font-medium flex items-center gap-2 border",
-            getRoleBadgeColor()
-          )}>
-            <RoleIcon className="h-3.5 w-3.5" />
-            {getRoleDisplay()}
+        <div className={cn("shrink-0 px-3 pt-3", collapsed && "lg:px-2")}>
+          <div
+            className={cn(
+              "flex items-center rounded-lg border py-2 text-xs font-medium",
+              getRoleBadgeColor(),
+              collapsed ? "gap-2 px-3 lg:w-11 lg:justify-center lg:gap-0 lg:px-0" : "w-full gap-2 px-3",
+            )}
+          >
+            <RoleIcon className="h-4 w-4 shrink-0" />
+            <span className={cn("truncate", collapsed && "lg:hidden")}>{getRoleDisplay()}</span>
           </div>
         </div>
 
-        {/* Navigation Principal */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-          <p className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+        {/* Navegación principal */}
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+          <div className={cn("px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40", collapsed && "lg:hidden")}>
             Principal
-          </p>
-          {filteredNavigation.map((item, index) => (
-            <NavLink
-              key={item.name + item.href}
-              to={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-all duration-200",
-                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "opacity-0 animate-slide-in-left"
-              )}
-              activeClassName="bg-[#0DA2E7] text-white hover:bg-[#0DA2E7] hover:text-white shadow-md"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-              {item.name}
-            </NavLink>
-          ))}
+          </div>
+          <div className="space-y-1">
+            {filteredNavigation.map((item, index) => (
+              <NavLink
+                key={item.name + item.href}
+                to={item.href}
+                onClick={onCloseMobile}
+                className={itemClasses}
+                activeClassName={ACTIVE_CLASSES}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <span className={cn("truncate", collapsed && "lg:hidden")}>{item.name}</span>
+              </NavLink>
+            ))}
+          </div>
 
-          {/* Separador */}
-          <div className="my-4" />
+          <div className="my-4 h-px bg-sidebar-border/60" />
 
-          <p className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+          <div className={cn("px-3 pb-2 text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40", collapsed && "lg:hidden")}>
             Cuenta
-          </p>
-          {filteredBottomNavigation.map((item, index) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground transition-all duration-200",
-                "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                "opacity-0 animate-slide-in-left"
-              )}
-              activeClassName="bg-[#0DA2E7] text-white hover:bg-[#0DA2E7] hover:text-white shadow-md"
-              style={{ animationDelay: `${(filteredNavigation.length + index) * 50}ms` }}
-            >
-              <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
-              {item.name}
-            </NavLink>
-          ))}
+          </div>
+          <div className="space-y-1">
+            {filteredBottomNavigation.map((item, index) => (
+              <NavLink
+                key={item.name}
+                to={item.href}
+                onClick={onCloseMobile}
+                className={itemClasses}
+                activeClassName={ACTIVE_CLASSES}
+                style={{ animationDelay: `${(filteredNavigation.length + index) * 50}ms` }}
+              >
+                <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <span className={cn("truncate", collapsed && "lg:hidden")}>{item.name}</span>
+              </NavLink>
+            ))}
+          </div>
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-sidebar-border p-4">
-          <div className="rounded-xl bg-sidebar-accent/50 p-3">
-            <p className="text-xs font-medium text-sidebar-foreground">
-              {profile?.full_name || "Usuario"}
-            </p>
-            <p className="text-[10px] text-sidebar-muted mt-0.5">© 2026 Hormiwatch</p>
+        <div className="shrink-0 border-t border-sidebar-border p-4">
+          <div className={cn("flex items-center gap-3 rounded-xl bg-sidebar-accent/50 p-3", collapsed && "lg:justify-center lg:px-2")}>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/15 text-xs font-bold text-[#0DA2E7]">
+              {initials}
+            </div>
+            <div className={cn("min-w-0", collapsed && "lg:hidden")}>
+              <p className="truncate text-xs font-semibold text-sidebar-accent-foreground">{displayName}</p>
+              <p className="mt-0.5 truncate text-[10px] text-sidebar-muted">© 2026 Hormiwatch</p>
+            </div>
           </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }

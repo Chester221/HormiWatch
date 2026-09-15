@@ -5,27 +5,75 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 // ============================================================
-// 2. CLIENTE HTTP CON MANEJO DE ERRORES Y TOKEN
+// 2. CLIENTE HTTP CON MANEJO DE ERRORES, TOKEN Y REFRESH
 // ============================================================
-const apiClient = async (endpoint: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('token');
-  
+let accessToken: string | null = null;
+
+export const setAccessToken = (token: string | null) => {
+  accessToken = token;
+};
+
+export const requestRefresh = async (): Promise<string | null> => {
+  try {
+    const response = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data?.accessToken) {
+      accessToken = data.accessToken;
+      return data.accessToken;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+const apiClient = async (endpoint: string, options: RequestInit = {}, retry = true): Promise<any> => {
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
       ...options.headers,
     },
   });
 
+  // ✅ Auto-refresh en 401 y reintento una vez
+  if (response.status === 401 && retry) {
+    const newToken = await requestRefresh();
+    if (newToken) {
+      return apiClient(endpoint, options, false);
+    }
+    // Fallback legacy: intentar con token de localStorage
+    const legacy = localStorage.getItem('token');
+    if (legacy) {
+      accessToken = legacy;
+      return apiClient(endpoint, options, false);
+    }
+  }
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || `Error ${response.status}: ${response.statusText}`);
+    throw new Error(error.message || `Error del servidor (${response.status})`);
+  }
+
+  // ✅ 204 No Content: no hay cuerpo que parsear
+  if (response.status === 204) {
+    return null;
   }
 
   const json = await response.json();
-  
+
+  // ✅ SOPORTA { records, meta } Preserva meta para que el cliente pueda paginar
+  if (json && typeof json === 'object' && 'meta' in json) {
+    return { records: json.records ?? [], meta: json.meta };
+  }
+
   // ✅ AHORA SOPORTA { records: [] } Y { data: [] }
   return json?.records ?? json?.data ?? json;
 };
@@ -57,6 +105,10 @@ export const authApi = {
   // ✅ NUEVO: session para obtener sesión actual
   session: () =>
     apiClient('/auth/session', { method: 'GET' }),
+
+  // ✅ NUEVO: eliminar la propia cuenta (cualquier rol)
+  deleteAccount: () =>
+    apiClient('/auth/account', { method: 'DELETE' }),
 };
 
 // ---------- USERS ----------
@@ -81,6 +133,11 @@ export const usersApi = {
 
   getTechnicians: () =>
     apiClient('/users/technicians'),
+};
+
+// ---------- ROLES ----------
+export const rolesApi = {
+  getAll: () => apiClient('/role'),
 };
 
 // ---------- PROJECTS ----------
@@ -302,8 +359,9 @@ export const storageApi = {
 
     return fetch(`${API_URL}/storage/upload`, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        Authorization: `Bearer ${accessToken || localStorage.getItem('token')}`,
       },
       body: formData,
     }).then(res => res.json());

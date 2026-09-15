@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { usersApi, authApi } from '@/lib/api'
+import { usersApi, authApi, setAccessToken, requestRefresh } from '@/lib/api'
 
-export type UserRole = 'Technician' | 'Manager' | 'Admin'
+export type UserRole = 'Technician' | 'Manager' | 'Admin' | 'Leader'
 
 export interface UserProfile {
     id: string
@@ -12,11 +12,12 @@ export interface UserProfile {
     dark_mode: boolean
     preferences?: {
         tasks_view?: "list" | "calendar"
-        projects_view?: "grid" | "table"
+        projects_view?: "grid" | "list" | "compact"
         tasks_filters?: {
             project?: string
             status?: string
         }
+        dark_mode?: boolean
     }
     email_notifications?: boolean
     task_reminders?: boolean
@@ -65,37 +66,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const updatePreferences = useCallback(async (preferences: any) => {
         if (!user) throw new Error('No hay usuario autenticado')
         
+        const currentPrefs = profile?.preferences || {}
+        const updatedPrefs = {
+            ...currentPrefs,
+            ...preferences
+        }
+
+        // 💨 CAMBIO INSTANTÁNEO (optimista): actualizar UI antes de esperar la API
+        setProfile(prev => prev ? {
+            ...prev,
+            ...(preferences.dark_mode !== undefined ? { dark_mode: preferences.dark_mode } : {}),
+            preferences: updatedPrefs
+        } : null)
+
+        if (preferences.dark_mode !== undefined) {
+            if (preferences.dark_mode) {
+                document.documentElement.classList.add('dark')
+            } else {
+                document.documentElement.classList.remove('dark')
+            }
+        }
+
         try {
-            const currentPrefs = profile?.preferences || {}
-            const updatedPrefs = {
-                ...currentPrefs,
-                ...preferences
-            }
-            
-            const updateData: any = {
-                preferences: updatedPrefs
-            }
-            
-            if (preferences.dark_mode !== undefined) {
-                updateData.dark_mode = preferences.dark_mode
-            }
-            
-            await usersApi.update(user.id, updateData)
-            
-            setProfile(prev => prev ? { 
-                ...prev, 
-                ...(preferences.dark_mode !== undefined ? { dark_mode: preferences.dark_mode } : {}),
-                preferences: updatedPrefs 
+            await usersApi.update(user.id, { preferences: updatedPrefs })
+        } catch (err) {
+            // Revertir si el servidor falló
+            setProfile(prev => prev ? {
+                ...prev,
+                ...(preferences.dark_mode !== undefined ? { dark_mode: currentPrefs.dark_mode ?? false } : {}),
+                preferences: currentPrefs
             } : null)
-            
             if (preferences.dark_mode !== undefined) {
                 if (preferences.dark_mode) {
-                    document.documentElement.classList.add('dark')
-                } else {
                     document.documentElement.classList.remove('dark')
+                } else {
+                    document.documentElement.classList.add('dark')
                 }
             }
-        } catch (err) {
             console.error('Error actualizando preferencias:', err)
             throw err
         }
@@ -107,6 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (profileData && typeof profileData.role !== 'string') {
                 profileData.role = profileData.role?.name || 'Technician';
             }
+            // ✅ dark_mode vive en preferences (jsonb) — exponerlo para el toggle
+            profileData.dark_mode = profileData.preferences?.dark_mode ?? false;
             return profileData as UserProfile;
         } catch (err: any) {
             console.error('Error crítico en fetchProfile:', err)
@@ -119,44 +128,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(true);
           setAuthError(null);
           
-          const token = localStorage.getItem('token');
-          
-          if (token) {
+          // ✅ Usar refresh/session con withCredentials (cookie HttpOnly)
+          // Si hay un refresh token en cookie, se renovará automáticamente
+          try {
+            let sessionData = null;
             try {
-              const sessionData = await authApi.session();
+              sessionData = await authApi.session();
+            } catch {
+              // Si el access token no está, el auto-refresh se encarga
+              const refreshed = await requestRefresh();
+              if (refreshed) {
+                sessionData = await authApi.session();
+              }
+            }
+            
+            if (sessionData?.id) {
+              setUser(sessionData);
+              setSession({ user: sessionData });
               
-              if (sessionData?.id) {
-                setUser(sessionData);
-                setSession({ user: sessionData });
+              try {
+                const profileData = await fetchProfile(sessionData.id);
+                setProfile(profileData);
                 
-                try {
-                  const profileData = await fetchProfile(sessionData.id);
-                  setProfile(profileData);
-                  
-                  if (profileData?.dark_mode) {
-                    document.documentElement.classList.add('dark')
-                  } else {
-                    document.documentElement.classList.remove('dark')
-                  }
-                } catch (profileErr: any) {
-                  console.error("Fallo carga de perfil", profileErr);
-                  setAuthError(`Error cargando tu perfil: ${profileErr.message || 'Error desconocido'}`);
-                  setProfile(null);
+                if (profileData?.dark_mode) {
+                  document.documentElement.classList.add('dark')
+                } else {
+                  document.documentElement.classList.remove('dark')
                 }
-              } else {
-                localStorage.removeItem('token');
-                setUser(null);
-                setSession(null);
+              } catch (profileErr: any) {
+                console.error("Fallo carga de perfil", profileErr);
+                setAuthError(`Error cargando tu perfil: ${profileErr.message || 'Error desconocido'}`);
                 setProfile(null);
               }
-            } catch (err) {
-              console.error('Error en session:', err);
-              localStorage.removeItem('token');
+            } else {
               setUser(null);
               setSession(null);
               setProfile(null);
             }
-          } else {
+          } catch (err) {
+            console.error('Error en session:', err);
             setUser(null);
             setSession(null);
             setProfile(null);
@@ -189,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             
             if (result?.accessToken) {
-                localStorage.setItem('token', result.accessToken);
+                setAccessToken(result.accessToken);
             }
             
             if (result?.user) {
@@ -248,6 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             console.error('Error en logout:', err);
         }
         localStorage.removeItem('token');
+        setAccessToken(null);
         setProfile(null); 
         setUser(null); 
         setSession(null);
@@ -258,11 +269,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!user) return { error: new Error('No hay usuario autenticado') };
         
         try {
-            // ✅ Enviar full_name al perfil
+            // ✅ Enviar full_name al perfil (dark_mode vive en preferences)
             await usersApi.update(user.id, {
                 full_name: updates.full_name,
                 avatar_url: updates.avatar_url,
-                dark_mode: updates.dark_mode,
+                preferences: updates.dark_mode !== undefined
+                    ? { ...(profile?.preferences || {}), dark_mode: updates.dark_mode }
+                    : undefined,
             });
             
             setProfile(prev => prev ? { ...prev, ...updates } : null);
@@ -277,12 +290,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!user) return { url: null, error: new Error('No hay usuario autenticado') };
         
         try {
+            const formData = new FormData();
+            formData.append('file', file);
             const result = await fetch(`http://localhost:3000/api/v1/storage/upload`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('token')}`,
                 },
-                body: file,
+                body: formData,
             });
             
             const data = await result.json();

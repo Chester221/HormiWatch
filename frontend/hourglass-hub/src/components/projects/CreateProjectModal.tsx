@@ -34,9 +34,9 @@ export function CreateProjectModal({ open, onOpenChange, onSuccess }: CreateProj
   const createProject = useCreateProject();
   const { data: members = [] } = useTeamMembers();
 
-  // 🔒 Filtrar solo MANAGER y ADMIN para líder de proyecto
+  // 🔒 Filtrar solo MANAGER para líder de proyecto (sin Admins)
   const eligibleLeaders = members.filter((m: any) => 
-    m.role === 'Manager' || m.role === 'Admin'
+    m.role === 'Manager'
   );
 
   const handleSubmit = async (e: React.FormEvent) => {

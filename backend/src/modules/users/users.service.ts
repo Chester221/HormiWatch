@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RoleService } from '../role/role.service';
@@ -17,7 +17,7 @@ import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from '../../common/pagination/metadata';
 import { UserResponseDto } from './dto/user-response.dto';
 import { plainToInstance } from 'class-transformer';
-import { Brackets } from 'typeorm';
+import { Brackets, Not } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { Inject } from '@nestjs/common';
@@ -163,6 +163,17 @@ export class UsersService {
       const sharedId = uuidv4();
 
       return await this.userRepository.manager.transaction(async (tx) => {
+        if (role.name === 'Admin') {
+          const activeAdminCount = await tx.count(User, {
+            where: { role: { name: 'Admin' }, isActive: true },
+          });
+          if (activeAdminCount >= 2) {
+            throw new ConflictException(
+              'Límite de 2 administradores activos alcanzado. Desactiva uno primero.',
+            );
+          }
+        }
+
         const newUserData = {
           id: sharedId,
           email: userData.email,
@@ -249,6 +260,8 @@ export class UsersService {
       'profile.position',
       'profile.deparment',
       'profile.profilePicture',
+      'profile.full_name',
+      'profile.avatar_url',
       'role.id',
       'role.name',
     ]);
@@ -331,6 +344,8 @@ export class UsersService {
         'user.isActive',
         'profile.name',
         'profile.lastName',
+        'profile.full_name',
+        'profile.avatar_url',
         'role.name',
       ])
       .where('user.isActive = :active', { active: true });
@@ -458,6 +473,17 @@ export class UsersService {
         user.password = hashedPassword;
         user.role = role;
         user.preferences = userData.preferences ?? user.preferences;
+
+        if (role.name === 'Admin' && user.isActive !== false) {
+          const activeAdminCount = await this.userRepository.count({
+            where: { role: { name: 'Admin' }, isActive: true, id: Not(user.id) },
+          });
+          if (activeAdminCount >= 2) {
+            throw new ConflictException(
+              'Límite de 2 administradores activos alcanzado. Desactiva uno primero.',
+            );
+          }
+        }
         // ✅ avatar_url y full_name están en Profile, NO en User
         user.updatedAt = new Date();
         await manager.save(User, user);
@@ -529,6 +555,21 @@ export class UsersService {
           error,
         );
       }
+    }
+
+    // ✅ Mensaje claro si el usuario tiene registros asociados (FK NO ACTION)
+    const counts = await this.userRepository.manager.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM tasks t WHERE t.technician_id = $1) AS tasks,
+        (SELECT COUNT(*)::int FROM projects p WHERE p.project_leader_id = $1) AS led_projects,
+        (SELECT COUNT(*)::int FROM assigned_technicians at WHERE at.user_id = $1) AS assigned_projects`,
+      [id],
+    );
+    const related = counts?.[0];
+    if (related && (related.tasks > 0 || related.led_projects > 0 || related.assigned_projects > 0)) {
+      throw new ConflictException(
+        'No se puede eliminar: el usuario tiene tareas o proyectos asignados. Desactívalo en su lugar.',
+      );
     }
 
     await this.userRepository.manager.transaction(async (manager) => {

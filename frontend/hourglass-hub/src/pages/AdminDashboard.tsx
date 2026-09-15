@@ -45,6 +45,7 @@ export default function AdminDashboard() {
   const [editModal, setEditModal] = useState<{ open: boolean; user: any }>({ open: false, user: null });
   const [suspendDialog, setSuspendDialog] = useState<{ open: boolean; user: any }>({ open: false, user: null });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: any }>({ open: false, user: null });
+  const [cannotDeleteDialog, setCannotDeleteDialog] = useState<{ open: boolean; user: any; message: string }>({ open: false, user: null, message: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
@@ -72,7 +73,8 @@ export default function AdminDashboard() {
     setIsLoading(true);
     try {
       const data = await usersApi.getAll();
-      if (data) setUsers(data);
+      const list = Array.isArray(data) ? data : data?.records || data?.data || [];
+      setUsers(list);
     } catch (error) {
       console.error("Error fetching users:", error);
       toast.error("Error al cargar usuarios");
@@ -203,21 +205,27 @@ export default function AdminDashboard() {
         return;
       }
 
-      await usersApi.delete(user.id);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Error eliminando de auth.users:", errorData);
-        toast.warning(`Usuario eliminado de la app, pero el email podría seguir registrado.`);
-      } else {
-        toast.success(`Usuario "${user.full_name || user.email}" eliminado completamente`);
-      }
+      await usersApi.delete(user.id)
+        .then(() => toast.success(`Usuario "${user.full_name || user.email}" eliminado completamente`))
+        .catch((e: any) => { throw e; });
 
       fetchUsers();
       setDeleteDialog({ open: false, user: null });
     } catch (error: any) {
       console.error("Error en handleDeleteUser:", error);
-      toast.error(error.message || "Error al eliminar usuario");
+      const msg = error?.message || "";
+      if (
+        msg.includes("No se puede eliminar") ||
+        msg.includes("tareas o proyectos") ||
+        msg.includes("tareas o proyectos asignados") ||
+        msg.includes("Desactívalo en su lugar") ||
+        (typeof error?.status === "number" && error.status === 409)
+      ) {
+        setDeleteDialog({ open: false, user: null });
+        setCannotDeleteDialog({ open: true, user, message: msg });
+        return;
+      }
+      toast.error(msg || "Error al eliminar usuario");
     }
   };
 

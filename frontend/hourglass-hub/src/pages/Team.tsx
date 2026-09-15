@@ -4,241 +4,314 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
+import { AddUserModal } from "@/components/team/AddUserModal";
+import { TeamMemberFormModal } from "@/components/team/TeamMemberFormModal";
+import { MemberDetailModal } from "@/components/team/MemberDetailModal";
+import { TeamMemberCard, type TeamMemberLike } from "@/components/team/TeamMemberCard";
+import { TeamFilters, type TeamFilterOption } from "@/components/team/TeamFilters";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import {
-  Search, Mail, Phone, Shield, Wrench, UserCog, Loader2, AlertTriangle,
-  FolderKanban, Users, Crown, User as UserIcon, Filter, CheckCircle, Clock,
-  ChevronLeft, ChevronRight, Table, Grid3x3, MoreVertical, Trash2,
-  TrendingUp,
+  Users, Shield, Wrench, Briefcase, UserCog, Loader2, AlertTriangle,
+  Crown, CheckCircle, ChevronLeft, ChevronRight, Table, Grid3x3,
+  Pencil, Trash2, TrendingUp, UserPlus, Ban, Eye,
 } from "lucide-react";
-import { useTeamMembers, useDeleteTeamMember, TeamMember } from "@/hooks/useTeamMembers";
-import { useProjects } from "@/hooks/useProjects";
+import type { LucideIcon } from "lucide-react";
+import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/hooks/useAuth";
-import { usersApi, projectsApi } from "@/lib/api";
+import { usersApi } from "@/lib/api";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 
-const HORMI_BLUE = "#0DA2E7";
+// ═══════════════ HELPERS DEFENSIVOS (API camelCase / legacy snake_case) ═══════════════
 
-// ✅ FUNCIONES PARA OBTENER NOMBRE COMPLETO
-const getFullName = (member: any) => {
-  if (member?.full_name) return member.full_name;
-  if (member?.profile?.name) {
-    return `${member.profile.name} ${member.profile.lastName || ''}`.trim();
-  }
-  if (member?.name) return member.name;
-  return 'Sin nombre';
+type Member = TeamMemberLike;
+
+const getFullName = (m?: Member | null) =>
+  m?.full_name || (m?.profile?.name ? `${m.profile.name} ${m.profile.lastName || ""}`.trim() : m?.name || "Sin nombre");
+
+const getInitials = (m?: Member | null) =>
+  getFullName(m).split(" ").map((n: string) => n[0]).join("").toUpperCase().substring(0, 2);
+
+const getRoleName = (role: string | { name?: string } | null | undefined) =>
+  typeof role === "string" ? role : role?.name || "Technician";
+
+const getIsActive = (m?: Member | null) => m?.isActive !== false && m?.is_active !== false;
+
+const getAvatar = (m?: Member | null) =>
+  m?.avatar_url || m?.profile?.profilePicture || null;
+
+// ═══════════════ CONFIG ESTILOS COMÚN ═══════════════
+
+const ROLE_CONFIG: Record<string, { label: string; icon: LucideIcon; badge: string; dot: string }> = {
+  Admin: { label: "Administrador", icon: Crown, badge: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
+  Manager: { label: "Manager", icon: Briefcase, badge: "bg-blue-50 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+  Technician: { label: "Técnico", icon: Wrench, badge: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
 };
 
-const getInitials = (member: any) => {
-  const name = getFullName(member);
-  return name.split(" ").map((n: string) => n[0]).join("").toUpperCase().substring(0, 2);
+const getRoleConfig = (role: string | { name?: string } | null | undefined) => {
+  const name = getRoleName(role);
+  return ROLE_CONFIG[name] || ROLE_CONFIG.Technician;
 };
 
-const getRoleName = (role: any) => {
-  if (typeof role === 'string') return role;
-  if (role?.name) return role.name;
-  return 'Sin rol';
-};
+const ROLE_ORDER: Record<string, number> = { Admin: 0, Manager: 1, Technician: 2 };
+
+// ═══════════════ TABLE ROW ═══════════════
+
+function TableRow({
+  member, onDelete, onEdit, onOpenDetail, canEdit, canDelete,
+}: {
+  member: Member;
+  onDelete: (m: Member) => void;
+  onEdit: (m: Member) => void;
+  onOpenDetail: (m: Member) => void;
+  canEdit: boolean;
+  canDelete: boolean;
+}) {
+  const roleConfig = getRoleConfig(member?.role);
+  const RoleIcon = roleConfig.icon;
+  const isActive = getIsActive(member);
+  const avatar = getAvatar(member);
+
+  return (
+    <motion.tr
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={() => onOpenDetail(member)}
+      className="border-b border-border/20 transition-colors hover:bg-[#0DA2E7]/[0.04] cursor-pointer group"
+    >
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8 ring-1 ring-border">
+            <AvatarImage src={avatar || ""} />
+            <AvatarFallback className="text-xs bg-muted">
+              {getInitials(member)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-medium text-foreground text-sm">{getFullName(member)}</span>
+        </div>
+      </td>
+      <td className="p-4">
+        <Badge variant="outline" className={`gap-1 text-[10px] px-2 py-0 font-medium ${roleConfig.badge}`}>
+          <RoleIcon className="h-2.5 w-2.5" />
+          {roleConfig.label}
+        </Badge>
+      </td>
+      <td className="p-4 text-muted-foreground text-xs">{member.email}</td>
+      <td className="p-4">
+        <Badge
+          variant="outline"
+          className={`text-[9px] px-2 py-0 font-medium ${isActive ? "bg-emerald-500/10 text-emerald-600 border-emerald-200" : "bg-rose-500/10 text-rose-600 border-rose-200"}`}
+        >
+          {isActive ? "Activo" : "Suspendido"}
+        </Badge>
+      </td>
+      <td className="p-4 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
+            onClick={(e) => { e.stopPropagation(); onOpenDetail(member); }}
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </Button>
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
+              onClick={(e) => { e.stopPropagation(); onEdit(member); }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-red-50 hover:text-red-500"
+              onClick={(e) => { e.stopPropagation(); onDelete(member); }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </td>
+    </motion.tr>
+  );
+}
+
+// ═══════════════ PÁGINA ═══════════════
 
 export default function Team() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Filtros (se aplican automáticamente al seleccionar)
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [projectFilter, setProjectFilter] = useState("all");
+
+  // Modales
+  const [addOpen, setAddOpen] = useState(false);
   const [manageMemberOpen, setManageMemberOpen] = useState(false);
-  const [projectMembers, setProjectMembers] = useState<any[]>([]);
+  const [detailMember, setDetailMember] = useState<Member | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [editMember, setEditMember] = useState<Member | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteMember, setDeleteMember] = useState<Member | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteMode, setDeleteMode] = useState<"deactivate" | "remove">("deactivate");
+  const [deleting, setDeleting] = useState(false);
+
+  // Datos
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
     const saved = localStorage.getItem("teamViewMode");
     return (saved === "grid" || saved === "table") ? saved : "grid";
   });
-  const itemsPerPage = 8;
-  
+  const itemsPerPage = 12;
+
   const { data: teamMembers = [], isLoading, refetch } = useTeamMembers();
-  const { data: projects = [] } = useProjects();
-  const deleteMemberMutation = useDeleteTeamMember();
   const { profile } = useAuth();
   const canViewTeam = profile?.role === 'Admin' || profile?.role === 'Manager';
   const isAdmin = profile?.role === 'Admin';
   const isManager = profile?.role === 'Manager';
 
-  const [assignDialog, setAssignDialog] = useState<{
-    open: boolean; member: TeamMember | null; selectedProjects: string[]; projectRoles: Record<string, string>;
-  }>({ open: false, member: null, selectedProjects: [], projectRoles: {} });
-
-  const fetchProjectMembers = async () => {
-    try {
-      const users = await usersApi.getAll();
-      const projects = await projectsApi.getAll();
-      setProjectMembers([]);
-    } catch (error) {
-      console.error("Error fetching project members:", error);
-    }
-  };
-
-  useEffect(() => { fetchProjectMembers(); }, []);
-
-  // 🔥 FILTRO: Excluir Admins de la lista regular (solo Managers y Técnicos)
-  const regularMembers = teamMembers.filter(m => {
-    const roleName = getRoleName(m.role);
-    return roleName !== 'Admin';
-  });
+  // ✅ Excluir Admins de la lista regular (solo Managers y Técnicos)
+  const regularMembers = teamMembers.filter(m => getRoleName(m.role) !== 'Admin');
   const visibleMembers = isAdmin ? teamMembers : regularMembers;
 
-  // ✅ FILTROS CORREGIDOS
+  // ✅ Filtros (rol + estado)
   const filteredMembers = visibleMembers.filter(m => {
     const roleName = getRoleName(m.role);
-    const fullName = getFullName(m);
-    
-    const matchesSearch = !searchQuery || 
-      fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (m.email?.toLowerCase().includes(searchQuery.toLowerCase()));
-    
     const matchesRole = roleFilter === "all" || roleName === roleFilter;
-    
-    const matchesStatus = statusFilter === "all" || 
-      (statusFilter === "active" && m.is_active !== false) ||
-      (statusFilter === "suspended" && m.is_active === false);
-    
-    const matchesProject = projectFilter === "all" || 
-      projectMembers.some(pm => pm.project_id === projectFilter && pm.user_id === m.id);
-    
-    return matchesSearch && matchesRole && matchesStatus && matchesProject;
+    const matchesStatus = statusFilter === "all" ||
+      (statusFilter === "active" && getIsActive(m)) ||
+      (statusFilter === "suspended" && !getIsActive(m));
+    return matchesRole && matchesStatus;
   });
 
-  const roleOrder: Record<string, number> = { Admin: 0, Manager: 1, Technician: 2 };
+  // ✅ Orden: por rol y luego alfabético
   const sortedMembers = [...filteredMembers].sort((a, b) => {
-    const roleA = getRoleName(a.role);
-    const roleB = getRoleName(b.role);
-    return (roleOrder[roleA] || 99) - (roleOrder[roleB] || 99);
+    const diff = (ROLE_ORDER[getRoleName(a.role)] ?? 99) - (ROLE_ORDER[getRoleName(b.role)] ?? 99);
+    return diff || getFullName(a).localeCompare(getFullName(b));
   });
 
   const indexOfLast = currentPage * itemsPerPage;
   const indexOfFirst = indexOfLast - itemsPerPage;
   const currentMembers = sortedMembers.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(sortedMembers.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(sortedMembers.length / itemsPerPage));
 
-  const getProjectMembers = (projectId: string) => projectMembers.filter(pm => pm.project_id === projectId);
-  const getProjectLeader = (projectId: string) => projectMembers.find(pm => pm.project_id === projectId && pm.role_in_project === 'leader');
+  // ✅ Leer ?member= de la URL y abrir el modal del miembro automáticamente
+  useEffect(() => {
+    const memberId = searchParams.get("member");
+    if (!memberId || isLoading) return;
+    const target = teamMembers.find((m) => m.id === memberId);
+    if (target) {
+      setDetailMember(target);
+      setDetailOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, isLoading, teamMembers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ ESTADÍSTICAS
+  // ✅ Estadísticas
   const stats = {
     total: regularMembers.length,
-    active: regularMembers.filter(m => m.is_active !== false).length,
+    active: regularMembers.filter(m => getIsActive(m)).length,
     leaders: teamMembers.filter(m => {
       const roleName = getRoleName(m.role);
       return roleName === 'Admin' || roleName === 'Manager';
     }).length,
-    technicians: teamMembers.filter(m => {
-      const roleName = getRoleName(m.role);
-      return roleName === 'Technician';
-    }).length,
-    suspended: regularMembers.filter(m => m.is_active === false).length,
+    technicians: teamMembers.filter(m => getRoleName(m.role) === 'Technician').length,
+    suspended: regularMembers.filter(m => !getIsActive(m)).length,
   };
 
-  const handleAssign = (m: TeamMember) => {
-    const currentAssignments = projectMembers.filter(pm => pm.user_id === m.id);
-    setAssignDialog({
-      open: true, member: m,
-      selectedProjects: currentAssignments.map(pm => pm.project_id),
-      projectRoles: Object.fromEntries(currentAssignments.map(pm => [pm.project_id, pm.role_in_project || 'member'])),
+  const activeFilterCount = (roleFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0);
+
+  // Opciones de rol visibles según el usuario actual
+  const roleOptions: TeamFilterOption[] = [
+    { value: "all", label: "Todos los roles", icon: Users, color: "text-muted-foreground" },
+    { value: "Manager", label: "Manager", icon: Briefcase, color: "text-blue-500" },
+    { value: "Technician", label: "Técnico", icon: Wrench, color: "text-emerald-500" },
+    ...(isAdmin ? [{ value: "Admin", label: "Administrador", icon: Crown, color: "text-amber-500" }] : []),
+  ];
+
+  // ✅ Permisos: editar = Admin/Manager · agregar/desactivar/eliminar = Admin
+  const canManageMembersEdit = isAdmin || isManager;
+
+  // ═══════════ HANDLERS ═══════════
+
+  const handleOpenDetail = (m: Member) => {
+    setDetailMember(m);
+    setDetailOpen(true);
+  };
+
+  const handleEditRequest = (m: Member) => {
+    setEditMember(m);
+    setDetailOpen(false);
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = async (data: { id?: string; name?: string; email?: string; phone?: string | null }) => {
+    if (!data?.id) return;
+    await usersApi.update(data.id, {
+      name: data.name,
+      email: data.email,
+      phone: data.phone || null,
     });
+    toast.success("Miembro actualizado correctamente");
+    setEditOpen(false);
+    refetch();
   };
 
-  const handleDelete = async (member: TeamMember) => {
-    if (!member) return;
-    const name = getFullName(member);
-    if (!confirm(`¿Eliminar a "${name || member.email}" del equipo?`)) return;
+  const handleToggleActive = async (m: Member) => {
+    if (!m?.id) return;
+    const next = !getIsActive(m);
     try {
-      await deleteMemberMutation.mutateAsync(member.id);
-      toast.success(`"${name || member.email}" eliminado del equipo`);
+      await usersApi.update(m.id, { isActive: next });
+      toast.success(next ? `${getFullName(m)} activado` : `${getFullName(m)} desactivado`);
+      if (detailMember?.id === m.id) {
+        setDetailMember({ ...detailMember, isActive: next, is_active: next });
+      }
       refetch();
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error(`Error: ${message}`);
     }
   };
 
-  const toggleProjectSelection = (projectId: string) => {
-    setAssignDialog(prev => {
-      const isSelected = prev.selectedProjects.includes(projectId);
-      const newSelected = isSelected ? prev.selectedProjects.filter(id => id !== projectId) : [...prev.selectedProjects, projectId];
-      const newRoles = { ...prev.projectRoles };
-      
-      if (!isSelected && !newRoles[projectId]) {
-        const memberRole = getRoleName(prev.member?.role);
-        const canBeLeader = memberRole === 'Manager' || memberRole === 'Admin';
-        
-        if (canBeLeader) {
-          const existingLeader = getProjectLeader(projectId);
-          if (existingLeader && existingLeader.user_id !== prev.member?.id) {
-            newRoles[projectId] = 'member';
-          } else {
-            newRoles[projectId] = 'leader';
-          }
-        } else {
-          newRoles[projectId] = 'member';
-        }
-      }
-      
-      if (isSelected) {
-        delete newRoles[projectId];
-      }
-      
-      return { ...prev, selectedProjects: newSelected, projectRoles: newRoles };
-    });
+  const handleDeleteRequest = (m: Member) => {
+    setDeleteMember(m);
+    setDeleteMode("deactivate");
+    setDeleteOpen(true);
   };
 
-  const toggleProjectRole = (projectId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const currentRole = assignDialog.projectRoles[projectId] || 'member';
-    const memberRole = getRoleName(assignDialog.member?.role);
-    
-    if (currentRole !== 'leader' && memberRole !== 'Manager' && memberRole !== 'Admin') {
-      toast.error('Solo los Managers pueden ser líderes de proyecto');
-      return;
-    }
-    
-    if (currentRole !== 'leader') {
-      const existingLeader = getProjectLeader(projectId);
-      if (existingLeader && existingLeader.user_id !== assignDialog.member?.id) {
-        toast.error(`Este proyecto ya tiene un líder: ${getFullName(existingLeader) || 'Otro miembro'}`);
-        return;
-      }
-    }
-    setAssignDialog(prev => ({ ...prev, projectRoles: { ...prev.projectRoles, [projectId]: currentRole === 'leader' ? 'member' : 'leader' } }));
-  };
-
-  const confirmAssign = async () => {
-    if (!assignDialog.member) return;
-    for (const projectId of assignDialog.selectedProjects) {
-      if (assignDialog.projectRoles[projectId] === 'leader') {
-        const existingLeader = getProjectLeader(projectId);
-        if (existingLeader && existingLeader.user_id !== assignDialog.member.id) {
-          toast.error(`El proyecto ya tiene un líder asignado.`); return;
-        }
-      }
-    }
+  const confirmDelete = async () => {
+    if (!deleteMember) return;
+    setDeleting(true);
     try {
-      toast.info("Funcionalidad de asignación de proyectos en migración");
-      toast.success("✅ Proyectos actualizados");
-      setAssignDialog({ open: false, member: null, selectedProjects: [], projectRoles: {} });
-      await fetchProjectMembers();
-    } catch (e: any) { toast.error(`❌ Error: ${e.message}`); }
+      if (deleteMode === "remove") {
+        await usersApi.delete(deleteMember.id);
+        toast.success(`${getFullName(deleteMember)} eliminado del equipo`);
+      } else {
+        await usersApi.update(deleteMember.id, { isActive: false });
+        toast.success(`${getFullName(deleteMember)} desactivado`);
+      }
+      setDeleteOpen(false);
+      setDetailOpen(false);
+      setCurrentPage(1);
+      refetch();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error(`Error: ${message}`);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   if (!canViewTeam) {
@@ -257,46 +330,59 @@ export default function Team() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* HEADER */}
-        <div className="relative overflow-hidden rounded-2xl border border-border/30 bg-gradient-to-br from-card via-card to-[#0DA2E7]/3 p-6 shadow-sm">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="hidden sm:flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0DA2E7] shadow-lg shadow-[#0DA2E7]/20">
-                <Users className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-                  <span className="bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] bg-clip-text text-transparent">Equipo</span>
-                  <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
-                    {stats.total} miembros
-                  </Badge>
-                </h1>
-                <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
-                  <span className="font-medium text-emerald-600">{stats.active}</span> activos · 
-                  <span className="text-muted-foreground/60">{stats.suspended} suspendidos</span>
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {(isAdmin || isManager) && (
-                <Button 
-                  onClick={() => setManageMemberOpen(true)} 
-                  className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
-                >
-                  <UserCog className="h-4 w-4" /> Gestionar Rol
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+<div className="relative overflow-hidden rounded-2xl border border-border/30 bg-gradient-to-br from-card via-card to-[#0DA2E7]/3 p-6 shadow-sm">
+  <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
+  <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
+  <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex items-center gap-4">
+      <div className="hidden sm:flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0DA2E7] shadow-lg shadow-[#0DA2E7]/20">
+        <Users className="h-7 w-7 text-white" />
+      </div>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+          <span className="bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] bg-clip-text text-transparent">
+            Equipo
+          </span>
+          <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
+            {stats.total} miembros
+          </Badge>
+        </h1>
+        <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
+          <span className="font-medium text-emerald-600">{stats.active}</span> activos ·
+          <span className="text-muted-foreground/60">{stats.suspended} suspendidos</span>
+        </p>
+        <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">
+          Aquí podrás gestionar los roles de los usuarios y miembros del equipo.
+        </p>
+      </div>
+    </div>
+    <div className="flex items-center gap-2 flex-wrap">
+      {canManageMembersEdit && (
+        <Button
+          onClick={() => setManageMemberOpen(true)}
+          className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
+        >
+          <UserCog className="h-4 w-4" /> Gestionar Rol
+        </Button>
+      )}
+      {isAdmin && (
+        <Button
+          onClick={() => setAddOpen(true)}
+          className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
+        >
+          <UserPlus className="h-4 w-4" /> Agregar Miembro
+        </Button>
+      )}
+    </div>
+  </div>
+</div>
 
         {/* KPI CARDS */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { icon: Users, label: "Total Miembros", value: stats.total, sub: `${stats.active} activos` },
-            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${Math.round((stats.active / stats.total) * 100)}% del equipo` },
+            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% del equipo` },
             { icon: Crown, label: "Leaders", value: stats.leaders, sub: `${stats.leaders} líderes` },
             { icon: TrendingUp, label: "Técnicos", value: stats.technicians, sub: `${stats.technicians} en el equipo` },
           ].map((metric, i) => (
@@ -322,148 +408,59 @@ export default function Team() {
           ))}
         </div>
 
-        {/* BARRA DE FILTROS */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1" />
-          <div className="flex items-center gap-1 rounded-lg border border-border/30 bg-card/50 p-1 shadow-sm backdrop-blur-sm">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="relative h-8 w-8 p-0 rounded-md hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-                >
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  {(roleFilter !== "all" || statusFilter !== "all" || projectFilter !== "all") && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#0DA2E7] ring-2 ring-background" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-card border-border shadow-xl rounded-xl p-3">
-                <div className="space-y-4">
-                  {/* Filtro por Rol */}
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Rol
-                    </label>
-                    <Select
-                      value={roleFilter}
-                      onValueChange={(v) => { setRoleFilter(v); setCurrentPage(1); }}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-muted/20 border-border/50 w-full">
-                        <SelectValue placeholder="Todos los roles" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los roles</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="Technician">Técnico</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Filtro por Estado */}
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Estado
-                    </label>
-                    <div className="flex gap-1 bg-muted/20 rounded-lg p-0.5">
-                      <button
-                        onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 ${
-                          statusFilter === "all" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Todos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("active"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "active" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "active" ? "bg-white" : "bg-emerald-500"}`} />
-                        Activos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("suspended"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "suspended" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "suspended" ? "bg-white" : "bg-rose-400"}`} />
-                        Suspendidos
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Filtro por Proyecto */}
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Proyecto
-                    </label>
-                    <Select
-                      value={projectFilter}
-                      onValueChange={(v) => { setProjectFilter(v); setCurrentPage(1); }}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-muted/20 border-border/50 w-full">
-                        <SelectValue placeholder="Todos los proyectos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los proyectos</SelectItem>
-                        {projects.map((p: any) => (
-                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {(roleFilter !== "all" || statusFilter !== "all" || projectFilter !== "all") && (
-                    <div className="pt-1 border-t border-border/30">
-                      <button
-                        onClick={() => { setRoleFilter("all"); setStatusFilter("all"); setProjectFilter("all"); setCurrentPage(1); }}
-                        className="text-[10px] text-muted-foreground hover:text-[#0DA2E7] transition-colors w-full text-center"
-                      >
-                        Limpiar filtros
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {/* FILTROS + MODO VISTA */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 flex-wrap">
+            <TeamFilters
+              roleOptions={roleOptions}
+              roleFilter={roleFilter}
+              onRoleChange={(v) => { setRoleFilter(v); setCurrentPage(1); }}
+              statusFilter={statusFilter}
+              onStatusChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
+              resultCount={filteredMembers.length}
+              activeCount={activeFilterCount}
+              onClear={() => { setRoleFilter("all"); setStatusFilter("all"); setCurrentPage(1); }}
+            />
 
             <div className="h-6 w-px bg-border/50" />
             <span className="text-xs text-muted-foreground whitespace-nowrap px-1.5">
-              {filteredMembers.length}
+              {filteredMembers.length} miembro{filteredMembers.length !== 1 ? "s" : ""}
             </span>
-            <div className="h-6 w-px bg-border/50" />
+          </div>
 
-            <button
-              onClick={() => {
-                const newMode = viewMode === "grid" ? "table" : "grid";
-                setViewMode(newMode);
-                localStorage.setItem("teamViewMode", newMode);
-              }}
-              className="relative h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#0DA2E7]/10 transition-all duration-200"
-            >
-              <motion.div
-                key={viewMode}
-                initial={{ rotate: -90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-              >
-                {viewMode === "grid" ? (
-                  <Grid3x3 className="h-4 w-4" />
-                ) : (
-                  <Table className="h-4 w-4" />
-                )}
-              </motion.div>
-            </button>
+          {/* Toggle Cuadrícula / Lista con píldora animada */}
+          <div className="relative flex items-center gap-0.5 self-start rounded-xl border border-border/30 bg-muted/30 p-1">
+            {[
+              { id: "grid" as const, label: "Cuadrícula", icon: Grid3x3 },
+              { id: "table" as const, label: "Lista", icon: Table },
+            ].map((opt) => {
+              const active = viewMode === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => {
+                    const newMode = active ? viewMode : opt.id;
+                    setViewMode(newMode);
+                    localStorage.setItem("teamViewMode", newMode);
+                  }}
+                  className={cn(
+                    "relative flex h-8 items-center rounded-lg px-3.5 text-xs font-medium transition-colors",
+                    active ? "text-[#0DA2E7]" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="team-view-pill"
+                      className="absolute inset-0 rounded-lg border border-border/50 bg-card shadow-sm"
+                      transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                    />
+                  )}
+                  <span className="relative z-10 flex items-center gap-1.5">
+                    <opt.icon className="h-3.5 w-3.5" /> {opt.label}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -491,9 +488,9 @@ export default function Team() {
             ))}
           </div>
         ) : currentMembers.length === 0 ? (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 py-20"
           >
             <Users className="h-16 w-16 text-muted-foreground/20 mb-4" />
@@ -501,26 +498,28 @@ export default function Team() {
             <p className="text-sm text-muted-foreground mt-1">Ajusta los filtros o agrega un nuevo miembro</p>
           </motion.div>
         ) : (
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={viewMode}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: "easeInOut" }}
+              layout
+              initial={{ opacity: 0, scale: 0.985, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.99, y: -8 }}
+              transition={{ type: "spring", stiffness: 320, damping: 30 }}
             >
               {viewMode === "grid" ? (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  <AnimatePresence>
+                  <AnimatePresence mode="popLayout" initial={false}>
                     {currentMembers.map((member, idx) => (
-                      <MemberCard 
-                        key={member.id} 
-                        member={member} 
-                        idx={idx} 
-                        onAssign={handleAssign}
-                        onDelete={handleDelete}
-                        isAdmin={isAdmin}
-                        projectMembers={projectMembers}
+                      <TeamMemberCard
+                        key={member.id}
+                        member={member}
+                        idx={idx}
+                        canEdit={canManageMembersEdit}
+                        canDelete={isAdmin}
+                        onEdit={handleEditRequest}
+                        onDelete={handleDeleteRequest}
+                        onOpenDetail={handleOpenDetail}
                       />
                     ))}
                   </AnimatePresence>
@@ -534,20 +533,20 @@ export default function Team() {
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Miembro</th>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Rol</th>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Email</th>
-                          <th className="text-center p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Estado</th>
-                          <th className="text-center p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Proyectos</th>
+                          <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Estado</th>
                           <th className="text-right p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
                         {currentMembers.map((member) => (
-                          <TableRow 
-                            key={member.id} 
-                            member={member} 
-                            onAssign={handleAssign}
-                            onDelete={handleDelete}
-                            isAdmin={isAdmin}
-                            projectMembers={projectMembers}
+                          <TableRow
+                            key={member.id}
+                            member={member}
+                            onDelete={handleDeleteRequest}
+                            onEdit={handleEditRequest}
+                            onOpenDetail={handleOpenDetail}
+                            canEdit={canManageMembersEdit}
+                            canDelete={isAdmin}
                           />
                         ))}
                       </tbody>
@@ -572,312 +571,134 @@ export default function Team() {
         )}
       </div>
 
-      {/* MODALES */}
-      <ManageMemberModal 
-        open={manageMemberOpen} 
-        onOpenChange={setManageMemberOpen} 
-        onSuccess={() => refetch()} 
+      {/* ═══════════ MODALES ═══════════ */}
+
+      {/* Agregar miembro (crea cuenta de usuario) — solo Admin */}
+      <AddUserModal
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onSuccess={() => { setAddOpen(false); refetch(); }}
       />
 
-      {/* Assign Projects Dialog */}
-      <Dialog open={assignDialog.open} onOpenChange={(o) => setAssignDialog({ open: o, member: o ? assignDialog.member : null, selectedProjects: [], projectRoles: {} })}>
-        <DialogContent className="sm:max-w-lg bg-card border-border p-0 overflow-hidden rounded-2xl shadow-2xl">
-          <div className="relative p-5 bg-gradient-to-r from-[#0DA2E7]/15 via-[#0DA2E7]/5 to-transparent border-b border-border">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#0DA2E7]/5 rounded-full blur-2xl" />
-            <div className="flex items-center gap-3 relative">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] shadow-lg shadow-[#0DA2E7]/30">
-                <FolderKanban className="h-5 w-5 text-white" />
+      {/* Gestionar rol */}
+      <ManageMemberModal
+        open={manageMemberOpen}
+        onOpenChange={setManageMemberOpen}
+        onSuccess={() => refetch()}
+        isAdmin={isAdmin}
+        isManager={isManager}
+      />
+
+      {/* Editar miembro */}
+      <TeamMemberFormModal
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        member={editMember}
+        onSubmit={handleEditSubmit}
+      />
+
+      {/* Detalle del miembro */}
+      <MemberDetailModal
+        open={detailOpen}
+        onOpenChange={setDetailOpen}
+        member={detailMember}
+        isAdmin={isAdmin}
+        isManager={isManager}
+        onEdit={handleEditRequest}
+        onDelete={handleDeleteRequest}
+        onToggleActive={handleToggleActive}
+      />
+
+      {/* Confirmación de eliminación / desactivación (solo Admin) */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md bg-card border-border p-0 overflow-hidden rounded-2xl shadow-2xl">
+          <div className="relative p-5 bg-gradient-to-r from-red-500/10 via-transparent to-transparent border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold">Gestionar Proyectos</DialogTitle>
+                <DialogTitle className="text-lg font-bold text-foreground">
+                  {deleteMode === "remove" ? "Eliminar miembro" : "Desactivar miembro"}
+                </DialogTitle>
                 <DialogDescription className="text-xs mt-0.5">
-                  Asignar o remover a <strong className="text-foreground">{assignDialog.member ? getFullName(assignDialog.member) : ''}</strong> de proyectos
+                  {deleteMode === "remove"
+                    ? "Esta acción no se puede deshacer"
+                    : "El miembro conservará sus datos, pero no podrá acceder"}
                 </DialogDescription>
               </div>
             </div>
           </div>
 
-          <div className="p-5 space-y-2 max-h-[400px] overflow-y-auto">
-            {projects.length === 0 ? (
-              <div className="text-center py-12"><FolderKanban className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-30" /><p className="text-sm text-muted-foreground">No hay proyectos</p></div>
-            ) : (
-              projects.map((project: any) => {
-                const isSelected = assignDialog.selectedProjects.includes(project.id);
-                const role = assignDialog.projectRoles[project.id] || 'member';
-                const currentLeader = getProjectLeader(project.id);
-                const isLeader = role === 'leader';
-                const hasOtherLeader = currentLeader && currentLeader.user_id !== assignDialog.member?.id;
-                const isCurrentlyAssigned = projectMembers.some(pm => pm.project_id === project.id && pm.user_id === assignDialog.member?.id);
-                const memberRole = getRoleName(assignDialog.member?.role);
-                const canBeLeader = memberRole === 'Manager' || memberRole === 'Admin';
-
-                return (
-                  <motion.div key={project.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                    className={`p-3.5 rounded-xl border transition-all ${
-                      isSelected ? isLeader ? 'border-amber-400/60 bg-amber-50/50' : 'border-[#0DA2E7]/40 bg-[#0DA2E7]/5' : isCurrentlyAssigned ? 'border-border/50 bg-muted/10' : 'border-border/50 bg-muted/5 hover:bg-muted/10'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div onClick={() => { toggleProjectSelection(project.id); }} 
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 cursor-pointer transition-all ${
-                          isSelected ? isLeader ? 'bg-amber-500 border-amber-500' : 'bg-[#0DA2E7] border-[#0DA2E7]' : 'border-muted-foreground/30 hover:border-[#0DA2E7]/40'
-                        }`}>
-                        {isSelected && <CheckCircle className="h-3 w-3 text-white" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{project.name}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {hasOtherLeader && <span className="text-[10px] text-amber-600 flex items-center gap-1"><Crown className="h-2.5 w-2.5" />Líder: {getFullName(currentLeader) || 'Asignado'}</span>}
-                          {isCurrentlyAssigned && !isSelected && <span className="text-[10px] text-red-500">Será removido al guardar</span>}
-                          <span className="text-[10px] text-muted-foreground">{getProjectMembers(project.id).length} miembros</span>
-                        </div>
-                      </div>
-                      {isSelected && canBeLeader && (
-                        <Button size="sm" variant={isLeader ? 'default' : 'outline'} className={`h-7 text-[10px] px-2.5 gap-1 transition-all ${isLeader ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500' : 'border-border hover:border-[#0DA2E7]/30'}`} onClick={(e) => { toggleProjectRole(project.id, e); }}>
-                          {isLeader ? <><Crown className="h-3 w-3" /> Líder</> : <><UserIcon className="h-3 w-3" /> Miembro</>}
-                        </Button>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })
-            )}
-          </div>
-
-          <div className="p-5 pt-0">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs text-muted-foreground">{assignDialog.selectedProjects.length === 0 ? 'Sin proyectos seleccionados' : `${assignDialog.selectedProjects.length} proyecto(s) seleccionado(s)`}</p>
-              {assignDialog.selectedProjects.length > 0 && (
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setAssignDialog(prev => ({ ...prev, selectedProjects: [], projectRoles: {} }))}>Limpiar</Button>
-              )}
+          <div className="p-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40">
+              <Avatar className="h-10 w-10">
+                <AvatarImage src={getAvatar(deleteMember) || ""} />
+                <AvatarFallback className="text-xs bg-muted">{getInitials(deleteMember)}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-foreground truncate">{getFullName(deleteMember)}</p>
+                <p className="text-xs text-muted-foreground truncate">{deleteMember?.email}</p>
+              </div>
             </div>
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setAssignDialog({ open: false, member: null, selectedProjects: [], projectRoles: {} })} className="flex-1 rounded-lg">Cancelar</Button>
-              <Button onClick={confirmAssign} className="flex-1 text-white rounded-lg" style={{ backgroundColor: HORMI_BLUE }}>
-                <FolderKanban className="h-4 w-4 mr-1.5" />
-                {assignDialog.selectedProjects.length > 0 ? 'Guardar Cambios' : 'Quitar de todos'}
-              </Button>
-            </DialogFooter>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => setDeleteMode("deactivate")}
+                className={cn(
+                  "w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
+                  deleteMode === "deactivate"
+                    ? "border-[#0DA2E7]/40 bg-[#0DA2E7]/5 ring-2 ring-[#0DA2E7]/10"
+                    : "border-border/50 hover:bg-muted/5"
+                )}
+              >
+                <div className={cn("mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0", deleteMode === "deactivate" ? "border-[#0DA2E7]" : "border-muted-foreground/30")}>
+                  {deleteMode === "deactivate" && <span className="h-2 w-2 rounded-full bg-[#0DA2E7]" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                    <Ban className="h-3.5 w-3.5 text-amber-500" /> Desactivar (lógica)
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Recomendado: se puede reactivar luego</p>
+                </div>
+              </button>
+              <button
+                onClick={() => setDeleteMode("remove")}
+                className={cn(
+                  "w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
+                  deleteMode === "remove"
+                    ? "border-red-400/50 bg-red-50/50 ring-2 ring-red-500/10"
+                    : "border-border/50 hover:bg-muted/5"
+                )}
+              >
+                <div className={cn("mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0", deleteMode === "remove" ? "border-red-500" : "border-muted-foreground/30")}>
+                  {deleteMode === "remove" && <span className="h-2 w-2 rounded-full bg-red-500" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                    <Trash2 className="h-3.5 w-3.5 text-red-500" /> Eliminar definitivamente (física)
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Borra la cuenta y su perfil de forma permanente</p>
+                </div>
+              </button>
+            </div>
           </div>
+
+          <DialogFooter className="p-5 pt-0 gap-2">
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1 rounded-lg h-10 text-sm border-border/60">
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmDelete}
+              disabled={deleting}
+              className={`flex-1 rounded-lg h-10 gap-2 text-white text-sm ${deleteMode === "remove" ? "bg-red-500 hover:bg-red-600" : "bg-[#0DA2E7] hover:bg-[#0B8BC7]"}`}
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : deleteMode === "remove" ? <Trash2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+              {deleting ? "Procesando..." : deleteMode === "remove" ? "Eliminar" : "Desactivar"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
-  );
-}
-
-// ═══════════════ MEMBER CARD ═══════════════
-function MemberCard({ member, idx, onAssign, onDelete, isAdmin, projectMembers }: any) {
-  const roleName = getRoleName(member?.role);
-  
-  const roleConfig = {
-    Admin: { icon: Crown, color: "bg-amber-50 text-amber-700 border-amber-200" },
-    Manager: { icon: Shield, color: "bg-blue-50 text-blue-700 border-blue-200" },
-    Technician: { icon: Wrench, color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  };
-  const config = roleConfig[roleName] || roleConfig.Technician;
-  const RoleIcon = config.icon;
-  const isActive = member?.is_active !== false;
-  const fullName = getFullName(member);
-
-  const projectCount = projectMembers.filter((pm: any) => pm.user_id === member.id).length;
-  const isLeader = projectMembers.some((pm: any) => pm.user_id === member.id && pm.role_in_project === 'leader');
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ delay: idx * 0.03, duration: 0.2 }}
-      whileHover={{ y: -3 }}
-      className="group relative rounded-xl border border-border/30 bg-card p-4 shadow-sm hover:shadow-md hover:border-[#0DA2E7]/30 transition-all duration-300"
-    >
-      <div className="flex items-start gap-3">
-        <div className="relative">
-          <Avatar className="h-11 w-11 ring-2 ring-border group-hover:ring-[#0DA2E7]/40 transition-all duration-300">
-            <AvatarImage src={member?.avatar_url || ""} />
-            <AvatarFallback className="text-xs font-semibold bg-gradient-to-br from-muted to-muted/50">
-              {getInitials(member)}
-            </AvatarFallback>
-          </Avatar>
-          {isActive ? (
-            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-card" />
-          ) : (
-            <div className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-rose-400 ring-2 ring-card" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground group-hover:text-[#0DA2E7] transition-colors truncate">
-              {fullName}
-            </h3>
-            {isLeader && (
-              <Badge className="bg-amber-50 text-amber-700 text-[8px] px-1.5 py-0 border-amber-200 flex-shrink-0">
-                <Crown className="h-2.5 w-2.5 mr-0.5" /> Líder
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 gap-1 font-medium ${config.color}`}>
-              <RoleIcon className="h-2.5 w-2.5" />
-              {roleName}
-            </Badge>
-            <Badge
-              variant="outline"
-              className={`text-[8px] px-1.5 py-0 h-4 ${
-                isActive
-                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-200"
-                  : "bg-rose-500/10 text-rose-600 border-rose-200"
-              }`}
-            >
-              {isActive ? "Activo" : "Suspendido"}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-1 mt-2 min-h-[40px]">
-        {member?.email && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
-            <Mail className="h-3 w-3 shrink-0 text-[#0DA2E7]/50" />
-            <span className="truncate">{member.email}</span>
-          </div>
-        )}
-        {member?.phone && (
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
-            <Phone className="h-3 w-3 shrink-0 text-[#0DA2E7]/50" />
-            <span>{member.phone}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/20">
-        <div className="flex items-center gap-1">
-          <FolderKanban className="h-3 w-3 text-muted-foreground/50" />
-          <span className="text-[10px] text-muted-foreground">
-            {projectCount} {projectCount === 1 ? 'proyecto' : 'proyectos'}
-          </span>
-        </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 rounded-full hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-            >
-              <MoreVertical className="h-3.5 w-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-32 bg-card border-border shadow-lg rounded-lg p-1">
-            {isAdmin && (
-              <DropdownMenuItem
-                className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-indigo-50 hover:text-indigo-600 rounded-md px-2 py-1.5 transition-all duration-200"
-                onClick={() => onAssign(member)}
-              >
-                <FolderKanban className="h-3 w-3" /> Proyectos
-              </DropdownMenuItem>
-            )}
-            {isAdmin && (
-              <DropdownMenuItem
-                className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-red-50 hover:text-red-500 rounded-md px-2 py-1.5 transition-all duration-200"
-                onClick={() => onDelete(member)}
-              >
-                <Trash2 className="h-3 w-3" /> Eliminar
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </motion.div>
-  );
-}
-
-// ═══════════════ TABLE ROW ═══════════════
-function TableRow({ member, onAssign, onDelete, isAdmin, projectMembers }: any) {
-  const roleName = getRoleName(member?.role);
-  const isActive = member?.is_active !== false;
-  const projectCount = projectMembers.filter((pm: any) => pm.user_id === member.id).length;
-  const isLeader = projectMembers.some((pm: any) => pm.user_id === member.id && pm.role_in_project === 'leader');
-
-  return (
-    <motion.tr
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="border-b border-border/20 hover:bg-muted/5 transition-colors group"
-    >
-      <td className="p-4">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={member?.avatar_url || ""} />
-            <AvatarFallback className="text-xs bg-muted">
-              {getInitials(member)}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground">{getFullName(member)}</span>
-            {isLeader && (
-              <Badge className="bg-amber-50 text-amber-700 text-[8px] px-1.5 py-0 border-amber-200">
-                <Crown className="h-2.5 w-2.5 mr-0.5" /> Líder
-              </Badge>
-            )}
-          </div>
-        </div>
-      </td>
-      <td className="p-4">
-        <Badge variant="outline" className="text-[10px] px-2 py-0 bg-muted/30">
-          {roleName}
-        </Badge>
-      </td>
-      <td className="p-4 text-muted-foreground text-xs">{member.email}</td>
-      <td className="p-4 text-center">
-        <Badge
-          variant="outline"
-          className={`text-[9px] px-2 py-0 ${
-            isActive
-              ? "bg-emerald-500/10 text-emerald-600 border-emerald-200"
-              : "bg-rose-500/10 text-rose-600 border-rose-200"
-          }`}
-        >
-          {isActive ? "Activo" : "Suspendido"}
-        </Badge>
-      </td>
-      <td className="p-4 text-center">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-[10px] text-muted-foreground hover:text-[#0DA2E7] gap-1.5"
-          onClick={() => onAssign(member)}
-        >
-          <FolderKanban className="h-3 w-3" />
-          <span className="font-medium">{projectCount}</span>
-        </Button>
-      </td>
-      <td className="p-4 text-right">
-        <div className="flex items-center justify-end gap-1">
-          {isAdmin && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 hover:bg-indigo-50 hover:text-indigo-600"
-                onClick={() => onAssign(member)}
-              >
-                <FolderKanban className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 hover:bg-red-50 hover:text-red-500"
-                onClick={() => onDelete(member)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          )}
-        </div>
-      </td>
-    </motion.tr>
   );
 }

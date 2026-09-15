@@ -12,6 +12,20 @@ export class UserResponseDto {
   @Expose()
   email: string;
 
+  @ApiProperty({
+    description: 'User preferences (UI settings incl. dark_mode)',
+  })
+  @Expose()
+  preferences: {
+    tasks_view?: 'list' | 'calendar';
+    projects_view?: 'grid' | 'table';
+    tasks_filters?: {
+      project?: string;
+      status?: string;
+    };
+    dark_mode?: boolean;
+  };
+
   @ApiProperty({ description: 'Indicates if the user account is active' })
   @Expose()
   isActive: boolean; // ✅ CAMBIADO de isActived a isActive

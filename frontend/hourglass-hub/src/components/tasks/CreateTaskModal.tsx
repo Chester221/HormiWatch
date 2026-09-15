@@ -4,12 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
-  DialogFooter 
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,12 +36,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Loader2, Clock, Briefcase, Wrench, FileText, Sun, Moon, X, CalendarIcon } from "lucide-react";
+import { Loader2, Clock, Briefcase, Wrench, FileText, Sun, Moon, X, CalendarIcon, ClipboardList, AlignLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 const HORMI_BLUE = '#0DA2E7';
 const HORMI_GRADIENT = 'linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)';
+
+const FieldLabel = ({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) => (
+  <span className="flex items-center gap-1.5">
+    <span className="text-[#0DA2E7]">{icon}</span>
+    <span className="text-xs font-bold text-foreground uppercase tracking-wide">{children}</span>
+  </span>
+);
 
 const taskSchema = z.object({
   title: z.string().min(1, "El título es requerido"),
@@ -139,26 +146,24 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
-        {/* Header */}
-        <div className="px-6 pt-6 pb-4 border-b border-border/50">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0DA2E7]/10">
-            <Clock className="h-5 w-5 text-[#0DA2E7]" />
-            </div>
-            <div>
-              <DialogTitle className="text-lg font-bold text-foreground">
-                Crear Nueva Tarea
-              </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                Completa los detalles para registrar una nueva tarea
-              </p>
-            </div>
+        {/* Header neutro */}
+        <div className="flex items-center gap-3 p-5 pb-4 bg-muted/5 border-b border-border">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted/40">
+            <ClipboardList className="h-5 w-5 text-muted-foreground/70" />
+          </div>
+          <div>
+            <DialogTitle className="text-lg font-bold text-foreground">
+              Crear Nueva Tarea
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground">
+              Completa los detalles para registrar una nueva tarea
+            </p>
           </div>
         </div>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)}>
-            <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 {/* Título */}
                 <FormField
@@ -166,9 +171,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="title"
                   render={({ field }) => (
                     <FormItem className="col-span-2">
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <FileText className="h-3.5 w-3.5" />
-                        Título <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={<FileText className="h-3.5 w-3.5" />}>Título <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <FormControl>
                         <Input 
@@ -188,9 +192,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="projectId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <Briefcase className="h-3.5 w-3.5" />
-                        Proyecto <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={<Briefcase className="h-3.5 w-3.5" />}>Proyecto <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
@@ -217,9 +220,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="serviceId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <Wrench className="h-3.5 w-3.5" />
-                        Servicio <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={<Wrench className="h-3.5 w-3.5" />}>Servicio <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
@@ -251,9 +253,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="date"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <CalendarIcon className="h-3.5 w-3.5" />
-                        Fecha <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={<CalendarIcon className="h-3.5 w-3.5" />}>Fecha <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -296,9 +297,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="status"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />
-                        Estado <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={<Clock className="h-3.5 w-3.5" />}>Estado <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
@@ -332,9 +332,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="startTime"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        {getTimeIcon(field.value)}
-                        Inicio <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={getTimeIcon(field.value)}>Inicio <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
@@ -364,9 +363,8 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   name="endTime"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                        {getTimeIcon(field.value)}
-                        Fin <span className="text-red-500">*</span>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">
+                        <FieldLabel icon={getTimeIcon(field.value)}>Fin <span className="text-red-500">*</span></FieldLabel>
                       </FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
@@ -397,7 +395,7 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                   render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground">
-                        Descripción
+                        <FieldLabel icon={<AlignLeft className="h-3.5 w-3.5" />}>Descripción</FieldLabel>
                       </FormLabel>
                       <FormControl>
                         <Textarea

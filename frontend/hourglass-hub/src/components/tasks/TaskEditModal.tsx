@@ -5,7 +5,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -13,12 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Pencil, Clock, FileText, Save, X, AlertCircle, Lock } from "lucide-react";
+import { Loader2, Pencil, Clock, FileText, Save, X, Lock, ClipboardList, SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
 
 const HORMI_BLUE = '#0DA2E7';
-const HORMI_GRADIENT = 'linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)';
 
 interface TaskEditModalProps {
   task: any;
@@ -27,59 +27,74 @@ interface TaskEditModalProps {
   onSuccess: (updatedData: any) => void;
 }
 
-// Función para obtener el color del estado
+const STATUS_OPTS = [
+  { value: 'Pending', label: 'Pendiente', color: '#f59e0b' },
+  { value: 'In Progress', label: 'En progreso', color: '#0DA2E7' },
+  { value: 'Completed', label: 'Completada', color: '#10b981' },
+  { value: 'Cancelled', label: 'Cancelada', color: '#ef4444' },
+];
+
 const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'Pending': return 'bg-amber-500';
-    case 'In Progress': return 'bg-blue-500';
-    case 'Completed': return 'bg-emerald-500';
-    default: return 'bg-gray-500';
+  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
+  switch (norm) {
+    case 'CANCELLED': return '#ef4444';
+    case 'COMPLETED': return '#10b981';
+    case 'INPROGRESS': return '#0DA2E7';
+    case 'PENDING': return '#f59e0b';
+    default: return '#6b7280';
   }
 };
 
-// Función para obtener el estado en español
 const getStatusLabel = (status: string) => {
-  switch (status) {
-    case 'Pending': return 'Pendiente';
-    case 'In Progress': return 'En progreso';
-    case 'Completed': return 'Completada';
+  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
+  switch (norm) {
+    case 'CANCELLED': return 'Cancelada';
+    case 'COMPLETED': return 'Completada';
+    case 'INPROGRESS': return 'En progreso';
+    case 'PENDING': return 'Pendiente';
     default: return status;
   }
 };
 
+const toOptionStatus = (status?: string) => {
+  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
+  if (norm === 'COMPLETED') return 'Completed';
+  if (norm === 'CANCELLED') return 'Cancelled';
+  if (norm === 'INPROGRESS') return 'In Progress';
+  return 'Pending';
+};
+
 export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditModalProps) {
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("Pending");
-  const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 🔥 Verificar si la tarea está completada
-  const isCompleted = task?.status === 'Completed' || task?.completed === true;
+  const isCompleted = task?.completed === true ||
+    (task?.status && String(task.status).toUpperCase().replace(/[^A-Z]/g, "") === "COMPLETED") || false;
 
   useEffect(() => {
     if (task) {
+      setTitle(task.title || "");
       setDescription(task.description || "");
-      setStatus(task.status || "Pending");
-      setNotes(task.notes || "");
+      setStatus(toOptionStatus(task.status));
     }
   }, [task]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task) return;
-    
-    // 🔥 Bloquear si está completada
+
     if (isCompleted) {
       toast.warning("No puedes editar una tarea completada");
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
-      const updatedData = { description, status, notes };
+      const updatedData = { title, description, status };
       await onSuccess(updatedData);
-      toast.success("Tarea actualizada correctamente");
     } catch (error: any) {
       toast.error(`Error: ${error.message}`);
     } finally {
@@ -92,44 +107,68 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
-        {/* Header con gradiente */}
-        <div className="relative p-5 pb-4 bg-gradient-to-r from-[#0DA2E7]/15 via-[#0DA2E7]/5 to-transparent border-b border-border">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
-          <div className="flex items-center gap-3 relative">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0DA2E7] shadow-lg shadow-[#0DA2E7]/25">
-  <Pencil className="h-5 w-5 text-white" />
-</div>
-            <div>
-              <DialogTitle className="text-lg font-bold text-foreground">
-                Editar Tarea
-              </DialogTitle>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant="outline" className="text-[10px] px-2 py-0 bg-muted/30">
-                  {task.title || "Sin título"}
-                </Badge>
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${getStatusColor(status)}`} />
-                  <span className="text-[10px] text-muted-foreground">{getStatusLabel(status)}</span>
-                </div>
-                {/* 🔥 Badge de bloqueo si está completada */}
-                {isCompleted && (
-                  <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[9px] px-1.5 py-0 gap-1">
-                    <Lock className="h-2.5 w-2.5" />
-                    Bloqueada
-                  </Badge>
-                )}
+        {/* HEADER */}
+        <div className="flex items-center gap-3 p-5 pb-4 bg-muted/5 border-b border-border">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted/40">
+            <Pencil className="h-5 w-5 text-muted-foreground/70" />
+          </div>
+          <div>
+            <DialogTitle className="text-lg font-bold text-foreground">
+              Editar Tarea
+            </DialogTitle>
+            <div className="flex items-center gap-2 mt-0.5">
+              <Badge variant="outline" className="text-[10px] px-2 py-0 bg-muted/30">
+                {task.title || "Sin título"}
+              </Badge>
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getStatusColor(status) }} />
+                <span className="text-[10px] text-muted-foreground">{getStatusLabel(status)}</span>
               </div>
+              {isCompleted && (
+                <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[9px] px-1.5 py-0 gap-1">
+                  <Lock className="h-2.5 w-2.5" />
+                  Bloqueada
+                </Badge>
+              )}
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Descripción */}
+        {/* BODY */}
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-[#0DA2E7]" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-foreground uppercase tracking-widest">Detalles</p>
+            </div>
+          </div>
+          <Separator className="bg-border/60" />
+
           <div>
-            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5" />
-              Descripción
-            </Label>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
+                <ClipboardList className="h-3.5 w-3.5 text-[#0DA2E7]" />
+              </div>
+              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Título</Label>
+            </div>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Título de la tarea..."
+              disabled={isCompleted}
+              className="mt-1.5 h-9 text-sm bg-background border-border rounded-lg focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
+                <FileText className="h-3.5 w-3.5 text-[#0DA2E7]" />
+              </div>
+              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Descripción</Label>
+            </div>
             <Textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -140,14 +179,15 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
             />
           </div>
 
-          {/* Estado */}
           <div>
-            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5" />
-              Estado
-            </Label>
-            <Select 
-              value={status} 
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
+                <Clock className="h-3.5 w-3.5 text-[#0DA2E7]" />
+              </div>
+              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Estado</Label>
+            </div>
+            <Select
+              value={status}
               onValueChange={setStatus}
               disabled={isCompleted}
             >
@@ -155,14 +195,10 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
-                {[
-                  { value: 'Pending', label: 'Pendiente', color: 'bg-amber-500' },
-                  { value: 'In Progress', label: 'En progreso', color: 'bg-blue-500' },
-                  { value: 'Completed', label: 'Completada', color: 'bg-emerald-500' },
-                ].map((option) => (
+                {STATUS_OPTS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     <span className="flex items-center gap-2">
-                      <span className={`h-2 w-2 rounded-full ${option.color}`} />
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
                       {option.label}
                     </span>
                   </SelectItem>
@@ -177,35 +213,6 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
             )}
           </div>
 
-          {/* Observaciones */}
-          <div>
-            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-              <AlertCircle className="h-3.5 w-3.5" />
-              Observaciones
-            </Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Notas adicionales..."
-              disabled={isCompleted}
-              className="mt-1.5 text-sm bg-background border-border rounded-lg resize-none focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          {/* Info de la tarea */}
-          {task.project && (
-            <div className="p-3 rounded-lg bg-muted/10 border border-border/50 text-xs text-muted-foreground">
-              <span className="font-medium">Proyecto:</span> {task.project}
-              {task.serviceType && (
-                <>
-                  <span className="mx-2">·</span>
-                  <span className="font-medium">Servicio:</span> {task.serviceType}
-                </>
-              )}
-            </div>
-          )}
-
           <DialogFooter className="gap-2 pt-2 border-t border-border/50">
             <Button
               type="button"
@@ -214,13 +221,11 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
               className="h-10 px-6 text-sm rounded-xl flex-1 hover:bg-muted/50 transition-all"
             >
               <X className="h-4 w-4 mr-1.5" />
-              Cancelar
-            </Button>
+              Cancelar            </Button>
             <Button
               type="submit"
               disabled={isSubmitting || isCompleted}
-              className="h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: isCompleted ? '#94A3B8' : '#0DA2E7' }}
+              className={`h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isCompleted ? 'bg-gray-400' : 'bg-[#0DA2E7] hover:bg-[#0B8BC7]'}`}
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

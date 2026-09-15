@@ -49,7 +49,7 @@ async function bootstrap() {
   app.enableCors({
     origin: ['https://hormi-watch2-main.vercel.app', 'http://localhost:8080'],
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 

@@ -26,6 +26,8 @@ export class RolesGuard implements CanActivate {
       return false; // Rechazar si no hay usuario o no tiene rol
     }
 
-    return requiredRoles.includes(user.role as Role); // Validar si el usuario tiene un rol permitido
+    return requiredRoles.some(
+      (r) => String(r).toLowerCase() === String(user.role).toLowerCase(),
+    );
   }
 }

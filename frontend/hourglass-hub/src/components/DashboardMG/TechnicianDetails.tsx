@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { format, formatDistanceToNow, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
+import { taskHours } from "@/lib/dashboardUtils";
 
 interface TechnicianDetailsProps {
   tech: any;
@@ -51,10 +52,7 @@ export function TechnicianDetails({
   const pendingTasks = techTasks.filter((t: any) => t.status === "Pending");
   const inProgressTasks = techTasks.filter((t: any) => t.status === "InProgress");
 
-  const totalHours = techTasks.reduce((acc, t) => {
-    const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-    return acc + h;
-  }, 0);
+  const totalHours = techTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
   const efficiency = techTasks.length > 0
     ? Math.round((completedTasks.length / techTasks.length) * 100)
@@ -83,15 +81,9 @@ export function TechnicianDetails({
     new Date(t.created_at) >= twoMonthsAgo && new Date(t.created_at) < oneMonthAgo
   );
 
-  const currentHours = currentMonthTasks.reduce((acc, t) => {
-    const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-    return acc + h;
-  }, 0);
+  const currentHours = currentMonthTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
-  const previousHours = previousMonthTasks.reduce((acc, t) => {
-    const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-    return acc + h;
-  }, 0);
+  const previousHours = previousMonthTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
   let trend = 0;
   if (previousHours > 0) {
@@ -258,7 +250,7 @@ export function TechnicianDetails({
                               <span>·</span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {task.duration_in_minutes ? (task.duration_in_minutes / 60).toFixed(1) : 0}h
+                                {taskHours(task).toFixed(1)}h
                               </span>
                             </div>
                           </div>

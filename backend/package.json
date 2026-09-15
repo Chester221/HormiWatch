@@ -20,7 +20,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "typeorm": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js",
     "migrate:generate": "npm run typeorm migration:generate -- -d src/typeorm.config.ts",
-    "migrate:run": "npm run typeorm migration:run -- -d src/typeorm.config.ts"
+    "migrate:run": "npm run typeorm migration:run -- -d src/typeorm.config.ts",
+    "seed:services": "node scripts/seed-services.cjs"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.1",

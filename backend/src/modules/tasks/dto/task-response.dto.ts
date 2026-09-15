@@ -42,9 +42,26 @@ export class TaskResponseDto {
   @Expose()
   priority: TaskPriority;
 
+  @ApiPropertyOptional({ description: 'Short title of the task' })
+  @Expose()
+  title: string;
+
   @ApiPropertyOptional({ description: 'Description of the task' })
   @Expose()
   description: string;
+
+  @ApiPropertyOptional({
+    description: 'Date when the task was marked as completed',
+  })
+  @Expose()
+  @Transform(({ value }) => (value ? String(value) : null))
+  completedAt: string;
+
+  @ApiPropertyOptional({
+    description: 'ID of the user that created the task',
+  })
+  @Expose()
+  createdBy: string;
 
   @ApiPropertyOptional({ description: 'Applied hourly rate' })
   @Expose()

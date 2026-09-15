@@ -1,4 +1,6 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { HashingService } from '../../common/hashing/hashing.service';
@@ -11,6 +13,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly hashingService: HashingService,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async login(user: User) {
@@ -38,13 +41,48 @@ export class AuthService {
 
   async logout(userId: string) {
     await this.usersService.removeRefreshToken(userId);
-    return { message: 'Logged out successfully' };
+    return { message: 'Sesión cerrada correctamente' };
+  }
+
+  async deleteAccount(userId: string): Promise<void> {
+    const user = await this.usersService.findOneById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+    try {
+      const [{ count: assignedTasks }] = (await this.dataSource.query(
+        'SELECT COUNT(*) AS count FROM tasks WHERE technician_id = $1',
+        [userId],
+      )) as Array<{ count: number }>;
+      const [{ count: assignedProjects }] = (await this.dataSource.query(
+        'SELECT COUNT(*) AS count FROM projects WHERE project_leader_id = $1',
+        [userId],
+      )) as Array<{ count: number }>;
+
+      if (Number(assignedTasks) > 0 || Number(assignedProjects) > 0) {
+        throw new ConflictException(
+          'No se puede eliminar tu cuenta porque tienes tareas o proyectos asignados.',
+        );
+      }
+
+      await this.usersService.remove(userId);
+    } catch (error: any) {
+      if (error?.status === 409) {
+        throw error;
+      }
+      if (error?.code === '23503') {
+        throw new ConflictException(
+          'No se puede eliminar tu cuenta porque tiene registros asociados en el sistema.',
+        );
+      }
+      throw error;
+    }
   }
 
   async getSession(userId: string) {
     const user = await this.usersService.findOneById(userId);
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw new UnauthorizedException('Usuario no encontrado');
     }
     return {
       id: user.id,
@@ -72,7 +110,7 @@ export class AuthService {
       );
 
       if (!validUser) {
-        throw new UnauthorizedException('Invalid Refresh Token');
+        throw new UnauthorizedException('Token de refresco inválido');
       }
 
       const newPayload = { sub: validUser.id, role: validUser.role.name };
@@ -91,15 +129,19 @@ export class AuthService {
         refreshToken: newRefreshToken,
       };
     } catch {
-      throw new UnauthorizedException('Invalid or expired Refresh Token');
+      throw new UnauthorizedException('Token de refresco inválido o expirado');
     }
   }
 
   async validateUser(email: string, pass: string): Promise<User | null> {
     const user = await this.usersService.findOneByEmailForAuth(email);
-    if (user && (await this.hashingService.compare(pass, user.password))) {
-      return user as User;
+    if (!user || !(await this.hashingService.compare(pass, user.password))) {
+      return null;
     }
-    return null;
+    // 🚫 Usuarios desactivados no pueden iniciar sesión
+    if (user.isActive === false) {
+      return null;
+    }
+    return user as User;
   }
 }

@@ -81,29 +81,13 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
   const { data: clients = [] } = useClients(clientSearch);
   const { data: allUsers = [] } = useAllUsers(leaderSearch);
   
-  // ✅ FILTRAR MANAGERS CON LOG
+  // ✅ FILTRAR LÍDERES (solo Managers, sin Admins)
   const managers = allUsers.filter((u: any) => {
     const roleName = getRoleName(u.role);
-    return roleName === 'Manager' || roleName === 'Admin';
+    return roleName === 'Manager';
   });
-  
-  // ✅ LOG PARA VER QUÉ MANAGERS ESTÁN DISPONIBLES
-  console.log('👥 Managers disponibles:', managers.map((m: any) => ({
-    id: m.id,
-    email: m.email,
-    full_name: m.full_name,
-    role: getRoleName(m.role)
-  })));
 
   const { data: technicians = [] } = useTechnicians(techSearch);
-  
-  // ✅ LOG PARA VER QUÉ TÉCNICOS ESTÁN DISPONIBLES
-  console.log('🔧 Técnicos disponibles:', technicians.map((t: any) => ({
-    id: t.id,
-    email: t.email,
-    full_name: t.full_name,
-    role: getRoleName(t.role)
-  })));
 
   const [selectedClientId, setSelectedClientId] = useState<string | undefined>();
   const { data: clientContacts = [] } = useClientContacts(selectedClientId);
@@ -138,18 +122,8 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
     }
   }, [open, project, form]);
 
-  // ✅ HANDLE SUBMIT CON LOGS
+  // ✅ HANDLE SUBMIT
   const handleSubmit = async (data: ProjectFormValues) => {
-    console.log('📦 Datos del formulario:', {
-      name: data.name,
-      rate: data.rate,
-      hoursPool: data.hoursPool,
-      endDate: data.endDate,
-      clientId: data.clientId,
-      leaderId: data.leaderId,
-      technicianIds: data.technicianIds,
-    });
-
     setIsSubmitting(true);
     try {
       const projectData = {
@@ -164,8 +138,6 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
         technicianIds: data.technicianIds,
       };
 
-      console.log('📦 Enviando al backend:', projectData);
-
       let projectId = project?.id || '';
 
       if (isEditing && project) {
@@ -174,13 +146,6 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
       } else {
         const newProject = await projectsApi.create(projectData);
         projectId = newProject.id;
-        // ✅ Forzar refresco de la lista de proyectos
-if (onSubmit) {
-  onSubmit(data);
-} else {
-  // Si no hay onSubmit, recargar la página o forzar refetch
-  window.location.reload();
-}
       }
 
       setShowSuccess(true);
@@ -195,7 +160,6 @@ if (onSubmit) {
       }, 1500);
 
     } catch (error: any) {
-      console.error('❌ Error en handleSubmit:', error);
       toast.error(`Error: ${error.message}`);
       setIsSubmitting(false);
     }
@@ -319,6 +283,14 @@ if (onSubmit) {
 
         <div className="p-6 pt-0 border-t border-border/30 flex-shrink-0">
           <div className="flex items-center gap-3">
+            <Button 
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              className="gap-2 rounded-xl h-11 px-5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            >
+              Cancelar
+            </Button>
             {currentStepIndex > 0 && (
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
                 <Button 
@@ -452,6 +424,14 @@ if (onSubmit) {
 
         <div className="p-6 pt-0 border-t border-border/30 flex-shrink-0">
           <div className="flex items-center gap-3">
+            <Button 
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              className="gap-2 rounded-xl h-11 px-5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            >
+              Cancelar
+            </Button>
             <div className="flex-1" />
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
               <Button 
@@ -527,18 +507,34 @@ if (onSubmit) {
         <div className="space-y-1.5">
           <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
             <DollarSign className="h-4 w-4 text-[#0DA2E7]" />
-            Tarifa/hora
+            Tarifa por hora (USD)
             <span className="text-red-500 text-xs">*</span>
           </Label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
             <Input 
               type="number" 
-              placeholder="85" 
+              placeholder="Ej: 85" 
               {...form.register("rate", { valueAsNumber: true })} 
-              className="pl-7 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5" 
+              className={cn(
+                "pl-7 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200",
+                "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5",
+                form.formState.errors.rate && "border-red-300 focus:border-red-500"
+              )}
             />
+            {form.formState.errors.rate && (
+              <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
+            )}
           </div>
+          {form.formState.errors.rate && (
+            <motion.p 
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-xs text-red-500 flex items-center gap-1"
+            >
+              <X className="h-3 w-3" /> {form.formState.errors.rate.message}
+            </motion.p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
@@ -549,7 +545,7 @@ if (onSubmit) {
           <div className="relative">
             <Input 
               type="number" 
-              placeholder="100" 
+              placeholder="Ej: 100" 
               {...form.register("hoursPool", { valueAsNumber: true })} 
               className={cn(
                 "bg-muted/10 border-2 h-12 rounded-xl pl-4 text-sm transition-all duration-200",
@@ -572,6 +568,11 @@ if (onSubmit) {
           )}
         </div>
       </div>
+
+      <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
+        <Sparkles className="h-3 w-3 text-[#0DA2E7]" />
+        Ej: tarifa de $85/hora con 100 horas contratadas para el proyecto
+      </p>
     </div>
   );
 
@@ -586,7 +587,7 @@ if (onSubmit) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Buscar cliente..." 
+            placeholder="Buscar cliente por nombre..." 
             value={clientSearch} 
             onChange={e => setClientSearch(e.target.value)} 
             className="pl-10 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5" 
@@ -608,20 +609,26 @@ if (onSubmit) {
             <SelectValue placeholder="Seleccionar cliente" />
           </SelectTrigger>
           <SelectContent className="bg-card border-border shadow-xl rounded-xl max-h-60">
-            {clients.map((c: any) => (
-              <SelectItem key={c.id} value={c.id} className="cursor-pointer py-2.5">
-                <div className="flex items-center gap-3">
-                  {c.logo_url ? (
-                    <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-lg object-cover" />
-                  ) : (
-                    <div className="h-6 w-6 rounded-lg bg-muted flex items-center justify-center">
-                      <Building2 className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                  )}
-                  <span className="font-medium">{c.name}</span>
-                </div>
-              </SelectItem>
-            ))}
+            {clients.length === 0 ? (
+              <div className="p-4 text-center text-sm text-muted-foreground">
+                {clientSearch ? `Sin resultados para "${clientSearch}"` : "No hay clientes disponibles"}
+              </div>
+            ) : (
+              clients.map((c: any) => (
+                <SelectItem key={c.id} value={c.id} className="cursor-pointer py-2.5">
+                  <div className="flex items-center gap-3">
+                    {c.logo_url ? (
+                      <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-lg object-cover" />
+                    ) : (
+                      <div className="h-6 w-6 rounded-lg bg-muted flex items-center justify-center">
+                        <Building2 className="h-3 w-3 text-muted-foreground" />
+                      </div>
+                    )}
+                    <span className="font-medium">{c.name}</span>
+                  </div>
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
         {form.formState.errors.clientId && (
@@ -633,13 +640,19 @@ if (onSubmit) {
             <X className="h-3 w-3" /> {form.formState.errors.clientId.message}
           </motion.p>
         )}
+        <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
+          <Building2 className="h-3 w-3 text-[#0DA2E7]" />
+          El cliente es obligatorio. Escribe para buscarlo en la lista.
+        </p>
       </div>
 
-      {selectedClientId && clientContacts.length > 0 && (
+      {/* Contacto + Fecha de Fin en grid de 2 columnas */}
+      <div className={cn("grid gap-4", (selectedClientId && clientContacts.length > 0) && "sm:grid-cols-2")}>
+        {selectedClientId && clientContacts.length > 0 && (
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="space-y-1.5"
+          className="space-y-1.5 sm:min-w-0"
         >
           <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
             <User className="h-4 w-4 text-[#0DA2E7]" />
@@ -673,7 +686,7 @@ if (onSubmit) {
         </motion.div>
       )}
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 sm:min-w-0">
         <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
           <CalendarIcon className="h-4 w-4 text-[#0DA2E7]" />
           Fecha de Fin
@@ -725,6 +738,7 @@ if (onSubmit) {
           El proyecto comenzará automáticamente el día de creación
         </p>
       </div>
+      </div>
     </div>
   );
 
@@ -739,7 +753,7 @@ if (onSubmit) {
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
-            placeholder="Buscar líder..." 
+            placeholder="Buscar líder (Manager)..." 
             value={leaderSearch} 
             onChange={e => setLeaderSearch(e.target.value)} 
             className="pl-10 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5" 
@@ -797,7 +811,7 @@ if (onSubmit) {
         )}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 sm:min-w-0">
         <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
           <Users className="h-4 w-4 text-[#0DA2E7]" />
           Técnicos Asignados
@@ -806,7 +820,7 @@ if (onSubmit) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input 
-              placeholder="Buscar técnicos..." 
+              placeholder="Buscar técnico por nombre..." 
               value={techSearch} 
               onChange={e => setTechSearch(e.target.value)} 
               className="pl-10 bg-white border-2 h-10 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:shadow-md focus:shadow-[#0DA2E7]/5" 
@@ -892,6 +906,10 @@ if (onSubmit) {
             )}
           </div>
         </div>
+        <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
+          <Users className="h-3 w-3 text-[#0DA2E7]" />
+          Toca un técnico para asignarlo o quitarlo. El líder no puede ser técnico del mismo proyecto.
+        </p>
       </div>
     </div>
   );
@@ -962,7 +980,7 @@ if (onSubmit) {
   // ──────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col bg-card border-border p-0 rounded-2xl shadow-2xl">
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col bg-card border-border p-0 rounded-2xl shadow-2xl data-[state=open]:duration-300">
         
         <div className="relative p-6 bg-gradient-to-br from-[#0DA2E7]/20 via-[#0DA2E7]/5 to-transparent border-b border-border/50 flex-shrink-0 overflow-hidden">
           <div className="absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[#0DA2E7]/10 blur-3xl" />

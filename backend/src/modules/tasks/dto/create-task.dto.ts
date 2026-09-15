@@ -74,6 +74,14 @@ export class CreateTaskDto {
   executionType?: TaskExecutionType;
 
   @ApiPropertyOptional({
+    description: 'Short title of the task',
+    example: 'Mantenimiento preventivo',
+  })
+  @IsString()
+  @IsOptional()
+  title?: string;
+
+  @ApiPropertyOptional({
     description: 'Description of the task',
     example: 'Fix server rack wiring in the main data center.',
   })

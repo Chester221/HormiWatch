@@ -1,11 +1,16 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Param, Res, UseGuards } from '@nestjs/common';
 import { ReportsService } from './reports.service';
 import type { Response } from 'express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { RolesGuard } from '../auth/guard/authorization.guard';
+import { Roles } from '../auth/decorator/roles.decorator';
+import { Role } from '../auth/enums/roles.enum';
 
 @ApiBearerAuth()
 @ApiTags('Reports')
 @Controller('reports')
+@UseGuards(RolesGuard)
+@Roles(Role.admin, Role.manager)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 

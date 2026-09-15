@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Camera, Loader2, Mail, Shield, User, Save, CheckCircle } from "lucide-react";
+import { Camera, Loader2, Mail, UserRound, UserCircle, ContactRound, ShieldCheck, LifeBuoy, Save, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -128,14 +128,13 @@ export default function Profile() {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="mb-6"
                 >
-                    <div className="flex items-center gap-3 mb-1">
-                        <div className="p-2 rounded-xl bg-[#0DA2E7]/10">
-                            <User className="h-5 w-5 text-[#0DA2E7]" />
+                    <div className="mb-6 flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/10">
+                            <UserCircle className="h-6 w-6 text-[#0DA2E7]" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                            <h1 className="text-xl font-bold text-foreground tracking-tight">
                                 Mi Perfil
                             </h1>
                             <p className="text-sm text-muted-foreground">
@@ -149,13 +148,13 @@ export default function Profile() {
                 <motion.div {...fadeUp} transition={{ delay: 0.05 }}>
                     <Card className="border-border/40 shadow-sm hover:shadow-md transition-all duration-300">
                         <CardHeader className="pb-3">
-                            <CardTitle className="text-base font-semibold flex items-center gap-2.5">
+                            <CardTitle className="text-lg font-semibold tracking-tight flex items-center gap-2.5">
                                 <div className="p-1.5 rounded-lg bg-[#0DA2E7]/10">
-                                    <User className="h-4 w-4 text-[#0DA2E7]" />
+                                    <ContactRound className="h-4 w-4 text-[#0DA2E7]" />
                                 </div>
                                 Información Personal
                             </CardTitle>
-                            <CardDescription className="text-xs">
+                            <CardDescription className="text-sm">
                                 Actualiza tu foto y nombre de perfil
                             </CardDescription>
                         </CardHeader>
@@ -212,23 +211,29 @@ export default function Profile() {
                             {/* Formulario */}
                             <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="fullName" className="text-xs font-medium text-muted-foreground">
+                                    <Label htmlFor="fullName" className="text-xs font-semibold text-foreground">
                                         Nombre Completo
                                     </Label>
                                     <div className="relative">
-                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <UserRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                         <Input
                                             id="fullName"
                                             value={fullName}
                                             onChange={(e) => setFullName(e.target.value)}
                                             placeholder="Tu nombre completo"
-                                            className="pl-10 h-9 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                                            autoComplete="name"
+                                            className="pl-10 h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
                                         />
                                     </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Escribe tu nombre completo y pulsa{" "}
+                                        <span className="font-medium text-foreground">Guardar Cambios</span>.
+                                        Se actualizará en toda la aplicación.
+                                    </p>
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+                                    <Label htmlFor="email" className="text-xs font-semibold text-foreground">
                                         Correo Electrónico
                                     </Label>
                                     <div className="relative">
@@ -237,7 +242,7 @@ export default function Profile() {
                                             id="email"
                                             value={user?.email || ""}
                                             disabled
-                                            className="pl-10 h-9 text-sm bg-muted/30 border-border/60 rounded-lg cursor-not-allowed"
+                                            className="pl-10 h-10 text-sm bg-muted/30 border-border/60 rounded-lg cursor-not-allowed"
                                         />
                                     </div>
                                     <p className="text-xs text-muted-foreground">
@@ -251,7 +256,9 @@ export default function Profile() {
                             {/* Rol */}
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <Shield className="h-5 w-5 text-muted-foreground" />
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/10">
+                                        <ShieldCheck className="h-5 w-5 text-[#0DA2E7]" />
+                                    </div>
                                     <div>
                                         <p className="font-medium text-foreground">Rol en el Sistema</p>
                                         <p className="text-sm text-muted-foreground">
@@ -300,10 +307,10 @@ export default function Profile() {
 
                 {/* Info Card */}
                 <motion.div {...fadeUp} transition={{ delay: 0.1 }}>
-                    <Card className="border-dashed bg-muted/5 border-border/40 shadow-sm">
+                    <Card className="bg-muted/30 border-border/70 shadow-sm">
                         <CardContent className="flex items-start gap-4 pt-6">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#0DA2E7]/10">
-                                <Shield className="h-5 w-5 text-[#0DA2E7]" />
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/10">
+                                <LifeBuoy className="h-5 w-5 text-[#0DA2E7]" />
                             </div>
                             <div>
                                 <p className="font-medium text-foreground">¿Necesitas cambiar tu rol?</p>

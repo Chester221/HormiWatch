@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, subDays, startOfWeek, endOfWeek, isWithinInterval, differenceInDays, startOfMonth, endOfMonth, subMonths } from "date-fns";
-import { es } from "date-fns/locale";
+import { subDays, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MetricCardMG } from "@/components/DashboardMG/MetricCardMG";
 import { ProjectsAtRisk } from "@/components/DashboardMG/ProjectsAtRisk";
@@ -11,12 +10,11 @@ import { ServicesUsage } from "@/components/DashboardMG/ServicesUsage";
 import { HoursEvolutionChart } from "@/components/DashboardMG/HoursEvolutionChart";
 import { HoursByDayChart } from "@/components/DashboardMG/HoursByDayChart";
 import { QuickMetrics } from "@/components/DashboardMG/QuickMetrics";
-import { TechnicianDetails } from "@/components/DashboardMG/TechnicianDetails";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Clock, FolderKanban, Loader2, AlertTriangle, RefreshCw, Shield,
-  Building2, CheckSquare, TrendingUp, Users
+  Clock, FolderKanban, Shield,
+  Building2, CheckSquare, Users
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTasks } from "@/hooks/useTasks";
@@ -24,16 +22,15 @@ import { useProjects } from "@/hooks/useProjects";
 import { useClientsWithContacts } from "@/hooks/useClientes";
 import { useServices } from "@/hooks/useServices";
 import { useTechnicians } from "@/hooks/useTeamMembers";
-import { toast } from "sonner";
 import { motion } from "framer-motion";
 
-import TechnicianDetailsModal from "@/components/DashboardMG/TechnicianDetailsModal";
 import ClientDetailsModal from "@/components/clients/ClientDetailsModal";
 import AllClientsModal from "@/components/clients/AllClientsModal";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
 import { CreateServiceModal } from "@/components/services/CreateServiceModal";
+import { taskDate, taskHours } from "@/lib/dashboardUtils";
 
 // ============================================
 // HELPERS
@@ -48,12 +45,6 @@ const getWeekRanges = () => {
   return { currentWeekStart, currentWeekEnd, lastWeekStart, lastWeekEnd };
 };
 
-const calculateHours = (task: any) => {
-  if (task.duration_in_minutes) return task.duration_in_minutes / 60;
-  if (task.normal_hours) return task.normal_hours + (task.overtime_hours || 0);
-  return 0;
-};
-
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -64,15 +55,13 @@ const DashboardMG = () => {
   const isManager = userRole === "Manager" || userRole === "Admin";
 
   // Hooks
-  const { data: tasks = [], isLoading: isLoadingTasks, refetch: refetchTasks } = useTasks();
+  const { data: tasks = [], isLoading: isLoadingTasks } = useTasks();
   const { data: projects = [], isLoading: isLoadingProjects, refetch: refetchProjects } = useProjects();
   const { data: clients = [] } = useClientsWithContacts();
   const { data: services = [] } = useServices();
   const { data: technicians = [] } = useTechnicians();
 
   // Estados de modales
-  const [selectedTechnician, setSelectedTechnician] = useState<any>(null);
-  const [techModalOpen, setTechModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [clientModalOpen, setClientModalOpen] = useState(false);
   const [allClientsModalOpen, setAllClientsModalOpen] = useState(false);
@@ -86,16 +75,7 @@ const DashboardMG = () => {
     setSelectedClient(client);
     setClientModalOpen(true);
   };
-  const handleViewTechnician = (tech: any) => {
-    setSelectedTechnician(tech);
-    setTechModalOpen(true);
-  };
   const handleViewAllClients = () => setAllClientsModalOpen(true);
-  const handleRefresh = () => {
-    refetchTasks();
-    refetchProjects();
-    toast.info("Actualizando datos...");
-  };
 
   // ============================================
   // MÉTRICAS PRINCIPALES
@@ -104,23 +84,25 @@ const DashboardMG = () => {
   const metrics = useMemo(() => {
     const { currentWeekStart, currentWeekEnd, lastWeekStart, lastWeekEnd } = getWeekRanges();
 
-    const currentWeekTasks = tasks.filter((t: any) =>
-      isWithinInterval(new Date(t.start_time || t.created_at), { start: currentWeekStart, end: currentWeekEnd })
-    );
-    const lastWeekTasks = tasks.filter((t: any) =>
-      isWithinInterval(new Date(t.start_time || t.created_at), { start: lastWeekStart, end: lastWeekEnd })
-    );
+    const currentWeekTasks = tasks.filter((t: any) => {
+      const date = taskDate(t);
+      return date ? isWithinInterval(date, { start: currentWeekStart, end: currentWeekEnd }) : false;
+    });
+    const lastWeekTasks = tasks.filter((t: any) => {
+      const date = taskDate(t);
+      return date ? isWithinInterval(date, { start: lastWeekStart, end: lastWeekEnd }) : false;
+    });
 
-    const totalHours = tasks.reduce((acc, t) => acc + calculateHours(t), 0);
-    const currentWeekHours = currentWeekTasks.reduce((acc, t) => acc + calculateHours(t), 0);
-    const lastWeekHours = lastWeekTasks.reduce((acc, t) => acc + calculateHours(t), 0);
+    const totalHours = tasks.reduce((acc, t) => acc + taskHours(t), 0);
+    const currentWeekHours = currentWeekTasks.reduce((acc, t) => acc + taskHours(t), 0);
+    const lastWeekHours = lastWeekTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
     const totalTasks = tasks.length;
     const completedTasks = tasks.filter((t: any) => t.status === "Completed").length;
     const pendingTasks = tasks.filter((t: any) => t.status === "Pending").length;
 
-    const activeProjects = projects.filter((p: any) => p.status !== "Completed" && p.status !== "Cancelled").length;
-    const completedProjects = projects.filter((p: any) => p.status === "Completed").length;
+    const activeProjects = projects.filter((p: any) => p.status !== "COMPLETED" && p.status !== "CANCELLED").length;
+    const completedProjects = projects.filter((p: any) => p.status === "COMPLETED").length;
 
     const clientsWithTasks = new Set();
     tasks.forEach((t: any) => {
@@ -160,24 +142,6 @@ const DashboardMG = () => {
       },
     };
   }, [tasks, projects, clients, technicians]);
-
-  // ============================================
-  // DATOS PARA GRÁFICO DE HORAS POR DÍA
-  // ============================================
-
-  const hoursByDayData = useMemo(() => {
-    const { currentWeekStart } = getWeekRanges();
-    const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
-    return days.map((day, index) => {
-      const date = new Date(currentWeekStart);
-      date.setDate(date.getDate() + index);
-      const dayTasks = tasks.filter((t: any) =>
-        new Date(t.start_time || t.created_at).toDateString() === date.toDateString()
-      );
-      const total = dayTasks.reduce((acc, t) => acc + calculateHours(t), 0);
-      return { day, hours: Math.round(total * 10) / 10 };
-    });
-  }, [tasks]);
 
   // ============================================
   // ESTADOS PARA COMPONENTES HIJOS
@@ -233,15 +197,20 @@ const DashboardMG = () => {
   return (
     <DashboardLayout>
       {/* ═══════ HEADER SIMPLE ═══════ */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-          <span className="bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] bg-clip-text text-transparent">
-            Dashboard
-          </span>
-          <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
-            Manager
-          </Badge>
-        </h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
+            <span className="bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] bg-clip-text text-transparent">
+              Dashboard
+            </span>
+            <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
+              Manager
+            </Badge>
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1 tracking-tight">
+            Resumen general de horas, proyectos y desempeño del equipo
+          </p>
+        </div>
       </div>
 
       {/* ═══════ KPI CARDS (5) ═══════ */}
@@ -322,14 +291,6 @@ const DashboardMG = () => {
       </div>
 
       {/* ═══════ MODALES ═══════ */}
-      <TechnicianDetails
-        tech={selectedTechnician}
-        tasks={tasks}
-        projects={projects}
-        clients={clients}
-        open={techModalOpen}
-        onOpenChange={setTechModalOpen}
-      />
       <ClientDetailsModal
         client={selectedClient}
         open={clientModalOpen}

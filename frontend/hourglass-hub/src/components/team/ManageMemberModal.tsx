@@ -1,57 +1,40 @@
 import { useState, useEffect } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { usersApi } from "@/lib/api";
-import { 
-  Users, Shield, Loader2, UserCog, Search, X, Check, EyeOff, 
-  Crown, Briefcase, Wrench, AlertTriangle
-} from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { motion, AnimatePresence } from "framer-motion";
-
-const HORMI_BLUE = '#0DA2E7';
+import { Users, Shield, Search } from "lucide-react";
 
 interface ManageMemberModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  isAdmin?: boolean;
+  isManager?: boolean;
 }
 
 const ROLE_OPTIONS = [
-  { 
-    value: "Admin", 
-    label: "Administrador", 
-    description: "Acceso total al sistema", 
-    color: "bg-amber-50 text-amber-700 border-amber-200",
-    icon: Crown 
-  },
-  { 
-    value: "Manager", 
-    label: "Manager", 
-    description: "Gestión de proyectos y equipos", 
-    color: "bg-blue-50 text-blue-700 border-blue-200",
-    icon: Briefcase 
-  },
-  { 
-    value: "Technician", 
-    label: "Técnico", 
-    description: "Registro de horas y tareas", 
-    color: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    icon: Wrench 
-  },
+  { value: "Admin", label: "Administrador" },
+  { value: "Manager", label: "Manager" },
+  { value: "Technician", label: "Técnico" },
 ];
 
-// ✅ FUNCIÓN PARA OBTENER NOMBRE COMPLETO
 const getFullName = (user: any) => {
   if (user?.full_name) return user.full_name;
   if (user?.profile?.name) {
@@ -60,76 +43,58 @@ const getFullName = (user: any) => {
   return user?.email?.split('@')[0] || 'Usuario';
 };
 
-// ✅ FUNCIÓN PARA OBTENER EL NOMBRE DEL ROL
 const getRoleName = (role: any) => {
   if (typeof role === 'string') return role;
   if (role?.name) return role.name;
   return 'Technician';
 };
 
-export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMemberModalProps) {
+export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isManager }: ManageMemberModalProps) {
   const [users, setUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newRole, setNewRole] = useState("");
-  const [showUserList, setShowUserList] = useState(false);
-  const { profile } = useAuth();
 
-  const currentUserRole = getRoleName(profile?.role);
-  const isAdmin = currentUserRole === 'Admin';
-  const isManager = currentUserRole === 'Manager';
-  const canManageRoles = isAdmin || isManager;
+  // ✅ visibleRoleOptions calculado dentro del componente con isManager
+  const visibleRoleOptions = isManager
+    ? ROLE_OPTIONS.filter((o) => o.value !== 'Admin')
+    : ROLE_OPTIONS;
 
-  // ✅ Cargar usuarios con response?.records
   const loadUsers = async () => {
     setIsLoading(true);
     try {
       const response = await usersApi.getAll();
       let data = Array.isArray(response) ? response : response?.records || [];
-      
-      // Si NO es Admin, excluir Admins de la lista
-      if (!isAdmin) {
-        data = data.filter((u: any) => {
-          const roleName = getRoleName(u.role);
-          return roleName !== 'Admin';
-        });
+      // Manager solo ve miembros no-Admin
+      if (isManager) {
+        data = data.filter((u: any) => getRoleName(u.role) !== 'Admin');
       }
-      
-      data.sort((a: any, b: any) => {
-        const nameA = getFullName(a);
-        const nameB = getFullName(b);
-        return nameA.localeCompare(nameB);
-      });
-      
-      setUsers(data || []);
-      setFilteredUsers(data || []);
-      setShowUserList(true);
+      data.sort((a: any, b: any) => getFullName(a).localeCompare(getFullName(b)));
+      setUsers(data);
+      setFilteredUsers(data);
     } catch (error: any) {
-      toast.error(`Error al cargar usuarios: ${error.message}`);
+      toast.error(`Error: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Filtrar usuarios por búsqueda
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredUsers(users);
     } else {
       const query = searchQuery.toLowerCase();
       setFilteredUsers(
-        users.filter(user => {
-          const fullName = getFullName(user);
-          return fullName.toLowerCase().includes(query) ||
-            user.email?.toLowerCase().includes(query);
-        })
+        users.filter(user => 
+          getFullName(user).toLowerCase().includes(query) ||
+          user.email?.toLowerCase().includes(query)
+        )
       );
     }
   }, [searchQuery, users]);
 
-  // Resetear al abrir
   useEffect(() => {
     if (open) {
       loadUsers();
@@ -143,65 +108,27 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
     const roleName = getRoleName(user.role);
     setSelectedUser(user);
     setNewRole(roleName);
-    setShowUserList(false);
-    setSearchQuery("");
-    toast.success(`Seleccionado: ${getFullName(user)}`);
   };
-
-  // ✅ Contar administradores actuales
-  const adminCount = users.filter((u: any) => {
-    const roleName = getRoleName(u.role);
-    return roleName === 'Admin';
-  }).length;
-
-  // ✅ Obtener roles disponibles (con límite de 2 Admins)
-  const getAvailableRoles = () => {
-    let roles = [...ROLE_OPTIONS];
-    
-    // Si no es Admin, no puede ver la opción Admin
-    if (!isAdmin) {
-      roles = roles.filter(r => r.value !== 'Admin');
-    }
-    
-    // Si ya hay 2 Admins, ocultar la opción Admin
-    if (adminCount >= 2) {
-      roles = roles.filter(r => r.value !== 'Admin');
-    }
-    
-    return roles;
-  };
-
-  const availableRoles = getAvailableRoles();
 
   const handleUpdateRole = async () => {
-    if (!selectedUser) { 
-      toast.error('Selecciona un usuario'); 
-      return; 
+    if (!selectedUser) {
+      toast.error('Selecciona un usuario');
+      return;
     }
-    
-    if (!canManageRoles) { 
-      toast.error('No tienes permisos para cambiar roles'); 
-      return; 
+    if (!newRole) {
+      toast.error('Selecciona un rol');
+      return;
     }
-    
+    // Manager no puede asignar Administrador
     if (isManager && newRole === 'Admin') {
-      toast.error('Un Manager no puede asignar el rol de Administrador');
+      toast.error('No tienes permisos para asignar Administrador');
       return;
     }
-    
-    // ✅ Verificar límite de Admins
-    if (newRole === 'Admin' && adminCount >= 2) {
-      toast.error('Ya hay 2 Administradores en el sistema. No se pueden asignar más.');
-      return;
-    }
-    
+
     setIsLoading(true);
     try {
-      // ✅ Enviar role como string
       await usersApi.update(selectedUser.id, { role: newRole });
-      
       toast.success(`✅ Rol actualizado para ${getFullName(selectedUser)}`);
-      setSelectedUser(null);
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {
@@ -212,9 +139,12 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
   };
 
   const handleToggleActive = async (userId: string, currentActive: boolean) => {
+    if (isManager) {
+      toast.error('No tienes permisos para cambiar el estado');
+      return;
+    }
     try {
-      await usersApi.update(userId, { is_active: !currentActive });
-      
+      await usersApi.update(userId, { isActive: !currentActive });
       toast.success(`Usuario ${!currentActive ? 'activado' : 'desactivado'}`);
       loadUsers();
     } catch (error: any) {
@@ -225,274 +155,155 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess }: ManageMembe
   const getRoleBadge = (roleValue: string) => {
     const config = ROLE_OPTIONS.find(r => r.value === roleValue);
     if (!config) return null;
-    const Icon = config.icon;
     return (
-      <Badge className={`gap-1 ${config.color} text-[10px] px-2 py-0`}>
-        <Icon className="h-3 w-3" />
+      <Badge className="bg-primary/10 text-primary border-primary/20">
         {config.label}
       </Badge>
     );
   };
 
-  const resetForm = () => { 
-    setSelectedUser(null); 
-    setShowUserList(false);
-    setSearchQuery("");
-  };
-
   return (
-    <Dialog open={open} onOpenChange={(newOpen) => { if (!newOpen) resetForm(); onOpenChange(newOpen); }}>
-      <DialogContent className="max-w-md bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
-        <div className="relative p-5 bg-gradient-to-r from-[#0DA2E7]/15 via-[#0DA2E7]/5 to-transparent border-b border-border">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#0DA2E7]/5 rounded-full blur-2xl" />
-          <div className="flex items-center gap-3 relative">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] shadow-lg shadow-[#0DA2E7]/30">
-              <UserCog className="h-5 w-5 text-white" />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl bg-card border-border p-0 rounded-2xl shadow-2xl">
+        {/* HEADER */}
+        <div className="p-4 border-b border-border bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-t-2xl">
+          <DialogHeader className="flex flex-row items-center justify-between space-y-0">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
+                <Shield className="h-4 w-4 text-white" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold">
+                  Gestionar Rol
+                </DialogTitle>
+                <p className="text-xs text-muted-foreground">
+                  Cambia el rol o estado de los miembros del equipo
+                </p>
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-lg font-bold text-foreground">Gestionar Rol</DialogTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Administra los roles de los miembros del equipo
-              </p>
-            </div>
-          </div>
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-xs">
+              <Users className="h-3 w-3 mr-1" />
+              {users.length} miembros
+            </Badge>
+          </DialogHeader>
         </div>
 
-        <div className="p-5 space-y-4">
-          {selectedUser ? (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-xl bg-[#0DA2E7]/5 border border-[#0DA2E7]/20"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12 ring-2 ring-[#0DA2E7]/30">
-                    <AvatarImage src={selectedUser.avatar_url || ""} />
-                    <AvatarFallback className="bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] text-white text-sm font-medium">
-                      {getFullName(selectedUser).charAt(0).toUpperCase()}
+        {/* BODY */}
+        <div className="p-4 space-y-3 max-h-[420px] overflow-y-auto">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Buscar usuario..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-9 text-sm bg-background border-border focus:border-primary/50"
+            />
+          </div>
+
+          {isLoading ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">Cargando...</div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="text-center py-6 text-sm text-muted-foreground">No se encontraron usuarios</div>
+          ) : (
+            <div className="space-y-1.5 max-h-[220px] overflow-y-auto">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-1">
+                {filteredUsers.length} USUARIOS ENCONTRADOS
+              </p>
+              {filteredUsers.map((user) => (
+                <button
+                  key={user.id}
+                  onClick={() => selectUser(user)}
+                  className={`w-full flex items-center gap-3 p-2.5 rounded-lg transition-all text-left border ${
+                    selectedUser?.id === user.id
+                      ? 'border-primary bg-primary/5'
+                      : 'border-transparent hover:border-border hover:bg-muted/30'
+                  }`}
+                >
+                  <Avatar className="h-8 w-8 ring-2 ring-primary/10">
+                    <AvatarImage src={user.profile?.profilePicture} />
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                      {getFullName(user).charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {getFullName(selectedUser)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{selectedUser.email}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-muted-foreground">Rol actual:</span>
-                      {getRoleBadge(getRoleName(selectedUser.role))}
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{getFullName(user)}</p>
+                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                   </div>
-                </div>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 w-8 p-0 rounded-full hover:bg-red-50 hover:text-red-500"
-                  onClick={() => { setSelectedUser(null); setNewRole(""); }}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </motion.div>
-          ) : (
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar usuario por nombre o email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={() => { if (!showUserList && users.length > 0) setShowUserList(true); }}
-                  className="pl-9 h-10 text-sm bg-background border-border rounded-lg focus:ring-[#0DA2E7] focus:border-[#0DA2E7]"
-                />
-              </div>
-
-              <AnimatePresence>
-                {showUserList && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="border border-border rounded-xl overflow-hidden"
-                  >
-                    <div className="p-2.5 bg-muted/20 border-b border-border flex items-center justify-between">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                        {filteredUsers.length} usuarios encontrados
-                      </span>
-                      <Button 
-                        type="button" 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-6 w-6 p-0 rounded-full hover:bg-muted/50"
-                        onClick={() => setShowUserList(false)}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="max-h-52 overflow-y-auto">
-                      {isLoading ? (
-                        <div className="p-6 text-center">
-                          <Loader2 className="h-6 w-6 animate-spin mx-auto text-[#0DA2E7]" />
-                          <p className="text-xs text-muted-foreground mt-2">Cargando usuarios...</p>
-                        </div>
-                      ) : filteredUsers.length === 0 ? (
-                        <div className="p-6 text-center">
-                          <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                          <p className="text-sm text-muted-foreground">No se encontraron usuarios</p>
-                        </div>
-                      ) : (
-                        filteredUsers.map((user) => {
-                          const fullName = getFullName(user);
-                          const roleName = getRoleName(user.role);
-                          return (
-                            <button
-                              key={user.id}
-                              type="button"
-                              onClick={() => selectUser(user)}
-                              className="w-full p-3 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left border-b border-border last:border-0 group"
-                            >
-                              <Avatar className="h-9 w-9">
-                                <AvatarImage src={user.avatar_url || ""} />
-                                <AvatarFallback className="text-xs bg-muted">
-                                  {fullName.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate group-hover:text-[#0DA2E7] transition-colors">
-                                  {fullName}
-                                </p>
-                                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                {getRoleBadge(roleName)}
-                                {!user.is_active && (
-                                  <Badge className="bg-red-50 text-red-600 border-red-200 text-[9px] px-1.5 py-0">
-                                    Inactivo
-                                  </Badge>
-                                )}
-                              </div>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {!showUserList && users.length === 0 && !isLoading && (
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={loadUsers} 
-                  className="w-full gap-2 h-10 rounded-lg text-sm"
-                >
-                  <Users className="h-4 w-4" />
-                  Cargar usuarios
-                </Button>
-              )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {getRoleBadge(getRoleName(user.role))}
+                    <Badge 
+                      variant="outline" 
+                      className={`text-[10px] px-1.5 py-0 ${user.isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                    >
+                      {user.isActive ? "Activo" : "Inactivo"}
+                    </Badge>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
 
           {selectedUser && (
-            <motion.div 
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="space-y-3 pt-2"
-            >
-              <div className="space-y-2">
-                <Label className="text-xs font-medium flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5 text-[#0DA2E7]" />
-                  Nuevo rol
-                </Label>
-                <Select value={newRole} onValueChange={setNewRole}>
-                  <SelectTrigger className="bg-background border-border h-10 rounded-lg text-sm focus:ring-[#0DA2E7] focus:border-[#0DA2E7]">
-                    <SelectValue placeholder="Seleccionar rol" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {availableRoles.map((option) => {
-                      const Icon = option.icon;
-                      return (
+            <div className="mt-3 p-3 rounded-xl border border-primary/15 bg-primary/5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Nuevo rol</label>
+                  <Select value={newRole} onValueChange={setNewRole}>
+                    <SelectTrigger className="h-9 text-sm bg-background border-border">
+                      <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleRoleOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
-                          <div className="flex flex-col">
-                            <span className="flex items-center gap-2 text-sm">
-                              <Icon className="h-3.5 w-3.5" style={{ color: HORMI_BLUE }} />
-                              {option.label}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground pl-5">
-                              {option.description}
-                            </span>
-                          </div>
+                          {option.label}
                         </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-                
-                {/* ✅ Mostrar mensaje de límite de Admins */}
-                {adminCount >= 2 && (
-                  <p className="text-[10px] text-amber-500 flex items-center gap-1">
-                    <AlertTriangle className="h-3 w-3" />
-                    Ya hay 2 Administradores. No se pueden asignar más.
-                  </p>
-                )}
-                {isManager && (
-                  <p className="text-[10px] text-muted-foreground/60">
-                    Como Manager no puedes asignar el rol de Administrador
-                  </p>
-                )}
-              </div>
-
-              {/* Estado del usuario (Activo/Inactivo) */}
-              <div className="flex items-center justify-between p-3 rounded-lg bg-muted/10 border border-border/50">
-                <span className="text-sm text-foreground">Estado de la cuenta</span>
-                <button
-                  onClick={() => handleToggleActive(selectedUser.id, selectedUser.is_active)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    selectedUser.is_active ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-red-50 text-red-600 hover:bg-red-100"
-                  }`}
-                >
-                  {selectedUser.is_active ? <><Check className="h-3.5 w-3.5" /> Activo</> : <><EyeOff className="h-3.5 w-3.5" /> Inactivo</>}
-                </button>
-              </div>
-
-              {/* Advertencia de cambio de rol */}
-              {selectedUser.role !== newRole && (
-                <div className="rounded-lg bg-amber-50 border border-amber-100 p-3 flex items-start gap-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
-                  <p className="text-[10px] text-amber-700">
-                    Cambiar el rol afectará los permisos del usuario en toda la aplicación.
-                  </p>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-            </motion.div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Estado</label>
+                  {isManager ? (
+                    <div className="flex h-9 w-full items-center justify-center rounded-lg border bg-muted text-muted-foreground border-border text-xs font-medium cursor-not-allowed">
+                      {selectedUser.isActive ? "✅ Activo" : "⛔ Inactivo"}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleToggleActive(selectedUser.id, selectedUser.isActive)}
+                      className={`flex h-9 w-full items-center justify-center rounded-lg border text-xs font-medium transition-colors ${
+                        selectedUser.isActive
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100"
+                          : "bg-rose-50 text-rose-600 border-rose-200 hover:bg-rose-100"
+                      }`}
+                    >
+                      {selectedUser.isActive ? "✅ Activo" : "⛔ Inactivo"}
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                Usuario: <span className="font-medium">{getFullName(selectedUser)}</span>
+              </p>
+            </div>
           )}
         </div>
 
-        <DialogFooter className="p-5 pt-0 gap-2 border-t border-border/50">
+        <DialogFooter className="p-3 border-t border-border gap-2">
           <Button 
             variant="outline" 
             onClick={() => onOpenChange(false)} 
-            className="rounded-lg h-10 px-4 text-sm flex-1"
+            className="flex-1 h-9 text-sm"
           >
             Cancelar
           </Button>
-          {selectedUser && (
-            <Button 
-              onClick={handleUpdateRole} 
-              disabled={isLoading || selectedUser.role === newRole} 
-              className="rounded-lg h-10 px-4 gap-2 text-white text-sm flex-1 disabled:opacity-50"
-              style={{ backgroundColor: HORMI_BLUE }}
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Check className="h-4 w-4" />
-              )}
-              Actualizar Rol
-            </Button>
-          )}
+          <Button 
+            onClick={handleUpdateRole}
+            disabled={!selectedUser || !newRole || isLoading || getRoleName(selectedUser.role) === newRole}
+            className="flex-1 h-9 text-sm bg-primary hover:bg-primary/90 text-white disabled:opacity-50"
+          >
+            {isLoading ? "Guardando..." : "Actualizar Rol"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -22,6 +22,7 @@ export interface Client {
     name: string
     ruc: string | null
     address: string | null
+    email?: string | null
     logo_url?: string | null
     code?: string | null
     department?: string | null
@@ -51,6 +52,8 @@ export const useClientsWithContacts = (searchQuery?: string) => {
                 ...client,
                 contacts: client.contacts || []
             }));
+
+            clients.sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
             if (searchQuery) {
                 const search = searchQuery.toLowerCase()
@@ -201,7 +204,7 @@ export const useSaveClientWithContacts = () => {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: async ({ client, contacts, isEditing }: {
-            client: { id?: string; name: string; ruc?: string; address?: string }
+            client: { id?: string; name: string; ruc?: string; address?: string; email?: string; phone?: string }
             contacts: { name: string; email?: string; phone?: string; position?: string; department?: string }[]
             isEditing: boolean
         }) => {
@@ -209,6 +212,8 @@ export const useSaveClientWithContacts = () => {
                 name: client.name,
                 ruc: client.ruc,
                 address: client.address,
+                email: client.email || undefined,
+                phone: client.phone || undefined,
                 contacts: contacts
             };
 

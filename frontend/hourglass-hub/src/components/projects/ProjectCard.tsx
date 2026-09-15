@@ -141,13 +141,13 @@ export function ProjectCard({
                   className={cn("rounded object-cover", compact ? "h-5 w-5" : "h-6 w-6")} 
                 />
               ) : (
-                <FolderKanban className={cn("text-[#0DA2E7]", compact ? "h-4 w-4" : "h-4.5 w-4.5")} />
+                <FolderKanban className={cn("text-[#0DA2E7]", compact ? "h-4 w-4" : "h-5 w-5")} />
               )}
             </motion.div>
             <div className="min-w-0 flex-1">
               <p className={cn(
                 "font-medium uppercase tracking-wider text-muted-foreground/60 truncate",
-                compact ? "text-[10px]" : "text-[10px]"
+                "text-[10px]"
               )}>
                 {project?.client || "Sin cliente"}
               </p>
@@ -411,6 +411,146 @@ export function ProjectCard({
           </motion.div>
         )}
       </motion.div>
+    </motion.div>
+  );
+}
+
+// 🔥 FILA DE LISTA PARA EL MODO VISTA "LISTA"
+interface ProjectListRowProps {
+  project: any;
+  statusColor: string;
+  statusInfo: { label: string; class: string; color: string };
+  clientData: any;
+  canEdit: boolean;
+  handleProjectClick: (project: any) => void;
+  handleEditProject: (project: any, e?: React.MouseEvent) => void;
+  handleDeleteClick: (id: string, name: string, e: React.MouseEvent) => void;
+  handleMemberClick: (memberId: string, e: React.MouseEvent) => void;
+}
+
+export function ProjectListRow({
+  project,
+  statusColor,
+  statusInfo,
+  clientData,
+  canEdit,
+  handleProjectClick,
+  handleEditProject,
+  handleDeleteClick,
+  handleMemberClick,
+}: ProjectListRowProps) {
+  const hasLeader = !!project?.teamLead?.id;
+  const team = Array.isArray(project?.team) ? project.team : [];
+  const totalMembers = team.length + (hasLeader ? 1 : 0);
+  const progress = project?.progress || 0;
+  const hoursConsumed = project?.hoursConsumed || 0;
+  const hoursPool = project?.hoursPool || 0;
+
+  const formatNumber = (num: number): string => {
+    if (num === 0) return '0';
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ backgroundColor: "rgba(13,162,231,0.04)" }}
+      onClick={() => handleProjectClick(project)}
+      className="group flex cursor-pointer items-center gap-3 sm:gap-4 px-4 py-3.5 transition-colors border-b border-border/40 last:border-b-0"
+    >
+      {/* Ícono del cliente */}
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"
+        style={{ boxShadow: `inset 0 0 0 1px ${statusColor || HORMI_BLUE}33` }}
+      >
+        {clientData?.logo_url ? (
+          <img src={clientData.logo_url} alt="" className="h-6 w-6 rounded object-cover" />
+        ) : (
+          <FolderKanban className="h-5 w-5 text-[#0DA2E7]" />
+        )}
+      </div>
+
+      {/* Nombre + cliente */}
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60 truncate">
+          {project?.client || "Sin cliente"}
+        </p>
+        <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-[#0DA2E7] transition-colors">
+          {project?.name || "Proyecto sin nombre"}
+        </h3>
+      </div>
+
+      {/* Progreso */}
+      <div className="hidden md:flex items-center gap-2 w-32 shrink-0">
+        <div className="flex-1 h-1.5 bg-muted/20 rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${Math.min(progress, 100)}%` }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
+            className="h-full rounded-full"
+            style={{ backgroundColor: statusColor || HORMI_BLUE }}
+          />
+        </div>
+        <span className="text-xs font-semibold w-9 text-right" style={{ color: statusColor || HORMI_BLUE }}>
+          {Math.round(progress)}%
+        </span>
+      </div>
+
+      {/* Horas */}
+      <span className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground shrink-0 w-20">
+        <Clock className="h-3.5 w-3.5 text-muted-foreground/40" />
+        {hoursConsumed.toFixed(0)}h<span className="text-muted-foreground/30">/</span>{formatNumber(hoursPool)}h
+      </span>
+
+      {/* Miembros */}
+      <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 w-16">
+        <Users className="h-3.5 w-3.5 text-muted-foreground/40" />
+        {totalMembers}
+      </span>
+
+      {/* Fecha fin */}
+      <span className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground shrink-0 w-28">
+        <Calendar className="h-3.5 w-3.5 text-muted-foreground/40" />
+        {project?.endDate ? new Date(project.endDate).toLocaleDateString("es-ES", {
+          day: "numeric", month: "short", year: "numeric",
+        }) : "..."}
+      </span>
+
+      {/* Estado */}
+      <Badge
+        variant="outline"
+        className={cn(
+          "font-medium shrink-0 text-[10px] px-2 py-0.5",
+          statusInfo?.class || "bg-gray-50 text-gray-600 border-gray-200"
+        )}
+      >
+        {statusInfo?.label || "Activo"}
+      </Badge>
+
+      {/* Acciones */}
+      {canEdit && !project?.isClosed ? (
+        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
+            onClick={(e) => handleEditProject(project, e)}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="p-0 h-7 w-7 hover:bg-red-50 hover:text-red-500 rounded-lg transition-all"
+            onClick={(e) => handleDeleteClick(project?.id, project?.name, e)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <div className="w-14 shrink-0 hidden sm:block" />
+      )}
     </motion.div>
   );
 }

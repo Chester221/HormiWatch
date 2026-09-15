@@ -1,18 +1,16 @@
-import { PageOptionsDto } from './pagination-options.dto';
+import { PageOptionsDto } from './page-options.dto';
 
-export class PageMeta<T extends PageOptionsDto> {
+export class PageMeta {
   readonly page: number;
   readonly take: number;
-  readonly skip: number;
   readonly itemCount: number;
   readonly pageCount: number;
   readonly hasPreviousPage: boolean;
   readonly hasNextPage: boolean;
 
-  constructor(pageOptionsDto: T, itemCount: number) {
-    this.page = pageOptionsDto.page;
-    this.take = pageOptionsDto.take;
-    this.skip = pageOptionsDto.skip;
+  constructor(pageOptionsDto: PageOptionsDto, itemCount: number) {
+    this.page = pageOptionsDto.page ?? 1;
+    this.take = pageOptionsDto.take ?? 10;
     this.itemCount = itemCount;
     this.pageCount = Math.ceil(this.itemCount / this.take);
     this.hasPreviousPage = this.page > 1;

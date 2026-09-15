@@ -1,10 +1,14 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { PageMeta } from './metadata';
 
 export class PageDto<T> {
+  @ApiProperty({ isArray: true })
   readonly records: T[];
-  readonly meta: PageMeta<any>;
 
-  constructor(records: T[], meta: PageMeta<any>) {
+  @ApiProperty()
+  readonly meta: PageMeta;
+
+  constructor(records: T[], meta: PageMeta) {
     this.records = records;
     this.meta = meta;
   }

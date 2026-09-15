@@ -58,4 +58,29 @@ export class ProjectResponseDto {
   @ApiProperty()
   @Expose()
   updatedAt: Date;
+
+  // ✅ NUEVOS CAMPOS PARA CLIENTE Y LÍDER
+  @ApiProperty({ required: false })
+  @Expose()
+  customer_id?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  customer_name?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  contact_name?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  contact_email?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  leader_email?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  leader_name?: string;
 }

@@ -2,11 +2,14 @@ import {
   Controller,
   Post,
   Get,
+  Delete,
   Body,
   UnauthorizedException,
   UseGuards,
   Request,
   Res,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
@@ -43,7 +46,7 @@ export class AuthController {
       loginDto.password,
     );
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('Credenciales inválidas');
     }
     const loginData = await this.authService.login(user);
 
@@ -94,7 +97,7 @@ export class AuthController {
       (req.body as { refreshToken?: string })?.refreshToken;
 
     if (!refreshToken) {
-      throw new UnauthorizedException('Refresh token is required');
+      throw new UnauthorizedException('Token de refresco requerido');
     }
 
     const newTokens = await this.authService.refreshToken(refreshToken);
@@ -110,6 +113,14 @@ export class AuthController {
     return {
       accessToken: newTokens.accessToken,
     };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('account')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Eliminar la propia cuenta' })
+  async deleteAccount(@Request() req: { user: IActiveUser }) {
+    await this.authService.deleteAccount(req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

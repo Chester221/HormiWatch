@@ -1,59 +1,31 @@
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ProjectCard } from "@/components/projects/ProjectCard";
+import { ProjectCard, ProjectListRow } from "@/components/projects/ProjectCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
-} from "@/components/ui/tooltip";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import {
-  Plus, Search, Calendar as CalendarIcon, Clock, X,
-  Pencil, Loader2, Trash2, Crown, Users,
-  FolderKanban, CheckCircle, TrendingUp, Building2, ChevronLeft, ChevronRight, Filter,
-  LayoutGrid, LayoutList, Lock,
-  ArrowUp, ArrowDown, FileSpreadsheet
+  Plus, Clock,
+  Loader2, Trash2, Archive, AlertTriangle,
+  FolderKanban, CheckCircle, TrendingUp, ChevronLeft, ChevronRight,
+  LayoutGrid, LayoutList,
+  FileSpreadsheet
 } from "lucide-react";
 import { ProjectDetailModal } from "@/components/projects/ProjectDetailModal";
 import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
 import { ProjectExportDialog } from "@/components/projects/ProjectExportDialog";
-import { cn } from "@/lib/utils";
+import ProjectFilters from "@/components/projects/ProjectFilters";
 import { useProjects, useDeleteProject } from "@/hooks/useProjects";
 import { useClients } from "@/hooks/useClientes";
 import { useAuth } from "@/hooks/useAuth";
-import { authApi, usersApi } from "@/lib/api";
+import { usersApi } from "@/lib/api";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 
 const HORMI_BLUE = '#0DA2E7';
-const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
 
 // 🔥 FUNCIONES AUXILIARES
 const formatProgress = (value: number): string => {
@@ -65,6 +37,31 @@ const formatProgress = (value: number): string => {
 const formatNumber = (num: number): string => {
   if (num === 0) return '0';
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+};
+
+// 🔥 NORMALIZA PARA COMPARAR ESTADOS (enum backend y legado)
+const normStatusKey = (status?: string | null): string =>
+  String(status ?? "").toUpperCase().replace(/[^A-Z]/g, "");
+
+const matchesProjectStatus = (p: {
+  statusRaw?: string | null;
+  status?: string | null;
+  isClosed?: boolean;
+}, filter: string): boolean => {
+  if (filter === "all") return true;
+  const want = normStatusKey(filter);
+  const raw = normStatusKey(p?.statusRaw);
+  const derived = normStatusKey(p?.status);
+  switch (want) {
+    case "COMPLETED": return raw === "COMPLETED" || derived === "COMPLETED";
+    case "CANCELLED": return raw === "CANCELLED";
+    case "INPROGRESS": return raw === "INPROGRESS" || derived === "INPROGRESS";
+    case "NOTSTARTED": return raw === "PENDING" || derived === "NOTSTARTED";
+    case "ONHOLD": return raw === "ONHOLD" || raw === "ON-HOLD" || raw === "INACTIVE";
+    case "ACTIVE": return !p?.isClosed && raw !== "CANCELLED";
+    case "INACTIVE": return !!p?.isClosed;
+    default: return !!raw && raw === want;
+  }
 };
 
 const statusConfig: Record<string, { label: string; class: string; color: string }> = {
@@ -109,16 +106,8 @@ export default function Projects() {
   const savedFilters = loadFilters();
 
   // Estados
-  const [searchQuery, setSearchQuery] = useState(savedFilters?.searchQuery || "");
   const [statusFilter, setStatusFilter] = useState(savedFilters?.statusFilter || "all");
   const [clientFilter, setClientFilter] = useState<string>(savedFilters?.clientFilter || "all");
-  const [memberFilter, setMemberFilter] = useState<string>(savedFilters?.memberFilter || "all");
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>(
-    savedFilters?.dateRange || {}
-  );
-  const [progressRange, setProgressRange] = useState<[number, number]>(
-    savedFilters?.progressRange || [0, 100]
-  );
 
   const [projectMembers, setProjectMembers] = useState<any[]>([]);
   const deleteProjectMutation = useDeleteProject();
@@ -138,26 +127,23 @@ export default function Projects() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; projectId: string; projectName: string }>({ open: false, projectId: '', projectName: '' });
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // ORDENAMIENTO
-  const [sortBy, setSortBy] = useState<string>("name");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Carrusel
   const [carouselPage, setCarouselPage] = useState(0);
   const projectsPerCarousel = 6;
 
   // Vista
-  const [viewMode, setViewMode] = useState<'grid' | 'compact'>(() => {
-    if (profile?.preferences?.projects_view) {
-      return profile.preferences.projects_view;
+  type ViewMode = 'grid' | 'list';
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    if (profile?.preferences?.projects_view === "grid" || profile?.preferences?.projects_view === "list") {
+      return profile.preferences.projects_view as ViewMode;
     }
     const saved = localStorage.getItem("projectsViewMode");
-    return (saved === "grid" || saved === "compact") ? saved : "grid";
+    return (saved === "grid" || saved === "list") ? saved as ViewMode : "grid";
   });
-  
-  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const { data: rawProjects = [], isLoading: loading, refetch } = useProjects();
   const { data: clients = [] } = useClients("");
@@ -165,22 +151,16 @@ export default function Projects() {
   // Guardar filtros en localStorage (fallback)
   useEffect(() => {
     const filters = {
-      searchQuery,
       statusFilter,
       clientFilter,
-      memberFilter,
-      dateRange: {
-        from: dateRange.from?.toISOString(),
-        to: dateRange.to?.toISOString(),
-      },
-      progressRange,
     };
     saveFilters(filters);
-  }, [searchQuery, statusFilter, clientFilter, memberFilter, dateRange, progressRange]);
+  }, [statusFilter, clientFilter]);
 
   useEffect(() => {
-    if (profile?.preferences?.projects_view) {
-      setViewMode(profile.preferences.projects_view);
+    const pv = profile?.preferences?.projects_view;
+    if (pv === "grid" || pv === "list") {
+      setViewMode(pv);
     }
   }, [profile]);
 
@@ -197,7 +177,7 @@ export default function Projects() {
   const loadProjectMembers = async () => {
     try {
       const response = await usersApi.getAll();
-      const members = Array.isArray(response) ? response : response?.data || [];
+      const members = Array.isArray(response) ? response : response?.records || response?.data || [];
       const formattedMembers = members.map((m: any) => ({
         id: m.id,
         user_id: m.id,
@@ -220,29 +200,53 @@ export default function Projects() {
   }, [rawProjects]);
 
   const toggleViewMode = async () => {
-    setIsTransitioning(true);
-    const newMode = viewMode === 'grid' ? 'compact' : 'grid';
-    setViewMode(newMode);
-    
+    const next: ViewMode = viewMode === "grid" ? "list" : "grid";
+    setViewMode(next);
+    setCarouselPage(0);
+
     try {
-      await updatePreferences({ projects_view: newMode });
+      await updatePreferences({ projects_view: next });
     } catch (error) {
       console.error('Error guardando preferencia de vista:', error);
     }
-    
-    localStorage.setItem("projectsViewMode", newMode);
-    setTimeout(() => setIsTransitioning(false), 400);
+
+    localStorage.setItem("projectsViewMode", next);
   };
 
-  const getProjectLeader = (projectId: string) => {
-    const leader = projectMembers.find(pm => pm.project_id === projectId && pm.role_in_project === 'leader');
-    if (leader?.profile) return { name: leader.profile.full_name || 'Sin nombre', avatar: leader.profile.avatar_url || '', id: leader.profile.id };
+  // ✅ FUNCIONES CORREGIDAS - Usan los datos del proyecto directamente
+  const getProjectLeader = (item: any) => {
+    // Primero intentar con los datos del backend (projectLeader)
+    if (item.projectLeader) {
+      const pl = item.projectLeader;
+      const fullName = [pl.name, pl.lastName].filter(Boolean).join(' ').trim() || pl.email || 'Sin líder';
+      return {
+        name: fullName,
+        avatar: pl.profilePicture || pl.avatar_url || '',
+        id: pl.id || item.project_leader_id || null,
+      };
+    }
+    // Fallback: usar leader_email si existe
+    if (item.leader_email) {
+      return {
+        name: item.leader_name || item.leader_email,
+        avatar: '',
+        id: item.project_leader_id || null
+      };
+    }
     return null;
   };
 
-  const getProjectTeam = (projectId: string) => {
-    return projectMembers.filter(pm => pm.project_id === projectId && pm.role_in_project !== 'leader')
-      .map(pm => ({ name: pm.profile?.full_name || 'Sin nombre', avatar: pm.profile?.avatar_url || '', id: pm.profile?.id, role: pm.role_in_project }));
+  const getProjectTeam = (item: any) => {
+    // Si el proyecto tiene técnicos en la respuesta del backend
+    if (item.technicians && Array.isArray(item.technicians)) {
+      return item.technicians.map((tech: any) => ({
+        name: [tech.name, tech.lastName].filter(Boolean).join(' ').trim() || tech.email || 'Técnico',
+        avatar: tech.profilePicture || tech.avatar_url || '',
+        id: tech.id,
+        role: tech.role || 'technician'
+      }));
+    }
+    return [];
   };
 
   const allMembers = useMemo(() => {
@@ -262,8 +266,8 @@ export default function Projects() {
 
   // ✅ CORREGIDO: Mapeo de proyectos con datos del backend
   const projects = rawProjects.map((item: any) => {
-    const leader = getProjectLeader(item.id);
-    const team = getProjectTeam(item.id);
+    const leader = getProjectLeader(item);
+    const team = getProjectTeam(item);
     const projectTasks = item.tasks || [];
     
     const completedHours = projectTasks
@@ -327,16 +331,13 @@ export default function Projects() {
     const clientName = item.customer_name || item.clients?.name || "Sin cliente";
     const clientId = item.customer_id || item.client_id || null;
     
-    // ✅ NORMALIZAR LÍDER
-    const leaderName = item.leader_email || item.projectLeader?.email || 'Sin líder';
-    const leaderId = item.project_leader_id || item.projectLeader?.id || null;
-    
     return {
       id: item.id,
       name: item.title || item.name || 'Proyecto sin nombre',
       client: clientName,
       clientId: clientId,
       status: status,
+      statusRaw: item.status || null,
       hoursPool: hoursPool,
       hoursConsumed: hoursConsumed,
       completedHours: completedHours,
@@ -349,82 +350,40 @@ export default function Projects() {
       isClosed: isClosed,
       isDelayed: isDelayed,
       isInactive: item.status === 'INACTIVE' || item.status === 'inactive',
-      teamLead: leader || { name: leaderName, avatar: "", id: leaderId },
+      teamLead: leader || { name: "Sin líder", avatar: "", id: null },
       team: team,
       tasks: projectTasks,
     };
   });
 
-  const sortProjects = (projectsList: any[]) => {
-    return [...projectsList].sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortBy) {
-        case "name":
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case "endDate":
-          comparison = new Date(a.endDate).getTime() - new Date(b.endDate).getTime();
-          break;
-        case "progress":
-          comparison = a.progress - b.progress;
-          break;
-        case "hours":
-          comparison = a.hoursConsumed - b.hoursConsumed;
-          break;
-        default:
-          comparison = 0;
-      }
-      
-      return sortOrder === "asc" ? comparison : -comparison;
-    });
-  };
-
   const filteredProjects = useMemo(() => {
     const filtered = projects.filter(p => {
-      const matchesSearch = !searchQuery || 
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        p.client.toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+      const matchesStatus = matchesProjectStatus(p, statusFilter);
       const matchesClient = clientFilter === "all" || p.clientId === clientFilter;
-      const matchesMember = memberFilter === "all" || 
-        p.team.some(m => m.id === memberFilter) || 
-        p.teamLead.id === memberFilter;
-      const matchesDate = !dateRange.from || !dateRange.to || 
-        (new Date(p.endDate) >= dateRange.from && new Date(p.endDate) <= dateRange.to);
-      const matchesProgress = p.progress >= progressRange[0] && p.progress <= progressRange[1];
-      
+
       if (isAdmin || isManager) {
-        return matchesSearch && matchesStatus && matchesClient && matchesMember && matchesDate && matchesProgress;
+        return matchesStatus && matchesClient;
       }
       if (userRole === 'Technician') {
         const isAssigned = p.team.some(m => m.id === user?.id) || p.teamLead.id === user?.id;
-        return matchesSearch && matchesStatus && matchesClient && matchesMember && matchesDate && matchesProgress && isAssigned;
+        return matchesStatus && matchesClient && isAssigned;
       }
-      return matchesSearch && matchesStatus && matchesClient && matchesMember && matchesDate && matchesProgress;
+      return matchesStatus && matchesClient;
     });
-    
-    return sortProjects(filtered);
-  }, [projects, searchQuery, statusFilter, clientFilter, memberFilter, dateRange, progressRange, sortBy, sortOrder, isAdmin, isManager, userRole, user?.id]);
+
+    return filtered;
+  }, [projects, statusFilter, clientFilter, isAdmin, isManager, userRole, user?.id]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (statusFilter !== "all") count++;
     if (clientFilter !== "all") count++;
-    if (memberFilter !== "all") count++;
-    if (dateRange.from || dateRange.to) count++;
-    if (progressRange[0] > 0 || progressRange[1] < 100) count++;
     return count;
-  }, [statusFilter, clientFilter, memberFilter, dateRange, progressRange]);
+  }, [statusFilter, clientFilter]);
 
   const clearAllFilters = () => {
     setStatusFilter("all");
     setClientFilter("all");
-    setMemberFilter("all");
-    setDateRange({});
-    setProgressRange([0, 100]);
-    setSearchQuery("");
   };
 
   const totalCarouselPages = Math.ceil(filteredProjects.length / projectsPerCarousel);
@@ -446,6 +405,18 @@ export default function Projects() {
     setSelectedProject(p); 
     setDetailModalOpen(true); 
   };
+
+  // Abrir el detalle de un proyecto desde la búsqueda global (?project=id)
+  useEffect(() => {
+    const projectId = searchParams.get("project");
+    if (!projectId) return;
+    const target = projects.find((p: any) => String(p.id) === projectId);
+    if (target) {
+      setSelectedProject(target);
+      setDetailModalOpen(true);
+    }
+    setSearchParams({}, { replace: true });
+  }, [searchParams, projects]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const handleCreateProject = () => { 
     if (!canCreate) return; 
@@ -524,6 +495,13 @@ export default function Projects() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                onClick={() => setExportDialogOpen(true)}
+                className="gap-2"
+              >
+                <FileSpreadsheet className="h-4 w-4" /> Exportar
+              </Button>
               {canCreate && (
                 <Button
                   onClick={handleCreateProject}
@@ -588,225 +566,87 @@ export default function Projects() {
         </div>
 
         {/* ═══════════ BARRA DE HERRAMIENTAS ═══════════ */}
-        <div className="flex items-center justify-end gap-3">
-          <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-8 w-8 p-0 hover:bg-muted/50 rounded-md text-muted-foreground relative"
-                >
-                  <span className="text-xl font-bold leading-none tracking-wider">⋯</span>
-                  {activeFilterCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-[#0DA2E7] text-white text-[9px] flex items-center justify-center">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              
-              <DropdownMenuContent align="end" className="w-64 p-2.5 bg-card border-border shadow-xl rounded-xl max-h-[80vh] overflow-y-auto">
-                <div className="space-y-2.5">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Estado</Label>
-                      <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="h-6 text-[10px] mt-0.5 border-border/60 px-2">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all" className="text-xs">Todos</SelectItem>
-                          <SelectItem value="In Progress" className="text-xs">En Progreso</SelectItem>
-                          <SelectItem value="active" className="text-xs">Activos</SelectItem>
-                          <SelectItem value="completed" className="text-xs">Cerrados</SelectItem>
-                          <SelectItem value="inactive" className="text-xs">Inactivos</SelectItem>
-                          <SelectItem value="on-hold" className="text-xs">En Pausa</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Cliente</Label>
-                      <Select value={clientFilter} onValueChange={setClientFilter}>
-                        <SelectTrigger className="h-6 text-[10px] mt-0.5 border-border/60 px-2">
-                          <SelectValue placeholder="Todos" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all" className="text-xs">Todos</SelectItem>
-                          {clients.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <ProjectFilters
+              statusFilter={statusFilter}
+              onStatusChange={setStatusFilter}
+              clients={clients}
+              clientFilter={clientFilter}
+              onClientChange={setClientFilter}
+              resultCount={filteredProjects.length}
+              activeCount={activeFilterCount}
+              onClear={clearAllFilters}
+            />
 
-                  <div>
-                    <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Miembro</Label>
-                    <Select value={memberFilter} onValueChange={setMemberFilter}>
-                      <SelectTrigger className="h-6 text-[10px] mt-0.5 border-border/60 px-2">
-                        <SelectValue placeholder="Todos los miembros" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all" className="text-xs">Todos</SelectItem>
-                        {allMembers.map((m: any) => (
-                          <SelectItem key={m.id} value={m.id} className="text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <Avatar className="h-4 w-4">
-                                <AvatarImage src={m.avatar} />
-                                <AvatarFallback className="text-[6px]">{m.name?.charAt(0) || '?'}</AvatarFallback>
-                              </Avatar>
-                              <span>{m.name}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider">Fecha de fin</Label>
-                    <div className="flex gap-1 mt-0.5">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn(
-                            "h-6 text-[9px] flex-1 px-1.5 border-border/60",
-                            dateRange.from && "border-[#0DA2E7]/50"
-                          )}>
-                            <CalendarIcon className="h-2.5 w-2.5 mr-0.5" />
-                            {dateRange.from ? format(dateRange.from, "dd/MM/yy") : "Desde"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-0 bg-card border-border shadow-xl rounded-xl w-auto">
-                          <Calendar 
-                            mode="single" 
-                            selected={dateRange.from} 
-                            onSelect={(d) => setDateRange(prev => ({ ...prev, from: d }))} 
-                            locale={es}
-                            className="rounded-xl"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button variant="outline" className={cn(
-                            "h-6 text-[9px] flex-1 px-1.5 border-border/60",
-                            dateRange.to && "border-[#0DA2E7]/50"
-                          )}>
-                            <CalendarIcon className="h-2.5 w-2.5 mr-0.5" />
-                            {dateRange.to ? format(dateRange.to, "dd/MM/yy") : "Hasta"}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="p-0 bg-card border-border shadow-xl rounded-xl w-auto">
-                          <Calendar 
-                            mode="single" 
-                            selected={dateRange.to} 
-                            onSelect={(d) => setDateRange(prev => ({ ...prev, to: d }))} 
-                            locale={es}
-                            className="rounded-xl"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider flex justify-between">
-                      <span>Progreso</span>
-                      <span className="font-normal text-[#0DA2E7] text-[9px]">{Math.round(progressRange[0])}% - {Math.round(progressRange[1])}%</span>
-                    </Label>
-                    <Slider
-                      value={progressRange}
-                      min={0}
-                      max={100}
-                      step={1}
-                      onValueChange={(value) => setProgressRange(value as [number, number])}
-                      className="mt-0.5"
-                    />
-                  </div>
-
-                  <div className="pt-1 border-t border-border/30">
-                    <Label className="text-[9px] font-medium text-muted-foreground uppercase tracking-wider flex items-center justify-between">
-                      <span>Ordenar por</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
-                        className="h-5 w-5 p-0 hover:bg-[#0DA2E7]/10"
-                        title={sortOrder === "asc" ? "Ascendente" : "Descendente"}
-                      >
-                        {sortOrder === "asc" ? (
-                          <ArrowUp className="h-3 w-3 text-muted-foreground" />
-                        ) : (
-                          <ArrowDown className="h-3 w-3 text-muted-foreground" />
-                        )}
-                      </Button>
-                    </Label>
-                    <Select value={sortBy} onValueChange={setSortBy}>
-                      <SelectTrigger className="h-6 text-[10px] mt-0.5 border-border/60 px-2">
-                        <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="name" className="text-xs">Nombre</SelectItem>
-                        <SelectItem value="endDate" className="text-xs">Fecha fin</SelectItem>
-                        <SelectItem value="progress" className="text-xs">Progreso</SelectItem>
-                        <SelectItem value="hours" className="text-xs">Horas</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex gap-1.5 pt-1.5 border-t border-border/30">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="flex-1 text-[9px] h-6 hover:bg-muted/50 px-1"
-                      onClick={clearAllFilters}
-                    >
-                      Limpiar
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      className="flex-1 text-[9px] h-6 text-white px-1"
-                      style={{ background: HORMI_GRADIENT }}
-                    >
-                      Aplicar
-                    </Button>
-                  </div>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <div className="flex items-center justify-center min-w-[32px] h-8 px-2">
-              <span className="text-xs text-muted-foreground font-medium">
-                {formatNumber(filteredProjects.length)}
-              </span>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleViewMode}
-              className="h-8 w-8 p-0 hover:bg-muted/50 rounded-md text-muted-foreground"
-              title={viewMode === 'grid' ? 'Vista compacta' : 'Vista grid'}
-            >
-              {viewMode === 'grid' ? (
-                <LayoutList className="h-4 w-4" />
-              ) : (
-                <LayoutGrid className="h-4 w-4" />
-              )}
-            </Button>
+            <div className="h-6 w-px bg-border/50" />
+            <span className="whitespace-nowrap px-1.5 text-xs text-muted-foreground">
+              {filteredProjects.length} proyecto{filteredProjects.length !== 1 ? "s" : ""}
+            </span>
           </div>
+
+          {/* Vista: botón único que alterna entre grid y lista */}
+          <Button
+            variant="outline"
+            onClick={toggleViewMode}
+            className="h-9 shrink-0 gap-2 rounded-lg border-border/60 bg-card px-3 text-xs font-medium text-foreground shadow-sm transition-all hover:border-[#0DA2E7]/40 hover:text-[#0DA2E7]"
+            title={viewMode === "grid" ? "Cambiar a vista lista" : "Cambiar a vista cuadrícula"}
+          >
+            {viewMode === "grid" ? (
+              <LayoutList className="h-3.5 w-3.5 text-[#0DA2E7]" />
+            ) : (
+              <LayoutGrid className="h-3.5 w-3.5 text-[#0DA2E7]" />
+            )}
+            {viewMode === "grid" ? "Vista Lista" : "Vista Grid"}
+          </Button>
         </div>
 
-        {/* ═══════════ CARRUSEL ═══════════ */}
+        {/* ═══════════ LISTADO ═══════════ */}
         {loading ? (
           <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin" style={{ color: HORMI_BLUE }} /></div>
         ) : filteredProjects.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 rounded-xl border border-border bg-card">
             <FolderKanban className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">No se encontraron proyectos</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">Prueba ajustar los filtros de búsqueda</p>
+            <p className="text-xs text-muted-foreground/50 mt-1">Prueba ajustar los filtros</p>
           </motion.div>
+        ) : viewMode === 'list' ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Mostrando {formatNumber(filteredProjects.length)} {filteredProjects.length === 1 ? 'proyecto' : 'proyectos'}
+            </p>
+            <div className="rounded-xl border border-border/40 bg-card shadow-sm overflow-hidden">
+              <AnimatePresence mode="popLayout">
+                {filteredProjects.map((project, idx) => {
+                  const statusColor = getStatusColor(project.status);
+                  const statusInfo = statusConfig[project.status] || statusConfig.default;
+                  const clientData = clients.find((c: any) => c.name === project.client);
+                  return (
+                    <motion.div
+                      key={project.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
+                      layout
+                      transition={{ delay: Math.min(idx * 0.02, 0.3), duration: 0.25, ease: "easeOut" }}
+                    >
+                      <ProjectListRow
+                        project={project}
+                        statusColor={statusColor}
+                        statusInfo={statusInfo}
+                        clientData={clientData}
+                        canEdit={canEdit}
+                        handleProjectClick={handleProjectClick}
+                        handleEditProject={handleEditProject}
+                        handleDeleteClick={handleDeleteClick}
+                        handleMemberClick={handleMemberClick}
+                      />
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
+            </div>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -830,10 +670,7 @@ export default function Projects() {
                   animate={{ opacity: 1 }} 
                   exit={{ opacity: 0 }} 
                   transition={{ duration: 0.25, ease: "easeInOut" }} 
-                  className={cn(
-                    "grid gap-4 transition-all duration-200 p-5 rounded-xl bg-muted/30 border border-border/40",
-                    viewMode === 'grid' ? "md:grid-cols-3" : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
-                  )}
+                  className="grid gap-4 rounded-xl bg-muted/30 p-5 transition-all duration-200 border border-border/40 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
                 >
                   {carouselProjects.map((project, idx) => {
                     const statusColor = getStatusColor(project.status);
@@ -866,7 +703,6 @@ export default function Projects() {
                           handleEditProject={handleEditProject}
                           handleDeleteClick={handleDeleteClick}
                           handleMemberClick={handleMemberClick}
-                          compact={viewMode === 'compact'}
                         />
                       </motion.div>
                     );
@@ -891,13 +727,57 @@ export default function Projects() {
 
       {/* Diálogo Eliminar */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>Eliminar Proyecto</DialogTitle></DialogHeader>
-          <div className="py-4"><p className="text-muted-foreground">¿Eliminar <strong className="text-red-500">"{deleteDialog.projectName}"</strong>?</p></div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, projectId: '', projectName: '' })}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmDelete} disabled={isDeleting}>{isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}Eliminar</Button>
-          </DialogFooter>
+        <DialogContent className="sm:max-w-md bg-card border-border rounded-2xl">
+          {(() => {
+            const deletingProject = projects.find(p => p.id === deleteDialog.projectId);
+            return (
+              <>
+                <DialogHeader>
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 mb-3">
+                    <Trash2 className="h-7 w-7 text-red-500" />
+                  </div>
+                  <DialogTitle className="text-center text-lg font-bold text-foreground">Eliminar Proyecto</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3 text-center px-2">
+                  <p className="text-sm text-muted-foreground">
+                    ¿Seguro que deseas eliminar <strong className="text-red-500">{deleteDialog.projectName}</strong>?
+                  </p>
+                  <div className="rounded-xl bg-muted/40 border border-border/40 p-3 text-left space-y-1.5">
+                    <p className="text-xs text-muted-foreground flex items-start gap-1.5">
+                      <Archive className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      La eliminación es <strong>lógica</strong>: el proyecto se archivará y dejará de aparecer en la lista.
+                    </p>
+                    {deletingProject && deletingProject.totalTasks > 0 && (
+                      <p className="text-xs text-amber-600 flex items-start gap-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                        Tiene {deletingProject.totalTasks} tarea(s){deletingProject.isClosed
+                          ? ", pero al estar cerrado/cancelado podrá eliminarse."
+                          : ": solo podrá eliminarse si el proyecto está cerrado o cancelado."}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <DialogFooter className="sm:justify-center gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteDialog({ open: false, projectId: '', projectName: '' })}
+                    className="rounded-lg border-border/60 hover:bg-muted/50"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={confirmDelete}
+                    disabled={isDeleting}
+                    className="rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+                  >
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                    Eliminar
+                  </Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

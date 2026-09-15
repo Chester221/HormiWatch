@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
-import { Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban, Users, Briefcase, Wrench } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban, Users, Briefcase, Wrench, Menu, X, ArrowRight } from "lucide-react";
+import { projectStatusInfo } from "@/lib/dashboardUtils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -21,11 +22,12 @@ import {
   DialogTitle,   // ✅ AGREGADO
 } from "@/components/ui/dialog";
 
-export function TopBar() {
+export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
@@ -43,6 +45,12 @@ export function TopBar() {
   const userRole = roleName;
 
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+  // ✅ Debounce real de 250ms para la búsqueda
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 250);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
   const getRoleLabel = (role: string) => {
     switch (role) { 
@@ -65,172 +73,187 @@ export function TopBar() {
     return () => document.removeEventListener("keydown", down);
   }, []);
 
-  const q = searchQuery.toLowerCase().trim();
-
-  const isAdminOrManager = userRole === 'Admin' || userRole === 'Manager';
+  // ✅ Permisos por rol
+  const isAdmin = userRole === 'Admin';
+  const isManager = userRole === 'Manager';
   const isTechnician = userRole === 'Technician';
+  const canSearchUsers = isAdmin || isManager;
+  const canSearchClients = isAdmin || isManager;
 
-  const isSearchingForTasks = q === 'tarea' || q === 'tareas';
-  const isSearchingForServices = q === 'servicio' || q === 'servicios';
-  const isSearchingForProjects = q === 'proyecto' || q === 'proyectos';
-  const isSearchingForClients = q === 'cliente' || q === 'clientes';
-  const isSearchingForMembers = q === 'miembro' || q === 'miembros' || q === 'equipo';
+  const q = debouncedQuery.toLowerCase();
 
-  const results: any[] = [];
+  // ✅ Etiqueta legible de estado de tarea
+  const taskStatusLabel = (status?: any): string => {
+    const s = String(status || '').toUpperCase();
+    if (s.includes('COMPLET')) return 'Completada';
+    if (s.includes('INPROGRESS') || s.includes('IN PROGRESS')) return 'En progreso';
+    if (s.includes('CANCELL')) return 'Cancelada';
+    return 'Pendiente';
+  };
 
-  if (isSearchingForTasks) {
-    const filteredTasks = tasks.filter((t: any) => {
-      if (isTechnician) return t.technician_id === user?.id;
-      return true;
-    });
-    results.push(...filteredTasks.slice(0, 5).map((t: any) => ({
-      type: 'Tarea',
-      icon: <CheckSquare className="h-4 w-4 text-green-500" />,
-      label: t.description || 'Sin descripción',
-      sub: t.projects?.name,
-      path: '/tasks'
-    })));
-  } else if (q) {
-    results.push(...tasks
-      .filter((t: any) => {
-        const matchesSearch = (t.description || '').toLowerCase().includes(q);
-        if (isTechnician) return matchesSearch && t.technician_id === user?.id;
-        return matchesSearch;
-      })
-      .slice(0, 5)
-      .map((t: any) => ({
+  // ✅ Un técnico solo ve tareas/proyectos/servicios que le corresponden.
+  const visibleTasks = isTechnician ? tasks.filter((t: any) => t.technician_id === user?.id) : tasks;
+  const visibleProjects = isTechnician
+    ? projects.filter((p: any) =>
+        p.technicians?.some((m: any) => m.id === user?.id) ||
+        p.technician_id === user?.id ||
+        p.project_leader_id === user?.id
+      )
+    : projects;
+
+  const results = useMemo(() => {
+    if (!q) return [];
+
+    const out: any[] = [];
+
+    // ---------- TAREAS ----------
+    visibleTasks.forEach((t: any) => {
+      const title = t.description || t.title || 'Sin descripción';
+      if (!title.toLowerCase().includes(q) && !t.projects?.name?.toLowerCase().includes(q)) return;
+      out.push({
         type: 'Tarea',
-        icon: <CheckSquare className="h-4 w-4 text-green-500" />,
-        label: t.description || 'Sin descripción',
-        sub: t.projects?.name,
-        path: '/tasks'
-      })));
-  }
+        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><CheckSquare className="h-4 w-4 text-[#0DA2E7]" /></span>,
+        label: title,
+        sub: [t.projects?.name || t.projectName, taskStatusLabel(t.status)].filter(Boolean).join(' · ') || 'Sin proyecto',
+        path: `/tasks?task=${t.id}`
+      });
+    });
 
-  if (isSearchingForServices) {
-    results.push(...services.slice(0, 5).map((s: any) => ({
-      type: 'Servicio',
-      icon: <Wrench className="h-4 w-4 text-purple-500" />,
-      label: s.name,
-      sub: `$${s.default_hourly_rate}/h`,
-      path: '/services'
-    })));
-  } else if (q && !isSearchingForTasks) {
-    results.push(...services
-      .filter((s: any) => (s.name || '').toLowerCase().includes(q))
-      .slice(0, 5)
-      .map((s: any) => ({
-        type: 'Servicio',
-        icon: <Wrench className="h-4 w-4 text-purple-500" />,
-        label: s.name,
-        sub: `$${s.default_hourly_rate}/h`,
-        path: '/services'
-      })));
-  }
-
-  if (isAdminOrManager) {
-    if (isSearchingForProjects) {
-      const filteredProjects = projects.slice(0, 5).map((p: any) => ({
+    // ---------- PROYECTOS ----------
+    visibleProjects.forEach((p: any) => {
+      if (!p.name?.toLowerCase().includes(q) && !p.clients?.name?.toLowerCase().includes(q) && !(p.customer_name || '').toLowerCase().includes(q)) return;
+      out.push({
         type: 'Proyecto',
-        icon: <FolderKanban className="h-4 w-4 text-blue-500" />,
+        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><FolderKanban className="h-4 w-4 text-[#0DA2E7]" /></span>,
         label: p.name,
-        sub: p.description,
-        path: '/projects'
-      }));
-      results.push(...filteredProjects);
-    } else if (q && !isSearchingForTasks && !isSearchingForServices) {
-      results.push(...projects
-        .filter((p: any) => (p.name || '').toLowerCase().includes(q))
-        .slice(0, 5)
-        .map((p: any) => ({
-          type: 'Proyecto',
-          icon: <FolderKanban className="h-4 w-4 text-blue-500" />,
-          label: p.name,
-          sub: p.description,
-          path: '/projects'
-        })));
-    }
+        sub: `${p.clients?.name || p.customer_name || 'Sin cliente'} · ${projectStatusInfo(p.status).label}`,
+        path: `/projects?project=${p.id}`
+      });
+    });
 
-    if (isSearchingForClients) {
-      const filteredClients = clients.slice(0, 5).map((c: any) => ({
-        type: 'Cliente',
-        icon: <Briefcase className="h-4 w-4 text-orange-500" />,
-        label: c.name,
-        sub: c.ruc || c.address,
-        path: '/clients'
-      }));
-      results.push(...filteredClients);
-    } else if (q && !isSearchingForTasks && !isSearchingForServices && !isSearchingForProjects) {
-      results.push(...clients
-        .filter((c: any) => (c.name || '').toLowerCase().includes(q))
-        .slice(0, 5)
-        .map((c: any) => ({
+    // ---------- CLIENTES (solo Admin/Manager) ----------
+    if (canSearchClients) {
+      clients.forEach((c: any) => {
+        if (!c.name?.toLowerCase().includes(q) && !c.ruc?.toLowerCase().includes(q)) return;
+        out.push({
           type: 'Cliente',
-          icon: <Briefcase className="h-4 w-4 text-orange-500" />,
+          icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Briefcase className="h-4 w-4 text-[#0DA2E7]" /></span>,
           label: c.name,
-          sub: c.ruc || c.address,
-          path: '/clients'
-        })));
+          sub: ['RIF:', c.ruc].filter(Boolean).join(' '),
+          path: `/clients?client=${c.id}`
+        });
+      });
     }
 
-    if (isSearchingForMembers) {
-      const filteredMembers = members.slice(0, 5).map((m: any) => ({
-        type: 'Miembro',
-        icon: <Users className="h-4 w-4 text-cyan-500" />,
-        label: m.full_name || m.email,
-        sub: m.role,
-        path: '/team'
-      }));
-      results.push(...filteredMembers);
-    } else if (q && !isSearchingForTasks && !isSearchingForServices && !isSearchingForProjects && !isSearchingForClients) {
-      results.push(...members
-        .filter((m: any) => (m.full_name || '').toLowerCase().includes(q) || (m.email || '').toLowerCase().includes(q))
-        .slice(0, 5)
-        .map((m: any) => ({
-          type: 'Miembro',
-          icon: <Users className="h-4 w-4 text-cyan-500" />,
-          label: m.full_name || m.email,
-          sub: m.role,
-          path: '/team'
-        })));
+    // ---------- SERVICIOS ----------
+    services.forEach((s: any) => {
+      const categoryName = s.categories?.name || s.category?.name || 'Sin categoría';
+      if (!s.name?.toLowerCase().includes(q) && !categoryName.toLowerCase().includes(q)) return;
+      out.push({
+        type: 'Servicio',
+        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Wrench className="h-4 w-4 text-[#0DA2E7]" /></span>,
+        label: s.name,
+        sub: categoryName,
+        path: `/services?service=${s.id}`
+      });
+    });
+
+    // ---------- USUARIOS (solo Admin/Manager) ----------
+    if (canSearchUsers) {
+      members.forEach((m: any) => {
+        const name = m.full_name || m.email || 'Sin nombre';
+        const role = typeof m.role === 'string' ? m.role : m.role?.name;
+        // Manager no ve administradores
+        if (isManager && role === 'Admin') return;
+        if (!name.toLowerCase().includes(q) && !(m.email || '').toLowerCase().includes(q)) return;
+        out.push({
+          type: 'Usuario',
+          icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Users className="h-4 w-4 text-[#0DA2E7]" /></span>,
+          label: name,
+          sub: getRoleLabel(role || 'Technician'),
+          path: `/team?member=${m.id}`
+        });
+      });
     }
-  }
+
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, visibleTasks, visibleProjects, clients, services, members, isTechnician, canSearchClients, canSearchUsers]);
 
   const uniqueResults = results.filter((item, index, self) => 
     index === self.findIndex((t) => t.label === item.label && t.type === item.type)
   );
 
+  const MAX_PER_GROUP = 5;
+  // item.type es singular ("Tarea"), el label del grupo es plural ("Tareas")
+  const grouped = ["Proyectos", "Tareas", "Clientes", "Servicios", "Usuarios"]
+    .map((label) => ({
+      label,
+      items: uniqueResults.filter((item) => `${item.type}s` === label).slice(0, MAX_PER_GROUP),
+    }))
+    .filter((g) => g.items.length > 0);
+
+  const suggestionText = isTechnician
+    ? 'Prueba con el nombre de una tarea, proyecto o servicio según tus permisos.'
+    : isManager
+      ? 'Prueba con el nombre de una tarea, proyecto, cliente, servicio o usuario.'
+      : 'Prueba con el nombre de una tarea, proyecto, cliente, servicio o usuario.';
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card/80 px-6 backdrop-blur-sm">
-      <div className="relative w-full max-w-md">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-card/80 px-4 backdrop-blur-sm lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-2 md:gap-3">
+        {onOpenSidebar && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Abrir menú"
+            onClick={onOpenSidebar}
+            className="shrink-0 text-muted-foreground lg:hidden"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+        <div className="relative w-full max-w-md min-w-0">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <motion.button
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           onClick={() => setSearchOpen(true)}
-          className="w-full flex items-center pl-10 pr-4 py-2 text-sm text-muted-foreground bg-muted/50 border border-transparent rounded-md hover:border-primary hover:bg-card transition-all text-left"
+          className="flex w-full items-center pl-10 pr-3 py-2 text-sm text-muted-foreground bg-muted/50 border border-transparent rounded-lg hover:border-primary hover:bg-card hover:shadow-sm hover:text-foreground transition-all text-left"
         >
-          Buscar en todo el sistema...
-          <kbd className="ml-auto inline-flex h-5 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">⌘K</kbd>
+          <span className="truncate">Buscar en todo el sistema...</span>
+          <kbd className="ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">Ctrl K</kbd>
         </motion.button>
+      </div>
       </div>
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent className="max-w-lg p-0 gap-0 bg-card border-border">
+        <DialogContent hideCloseButton className="w-full max-w-[calc(100vw-2rem)] gap-0 border-border bg-card p-0 sm:max-w-lg">
           {/* ✅ AGREGADO: DialogHeader con sr-only para accesibilidad */}
           <DialogHeader className="sr-only">
             <DialogTitle>Buscador de HormiWatch</DialogTitle>
           </DialogHeader>
           
-          <div className="flex items-center border-b border-border px-3">
-            <Search className="h-4 w-4 text-muted-foreground mr-2" />
+          <div className="relative flex items-center border-b border-border px-3">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Escribe para buscar..."
-              className="flex-1 h-12 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground"
+              aria-label="Buscar"
+              className="h-12 w-full flex-1 bg-transparent pl-2.5 pr-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
               autoFocus
             />
+            {searchQuery && (
+              <button
+                type="button"
+                aria-label="Limpiar búsqueda"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
           <div className="max-h-[300px] overflow-y-auto p-2">
             <AnimatePresence mode="wait">
@@ -242,34 +265,43 @@ export function TopBar() {
                 </motion.div>
               )}
               {q && uniqueResults.length === 0 && (
-                <motion.div key="no-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-10 text-center">
+                <motion.div key="no-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 py-10 text-center">
                   <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-30" />
-                  <p className="text-sm font-medium">No se encontraron resultados</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    No hay nada relacionado con <strong>"{searchQuery}"</strong>
-                  </p>
+                  <p className="text-sm font-medium">No se encontraron resultados para <strong>"{searchQuery}"</strong></p>
+                  <p className="text-xs text-muted-foreground mt-1">{suggestionText}</p>
                 </motion.div>
               )}
               {uniqueResults.length > 0 && (
                 <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <p className="text-xs text-muted-foreground px-2 py-1">Resultados ({uniqueResults.length})</p>
-                  {uniqueResults.map((item, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.04 }}
-                      onClick={() => { navigate(item.path); setSearchOpen(false); setSearchQuery(""); }}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted cursor-pointer transition-colors"
-                    >
-                      {item.icon}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{item.label}</p>
-                        {item.sub && <p className="text-xs text-muted-foreground truncate">{item.sub}</p>}
+                  <p className="px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Resultados ({uniqueResults.length})
+                  </p>
+                  <div className="max-h-[300px] overflow-y-auto p-1.5 pt-0.5">
+                    {grouped.map((group, gi) => (
+                      <div key={group.label} className={gi > 0 ? "mt-1.5 border-t border-border/60 pt-1.5" : ""}>
+                        <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                          {group.label}
+                        </p>
+                        {group.items.map((item, i) => (
+                          <motion.div
+                            key={item.label + item.type}
+                            initial={{ opacity: 0, x: -8 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: i * 0.03 }}
+                            onClick={() => { navigate(item.path); setSearchOpen(false); setSearchQuery(""); }}
+                            className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted"
+                          >
+                            {item.icon}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
+                              {item.sub && <p className="truncate text-xs text-muted-foreground">{item.sub}</p>}
+                            </div>
+                            <ArrowRight className="h-3.5 w-3.5 shrink-0 -translate-x-0.5 text-[#0DA2E7] opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
+                          </motion.div>
+                        ))}
                       </div>
-                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{item.type}</span>
-                    </motion.div>
-                  ))}
+                    ))}
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>

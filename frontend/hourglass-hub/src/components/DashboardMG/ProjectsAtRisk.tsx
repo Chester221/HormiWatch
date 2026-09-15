@@ -5,12 +5,14 @@ import {
   AlertCircle,
   Clock,
   CheckSquare,
+  CheckCircle2,
   Users,
   Calendar,
   ArrowRight,
   Building2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { taskHours, safeParseDate, toFinite } from "@/lib/dashboardUtils";
 
 interface ProjectsAtRiskProps {
   projects: any[];
@@ -27,8 +29,9 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
 
   const atRisk = projects
     .filter((p: any) => {
-      if (!p.end_date || p.status === "Completed" || p.status === "Cancelled") return false;
-      const endDate = new Date(p.end_date);
+      if (!p.end_date || p.status === "COMPLETED" || p.status === "CANCELLED") return false;
+      const endDate = safeParseDate(p.end_date);
+      if (!endDate) return false;
       const today = new Date();
       const projectTasks = tasks.filter((t: any) => t.project_id === p.id);
       const completed = projectTasks.filter((t: any) => t.status === "Completed").length;
@@ -40,13 +43,12 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
       const completed = projectTasks.filter((t: any) => t.status === "Completed").length;
       const total = projectTasks.length;
       const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-      const hours = projectTasks.reduce((acc, t) => {
-        const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-        return acc + h;
-      }, 0);
-      const endDate = new Date(p.end_date);
+      const hours = projectTasks.reduce((acc, t) => acc + taskHours(t), 0);
+      const endDate = safeParseDate(p.end_date);
       const today = new Date();
-      const days = Math.max(0, Math.ceil((today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const days = endDate
+        ? Math.max(0, Math.ceil((today.getTime() - endDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : 0;
       const lead = technicians.find((t: any) => t.id === p.lead_id);
 
       return {
@@ -56,7 +58,8 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
         progress,
         hours,
         days,
-        clientName: p.clients?.name || "Sin cliente",
+        dueLabel: endDate ? endDate.toLocaleDateString() : "—",
+        clientName: p.clients?.name || p.clientName || "Sin cliente",
         leadName: lead?.full_name || "Sin responsable",
       };
     })
@@ -119,8 +122,9 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
             transition={{ delay: 0.4 }}
             className="mt-4"
           >
-            <Badge className="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-none px-3 py-1.5 text-xs font-medium">
-              ✅ Todos los proyectos a tiempo
+            <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/40 px-3 py-1.5 text-xs font-medium gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Todos los proyectos a tiempo
             </Badge>
           </motion.div>
         </div>
@@ -155,7 +159,7 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.08 }}
-              onClick={() => navigate(`/projects/${project.id}`)}
+              onClick={() => navigate(`/projects?project=${project.id}`)}
               className={`p-3 rounded-lg border ${severity.border} ${severity.bg} transition-all hover:shadow-md cursor-pointer group`}
             >
               {/* FILA SUPERIOR */}
@@ -185,7 +189,7 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
                     <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
                     <span className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      Vence: {new Date(project.end_date).toLocaleDateString()}
+                      Vence: {project.dueLabel}
                     </span>
                   </div>
                 </div>
@@ -201,7 +205,7 @@ export function ProjectsAtRisk({ projects, tasks, technicians = [] }: ProjectsAt
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
-                  {project.hours.toFixed(1)}h
+                  {toFinite(project.hours).toFixed(1)}h
                 </span>
                 <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
                 <span className={`font-medium ${severity.text}`}>

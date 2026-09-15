@@ -1,4 +1,4 @@
-import { Card } from "@/components/ui/card";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Target,
@@ -8,6 +8,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
+import { taskDate, taskHours, safeParseDate } from "@/lib/dashboardUtils";
 
 interface QuickMetricsProps {
   tasks: any[];
@@ -15,38 +16,67 @@ interface QuickMetricsProps {
   technicians: any[];
 }
 
-export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps) {
-  // ============================================
-  // CÁLCULOS
-  // ============================================
+const withinPeriod = (date: Date | null, start: Date, end?: Date) => {
+  if (!date) return false;
+  const d = date.getTime();
+  if (end) return d >= start.getTime() && d < end.getTime();
+  return d >= start.getTime();
+};
 
-  const totalTasks = tasks.length || 1;
-  const completedTasks = tasks.filter((t: any) => t.status === "Completed").length;
-  const efficiency = Math.round((completedTasks / totalTasks) * 100);
+export function QuickMetrics({ tasks, projects }: QuickMetricsProps) {
+  const { efficiency, avgTime, projectsOnTime, tasksPerTech } = useMemo(() => {
+    const totalTasks = tasks.length || 1;
+    const completedTasks = tasks.filter((t: any) => t.status === "Completed").length;
+    const efficiency = Math.round((completedTasks / totalTasks) * 100);
 
-  const totalHours = tasks.reduce((acc, t) => {
-    const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-    return acc + h;
-  }, 0);
-  const avgTime = totalTasks > 0 ? totalHours / totalTasks : 0;
+    const totalHours = tasks.reduce((acc, t) => acc + taskHours(t), 0);
+    const avgTime = totalTasks > 0 ? totalHours / totalTasks : 0;
 
-  const delayedProjects = projects.filter((p: any) => {
-    if (!p.end_date) return false;
-    const endDate = new Date(p.end_date);
-    const today = new Date();
-    const projectTasks = tasks.filter((t: any) => t.project_id === p.id);
-    const completed = projectTasks.filter((t: any) => t.status === "Completed").length;
-    const progress = projectTasks.length > 0 ? Math.round((completed / projectTasks.length) * 100) : 0;
-    return endDate < today && progress < 100;
-  });
-  const projectsOnTime = Math.round(((projects.length - delayedProjects.length) / (projects.length || 1)) * 100);
+    const delayedProjects = projects.filter((p: any) => {
+      if (!p.end_date) return false;
+      const endDate = safeParseDate(p.end_date);
+      if (!endDate) return false;
+      const today = new Date();
+      const projectTasks = tasks.filter((t: any) => t.project_id === p.id);
+      const completed = projectTasks.filter((t: any) => t.status === "Completed").length;
+      const progress = projectTasks.length > 0 ? Math.round((completed / projectTasks.length) * 100) : 0;
+      return endDate < today && progress < 100;
+    });
+    const projectsOnTime = Math.round(((projects.length - delayedProjects.length) / (projects.length || 1)) * 100);
 
-  const activeTechs = new Set(tasks.map((t: any) => t.technician_id).filter(Boolean));
-  const tasksPerTech = activeTechs.size > 0 ? Math.round(totalTasks / activeTechs.size) : 0;
+    const activeTechs = new Set(tasks.map((t: any) => t.technician_id).filter(Boolean));
+    const tasksPerTech = activeTechs.size > 0 ? Math.round(totalTasks / activeTechs.size) : 0;
 
-  // ============================================
-  // DATOS
-  // ============================================
+    return { efficiency, avgTime, projectsOnTime, tasksPerTech };
+  }, [tasks, projects]);
+
+  const realTrends = useMemo(() => {
+    const now = new Date();
+    const periodStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const prevStart = new Date(periodStart.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const lastTasks = tasks.filter((t: any) => withinPeriod(taskDate(t), periodStart));
+    const prevTasks = tasks.filter((t: any) => withinPeriod(taskDate(t), prevStart, periodStart));
+
+    const rate = (list: any[]) => {
+      if (list.length === 0) return 0;
+      return (list.filter((t: any) => t.status === "Completed").length / list.length) * 100;
+    };
+    const lastRate = rate(lastTasks);
+    const prevRate = rate(prevTasks);
+    const efficiencyTrend =
+      (prevRate > 0
+        ? Math.round(((lastRate - prevRate) / prevRate) * 100)
+        : lastRate > 0
+        ? 100
+        : 0);
+
+    return {
+      efficiency: Math.abs(efficiencyTrend) > 0
+        ? { value: Math.abs(efficiencyTrend), positive: efficiencyTrend >= 0 }
+        : undefined,
+    };
+  }, [tasks]);
 
   const metrics = [
     {
@@ -56,7 +86,7 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
       value: `${efficiency}%`,
       color: "#10b981",
       bg: "bg-emerald-50 dark:bg-emerald-950/20",
-      trend: efficiency >= 70 ? { value: 12, positive: true } : { value: 5, positive: false },
+      trend: realTrends.efficiency,
     },
     {
       id: "avgTime",
@@ -65,7 +95,6 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
       value: `${avgTime.toFixed(1)}h`,
       color: "#3b82f6",
       bg: "bg-blue-50 dark:bg-blue-950/20",
-      trend: avgTime > 0 ? { value: 8, positive: true } : undefined,
     },
     {
       id: "projectsOnTime",
@@ -74,7 +103,6 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
       value: `${projectsOnTime}%`,
       color: "#8b5cf6",
       bg: "bg-purple-50 dark:bg-purple-950/20",
-      trend: projectsOnTime >= 80 ? { value: 15, positive: true } : { value: 10, positive: false },
     },
     {
       id: "tasksPerTech",
@@ -83,13 +111,9 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
       value: `${tasksPerTech}`,
       color: "#f59e0b",
       bg: "bg-amber-50 dark:bg-amber-950/20",
-      trend: tasksPerTech > 5 ? { value: 20, positive: true } : { value: 5, positive: false },
+      trend: realTrends.tasksPerTech,
     },
   ];
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -106,12 +130,15 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
             className="group relative overflow-hidden rounded-xl border border-border/40 bg-white dark:bg-card p-4 shadow-sm hover:shadow-lg hover:border-[#0DA2E7]/30 transition-all duration-300"
           >
             {/* Círculo decorativo de fondo */}
-            <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-[#0DA2E7] opacity-[0.04] transition-transform duration-500 group-hover:scale-150" />
+            <div
+              className="absolute -right-8 -top-8 h-24 w-24 rounded-full transition-transform duration-500 group-hover:scale-150"
+              style={{ backgroundColor: metric.color, opacity: 0.05 }}
+            />
 
             <div className="relative flex items-start justify-between">
               {/* Lado izquierdo: valor + etiqueta */}
               <div className="flex-1 min-w-0 pr-2">
-                <p className="text-2xl font-bold text-foreground tracking-tight">
+                <p className="text-2xl font-bold text-foreground tracking-tight tabular-nums">
                   {metric.value}
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -127,9 +154,11 @@ export function QuickMetrics({ tasks, projects, technicians }: QuickMetricsProps
                 )}
               </div>
 
-              {/* Lado derecho: icono con fondo */}
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0DA2E7]/10 transition-transform duration-300 group-hover:scale-105 flex-shrink-0">
-                <Icon className="h-5 w-5 text-[#0DA2E7]" />
+              {/* Lado derecho: icono con fondo del color de la métrica */}
+              <div
+                className={`flex h-11 w-11 items-center justify-center rounded-xl ${metric.bg} transition-transform duration-300 group-hover:scale-105 flex-shrink-0`}
+              >
+                <Icon className="h-5 w-5" style={{ color: metric.color }} />
               </div>
             </div>
 

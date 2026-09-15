@@ -18,6 +18,7 @@ import {
   Briefcase,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { taskHours } from "@/lib/dashboardUtils";
 
 interface ServicesUsageProps {
   tasks: any[];
@@ -104,8 +105,7 @@ export function ServicesUsage({ tasks = [], services = [], projects = [] }: Serv
       };
     }
     serviceMap[service.id].count += 1;
-    const h = task.duration_in_minutes ? task.duration_in_minutes / 60 : 0;
-    serviceMap[service.id].hours += h;
+    serviceMap[service.id].hours += taskHours(task);
   });
 
   const data = Object.values(serviceMap)
@@ -147,14 +147,14 @@ export function ServicesUsage({ tasks = [], services = [], projects = [] }: Serv
       {/* ═══ HEADER ═══ */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-[#8B5CF6]/10">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8B5CF6]/10">
             <Wrench className="h-4 w-4 text-[#8B5CF6]" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-sm font-semibold text-foreground tracking-tight">
               Servicios Más Usados
             </h3>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {totalTasks} tareas · {totalHours.toFixed(1)}h totales
             </p>
           </div>
@@ -168,7 +168,7 @@ export function ServicesUsage({ tasks = [], services = [], projects = [] }: Serv
       </div>
 
       {/* ═══ GRID DE TARJETAS MEJORADO ═══ */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {data.map((item, idx) => {
           const color = SERVICE_COLORS[idx % SERVICE_COLORS.length];
           const Icon = getServiceIcon(item.name, item.categoryName);

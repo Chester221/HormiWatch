@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -7,7 +7,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -18,908 +18,506 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
 import {
-  Loader2,
-  Wrench,
-  DollarSign,
-  FolderKanban,
-  Plus,
-  Tag,
-  Code,
-  BarChart3,
-  Palette,
-  Briefcase,
-  Server,
-  Landmark,
-  ClipboardCheck,
-  Search,
-  Pencil,
-  Save,
-  X,
-  Eye,
-  Calendar,
-  Check,
-  Settings,
-  Grid3x3,
+  X, DollarSign, FolderKanban, Loader2, Check, ChevronDown, Plus,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ICON_OPTIONS, pickServiceColor } from "./serviceIcons";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useQueryClient } from "@tanstack/react-query";
-import { motion } from "framer-motion";
-import { servicesApi } from "@/lib/api";
-// ✅ IMPORT CORREGIDO
-import { useServiceCategories } from "@/hooks/useServices";
-
-// ============================================
-// CONSTANTES Y MAPEOS
-// ============================================
-
-const HORMI_BLUE = '#0DA2E7';
-
-// ICONOS DISPONIBLES PARA SELECCIONAR
-const AVAILABLE_ICONS = [
-  { name: "Wrench", icon: Wrench },
-  { name: "Code", icon: Code },
-  { name: "BarChart3", icon: BarChart3 },
-  { name: "Palette", icon: Palette },
-  { name: "Briefcase", icon: Briefcase },
-  { name: "Server", icon: Server },
-  { name: "Landmark", icon: Landmark },
-  { name: "ClipboardCheck", icon: ClipboardCheck },
-  { name: "Search", icon: Search },
-  { name: "Tag", icon: Tag },
-];
-
-const categoryIcons: Record<string, any> = {
-  "Desarrollo": Code,
-  "Evaluación": Search,
-  "Mantenimiento": Wrench,
-  "Integración Bancaria": Landmark,
-  "Análisis de Datos": BarChart3,
-  "Infraestructura": Server,
-  "Diseño": Palette,
-  "Consultoría": Briefcase,
-  "Consulta": ClipboardCheck,
-};
-
-const categoryColors: Record<string, string> = {
-  "Desarrollo": "bg-blue-500/10 text-blue-600 border-blue-200",
-  "Evaluación": "bg-purple-500/10 text-purple-600 border-purple-200",
-  "Mantenimiento": "bg-orange-500/10 text-orange-600 border-orange-200",
-  "Integración Bancaria": "bg-emerald-500/10 text-emerald-600 border-emerald-200",
-  "Análisis de Datos": "bg-cyan-500/10 text-cyan-600 border-cyan-200",
-  "Infraestructura": "bg-indigo-500/10 text-indigo-600 border-indigo-200",
-  "Diseño": "bg-pink-500/10 text-pink-600 border-pink-200",
-  "Consultoría": "bg-amber-500/10 text-amber-600 border-amber-200",
-  "Consulta": "bg-teal-500/10 text-teal-600 border-teal-200",
-};
+  useServiceCategories,
+  useCreateService,
+  useUpdateService,
+  useCreateServiceCategory,
+  useDeleteServiceCategory,
+  type Service,
+} from "@/hooks/useServices";
 
 // ============================================
 // ESQUEMA DE VALIDACIÓN
 // ============================================
-
 const serviceSchema = z.object({
   name: z.string()
     .min(2, "El nombre debe tener al menos 2 caracteres")
-    .max(100, "El nombre no puede exceder 100 caracteres"),
+    .max(100, "El nombre no puede superar los 100 caracteres"),
   category_id: z.string().min(1, "Selecciona una categoría"),
-  description: z.string()
-    .max(500, "La descripción no puede exceder 500 caracteres")
-    .optional()
-    .nullable(),
-  default_hourly_rate: z.number()
-    .min(0, "La tarifa no puede ser negativa")
-    .max(9999, "La tarifa no puede exceder $9,999"),
-  is_active: z.boolean().default(true),
-  icon: z.string().optional().nullable(),
+  hourlyRate: z.coerce.number().min(0, "La tarifa no puede ser negativa"),
+  description: z.string().optional(),
+  icon: z.string().min(1, "Selecciona un icono"),
 });
 
-type ServiceFormData = z.infer<typeof serviceSchema>;
-
-// ============================================
-// COMPONENTE PRINCIPAL
-// ============================================
+type ServiceFormValues = z.infer<typeof serviceSchema>;
 
 interface ServiceFormModalProps {
   open: boolean;
+  service: Service | null;
   onOpenChange: (open: boolean) => void;
-  service?: Service | null;
 }
 
-export function ServiceFormModal({
-  open,
-  onOpenChange,
-  service,
-}: ServiceFormModalProps) {
-  const isEditing = !!service;
-  const [categories, setCategories] = useState<any[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const queryClient = useQueryClient();
+const TRIGGER_CLASS =
+  "flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background px-3 text-sm transition-colors hover:border-[#0DA2E7]/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0DA2E7]/40";
 
-  // ✅ USAR EL HOOK CORRECTAMENTE
-  const { data: categoriesData, isLoading: categoriesLoading } = useServiceCategories();
-
-  // ESTADOS SIMPLIFICADOS
-  const [selectedIconName, setSelectedIconName] = useState<string | null>(null);
-  const [categoryDialog, setCategoryDialog] = useState(false);
-  const [configDialog, setConfigDialog] = useState(false);
+export function ServiceFormModal({ open, service, onOpenChange }: ServiceFormModalProps) {
+  const editing = Boolean(service);
+  const [error, setError] = useState<string | null>(null);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryDesc, setNewCategoryDesc] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isConfigComplete, setIsConfigComplete] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+  const [iconPage, setIconPage] = useState(0);
 
-  const form = useForm<ServiceFormData>({
+  const { data: categories = [], isLoading: categoriesLoading } = useServiceCategories();
+  const createService = useCreateService();
+  const updateService = useUpdateService();
+  const createCategory = useCreateServiceCategory();
+  const deleteCategory = useDeleteServiceCategory();
+  const isPending = createService.isPending || updateService.isPending;
+
+  const ICONS_PER_PAGE = 12;
+  const iconTotalPages = Math.ceil(ICON_OPTIONS.length / ICONS_PER_PAGE);
+  const visibleIcons = ICON_OPTIONS.slice(
+    iconPage * ICONS_PER_PAGE,
+    iconPage * ICONS_PER_PAGE + ICONS_PER_PAGE
+  );
+
+  const form = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceSchema),
     defaultValues: {
       name: "",
       category_id: "",
+      hourlyRate: 0,
       description: "",
-      default_hourly_rate: 0,
-      is_active: true,
-      icon: null,
+      icon: "",
     },
   });
 
-  // Cargar categorías desde el hook
-  const fetchCategories = async () => {
-    setLoadingCategories(true);
-    try {
-      // Usar el hook useServiceCategories que ya usa la API
-      // Pero como categoriesData viene del hook, podemos usarlo directamente
-      if (categoriesData) {
-        setCategories(categoriesData);
-      } else {
-        // Fallback: obtener desde la API directamente
-        // Nota: servicesApi.getAll() devuelve servicios, no categorías
-        // Necesitamos un endpoint específico para categorías
-        const response = await fetch('/api/v1/service-categories');
-        if (response.ok) {
-          const data = await response.json();
-          setCategories(data);
-        }
-      }
-    } catch (error) {
-      console.error('Error al cargar categorías:', error);
-      toast.error('Error al cargar categorías');
-    } finally {
-      setLoadingCategories(false);
-    }
-  };
+  const selectedIconName = form.watch("icon");
+  const selectedIcon = ICON_OPTIONS.find((o) => o.name === selectedIconName) || ICON_OPTIONS[0];
+  const selectedColor = pickServiceColor(form.watch("name") || service?.name);
+  const selectedCategory = categories.find((c) => c.id === form.watch("category_id")) || null;
 
-  // Resetear estado al abrir/cerrar modal
   useEffect(() => {
-    if (open) {
-      fetchCategories();
-      
-      if (service) {
-        // Edición
-        const active = service.is_active !== undefined ? service.is_active : true;
-        form.reset({
-          name: service.name || "",
-          category_id: service.category_id || "",
-          description: service.description || "",
-          default_hourly_rate: service.default_hourly_rate || 0,
-          is_active: active,
-          icon: service.icon || null,
-        });
-        setSelectedIconName(service.icon || null);
-        setIsConfigComplete(!!service.icon);
-      } else {
-        // Nuevo servicio
-        form.reset({
-          name: "",
-          category_id: "",
-          description: "",
-          default_hourly_rate: 0,
-          is_active: true,
-          icon: null,
-        });
-        setSelectedIconName(null);
-        setIsConfigComplete(false);
-      }
+    if (!open) return;
+    setError(null);
+    if (service) {
+      const iconIndex = ICON_OPTIONS.findIndex((o) => o.name === service.icon);
+      form.reset({
+        name: service.name,
+        category_id: service.category?.id || service.category_id || "",
+        hourlyRate: service.hourlyRate ?? service.default_hourly_rate ?? 0,
+        description: service.description ?? "",
+        icon: service.icon ?? "",
+      });
+      setIconPage(iconIndex >= ICONS_PER_PAGE ? 1 : 0);
+    } else {
+      form.reset({
+        name: "",
+        category_id: "",
+        hourlyRate: 0,
+        description: "",
+        icon: "",
+      });
+      setIconPage(0);
     }
   }, [open, service, form]);
 
-  // ============================================
-  // HANDLERS
-  // ============================================
-
-  // Handler para crear categoría desde el modal "+"
-  const handleCategoryCreate = async () => {
-    const trimmedName = newCategoryName.trim();
-    if (!trimmedName) {
-      toast.error("El nombre de la categoría es obligatorio");
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      // Crear categoría usando la API
-      const response = await fetch('/api/v1/service-categories', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+  const handleAddCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name || createCategory.isPending) return;
+    createCategory.mutate(
+      { name },
+      {
+        onSuccess: (created) => {
+          setNewCategoryName("");
+          setCategoryOpen(true);
+          const createdRecord = created as { id?: string; data?: { id?: string } };
+          const createdId = createdRecord?.id || createdRecord?.data?.id;
+          if (createdId) {
+            form.setValue("category_id", createdId, { shouldDirty: true });
+          }
         },
-        body: JSON.stringify({
-          name: trimmedName,
-          description: newCategoryDesc.trim() || null,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al crear categoría');
       }
+    );
+  };
 
-      const data = await response.json();
+  const handleDeleteCategory = (categoryId: string) => {
+    if (deletingCategoryId) return;
+    setDeletingCategoryId(categoryId);
+    deleteCategory.mutate(categoryId, {
+      onSuccess: () => {
+        if (form.getValues("category_id") === categoryId) {
+          form.setValue("category_id", "");
+        }
+      },
+      onSettled: () => setDeletingCategoryId(null),
+    });
+  };
 
-      await fetchCategories();
+  const onSubmit = (data: ServiceFormValues) => {
+    const payload = {
+      name: data.name,
+      description: data.description || null,
+      categoryId: data.category_id,
+      hourlyRate: Number(data.hourlyRate),
+      icon: data.icon,
+    };
 
-      if (data) {
-        form.setValue('category_id', data.id);
-        toast.success(`Categoría "${trimmedName}" creada`);
-      }
-
-      setCategoryDialog(false);
-      setNewCategoryName("");
-      setNewCategoryDesc("");
-      
-      // Abrir config automáticamente después de crear categoría
-      setConfigDialog(true);
-    } catch (error: any) {
-      toast.error(`Error al crear categoría: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
+    if (service) {
+      updateService.mutate(
+        { id: service.id, data: payload },
+        { onSuccess: () => onOpenChange(false) }
+      );
+    } else {
+      createService.mutate(payload, { onSuccess: () => onOpenChange(false) });
     }
   };
-
-  // Handler para seleccionar icono
-  const handleIconSelect = (iconName: string) => {
-    setSelectedIconName(iconName);
-    form.setValue('icon', iconName);
-    setIsConfigComplete(true);
-  };
-
-  // Handler para guardar configuración
-  const handleSaveConfig = () => {
-    if (!selectedIconName) {
-      toast.error("Selecciona un icono");
-      return;
-    }
-    setConfigDialog(false);
-    toast.success("✅ Configuración guardada");
-  };
-
-  // Handler para crear/editar servicio
-  const handleSubmit = async (data: ServiceFormData) => {
-    if (!selectedIconName && !isEditing) {
-      toast.error("Configura el icono del servicio");
-      setConfigDialog(true);
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      if (isEditing && service) {
-        // Editar usando la API
-        await servicesApi.update(service.id, {
-          name: data.name,
-          category_id: data.category_id,
-          description: data.description || null,
-          default_hourly_rate: data.default_hourly_rate,
-          is_active: data.is_active,
-          icon: selectedIconName || data.icon,
-        });
-        toast.success("✅ Servicio actualizado exitosamente");
-      } else {
-        // Crear usando la API
-        await servicesApi.create({
-          name: data.name,
-          category_id: data.category_id,
-          description: data.description || null,
-          default_hourly_rate: data.default_hourly_rate,
-          is_active: data.is_active,
-          icon: selectedIconName,
-        });
-        toast.success("✅ Servicio creado exitosamente");
-      }
-      
-      queryClient.invalidateQueries({ queryKey: ['services'] });
-      onOpenChange(false);
-    } catch (error: any) {
-      toast.error(`❌ Error: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const getCategoryIcon = (categoryName: string) => {
-    return categoryIcons[categoryName] || Tag;
-  };
-
-  const getCategoryColor = (categoryName: string) => {
-    return categoryColors[categoryName] || "bg-muted/30 text-muted-foreground border-muted";
-  };
-
-  // ============================================
-  // RENDER
-  // ============================================
-
-  const watchedName = form.watch("name");
-  const watchedRate = form.watch("default_hourly_rate");
-  const watchedCategory = form.watch("category_id");
-  const selectedCategory = categories.find(c => c.id === watchedCategory);
-  const watchedActive = form.watch("is_active");
-  
-  // Determinar si el botón "Crear Servicio" debe estar habilitado
-  const canSubmit = !isEditing 
-    ? (watchedName?.length >= 2 && watchedCategory && isConfigComplete)
-    : (watchedName?.length >= 2 && watchedCategory);
 
   return (
-    <>
-      {/* MODAL PRINCIPAL */}
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[520px] bg-card border-border p-0 overflow-hidden shadow-2xl">
-          {/* Header */}
-          <div className="p-5 bg-gradient-to-r from-[#0DA2E7]/10 via-[#0DA2E7]/5 to-transparent border-b border-border/50">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/20 ring-4 ring-[#0DA2E7]/10">
-                  {isEditing ? (
-                    <Pencil className="h-5 w-5" style={{ color: HORMI_BLUE }} />
-                  ) : (
-                    <Wrench className="h-5 w-5" style={{ color: HORMI_BLUE }} />
-                  )}
-                </div>
-                <div>
-                  <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
-                    {isEditing ? "Editar Servicio" : "Nuevo Servicio"}
-                    {isEditing && service?.is_active !== undefined && (
-                      <Badge 
-                        variant="outline" 
-                        className={`text-[9px] px-2 py-0 ${
-                          service.is_active 
-                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-200' 
-                            : 'bg-red-500/10 text-red-600 border-red-200'
-                        }`}
-                      >
-                        {service.is_active ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    )}
-                  </DialogTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {isEditing 
-                      ? `Modificando: ${service?.name}` 
-                      : "Completa los datos del nuevo servicio"}
-                  </p>
-                </div>
-              </div>
-              {isEditing && service?.created_at && (
-                <div className="text-right">
-                  <p className="text-[9px] text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    {new Date(service.created_at).toLocaleDateString('es-ES', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric'
-                    })}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg gap-0 overflow-hidden rounded-2xl border-border/60 bg-card p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>{editing ? "Editar servicio" : "Nuevo servicio"}</DialogTitle>
+          <DialogDescription>
+            {editing ? "Modifica la información del servicio" : "Completa los datos para registrar un nuevo servicio"}
+          </DialogDescription>
+        </DialogHeader>
 
-          {/* Formulario */}
-          <div className="p-5 max-h-[60vh] overflow-y-auto">
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                {/* Nombre */}
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-medium flex items-center gap-1">
-                        Nombre del Servicio <span className="text-red-500">*</span>
-                        <span className="text-[9px] text-muted-foreground font-normal ml-auto">
-                          {field.value?.length || 0}/100
-                        </span>
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Ej: Desarrollo de API Bancaria"
-                          className="h-9 text-sm bg-background border-border focus:ring-[#0DA2E7] focus:border-[#0DA2E7] transition-all"
-                          {...field}
-                          maxLength={100}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Categoría y Tarifa */}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="category_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">
-                          Categoría <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <div className="flex gap-1.5">
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            disabled={loadingCategories}
-                          >
-                            <FormControl>
-                              <SelectTrigger className="h-9 text-sm bg-background border-border flex-1 transition-all focus:ring-[#0DA2E7] focus:border-[#0DA2E7]">
-                                <FolderKanban className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                                <SelectValue placeholder="Categoría" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {categories.map((cat) => {
-                                const Icon = getCategoryIcon(cat.name);
-                                return (
-                                  <SelectItem key={cat.id} value={cat.id}>
-                                    <span className="flex items-center gap-2">
-                                      <Icon className="h-3.5 w-3.5" />
-                                      {cat.name}
-                                    </span>
-                                  </SelectItem>
-                                );
-                              })}
-                            </SelectContent>
-                          </Select>
-                          
-                          {/* Botón "+" para agregar categoría */}
-                          {!isEditing && (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-9 w-9 shrink-0 hover:border-[#0DA2E7] hover:text-[#0DA2E7] hover:bg-[#0DA2E7]/5 transition-all"
-                                    onClick={() => {
-                                      setCategoryDialog(true);
-                                      setNewCategoryName("");
-                                      setNewCategoryDesc("");
-                                    }}
-                                  >
-                                    <Plus className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p className="text-xs">Agregar categoría</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="default_hourly_rate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium">
-                          Tarifa por Hora ($) <span className="text-red-500">*</span>
-                        </FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              placeholder="0.00"
-                              className="pl-8 h-9 text-sm bg-background border-border focus:ring-[#0DA2E7] focus:border-[#0DA2E7] transition-all"
-                              {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                {/* Descripción */}
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-medium flex items-center gap-1">
-                        Descripción
-                        <span className="text-[9px] text-muted-foreground font-normal ml-auto">
-                          {field.value?.length || 0}/500
-                        </span>
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Describe el servicio, alcance, entregables..."
-                          className="resize-none bg-background border-border text-sm focus:ring-[#0DA2E7] focus:border-[#0DA2E7] transition-all"
-                          rows={3}
-                          {...field}
-                          value={field.value || ""}
-                          maxLength={500}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {/* Estado Activo/Inactivo (solo en edición) */}
-                {isEditing && (
-                  <FormField
-                    control={form.control}
-                    name="is_active"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between p-3 rounded-lg bg-muted/20 border border-border/50">
-                        <div>
-                          <FormLabel className="text-xs font-medium">
-                            Estado del Servicio
-                          </FormLabel>
-                          <p className="text-[10px] text-muted-foreground">
-                            {field.value ? 'Visible y disponible para técnicos' : 'Oculto y no disponible'}
-                          </p>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            className="data-[state=checked]:bg-[#0DA2E7]"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                )}
-
-                {/* BOTÓN PARA CONFIGURAR ICONO (nuevo servicio) */}
-                {!isEditing && (
-                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border/50">
-                    <div className="flex-1">
-                      <Label className="text-xs font-medium flex items-center gap-2">
-                        <Grid3x3 className="h-3.5 w-3.5" />
-                        Configuración del icono
-                        <span className="text-red-500">*</span>
-                      </Label>
-                      <p className="text-[10px] text-muted-foreground">
-                        {isConfigComplete 
-                          ? `✅ Icono seleccionado: ${selectedIconName}` 
-                          : "Selecciona un icono para el servicio"}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant={isConfigComplete ? "default" : "outline"}
-                      size="sm"
-                      className={`h-8 gap-1.5 text-xs ${
-                        isConfigComplete 
-                          ? 'text-white' 
-                          : 'hover:border-[#0DA2E7] hover:text-[#0DA2E7]'
-                      }`}
-                      style={isConfigComplete ? { backgroundColor: HORMI_BLUE } : {}}
-                      onClick={() => setConfigDialog(true)}
-                    >
-                      {isConfigComplete ? (
-                        <>
-                          <Check className="h-3 w-3" />
-                          Configurado
-                        </>
-                      ) : (
-                        <>
-                          <Settings className="h-3 w-3" />
-                          Configurar
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-
-                {/* Icono seleccionado (edición) */}
-                {isEditing && selectedIconName && (
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/20 border border-border/50">
-                    <span className="text-xs font-medium text-muted-foreground">Icono:</span>
-                    <Badge className="bg-[#0DA2E7] text-white border-none">
-                      {selectedIconName}
-                    </Badge>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs ml-auto"
-                      onClick={() => setConfigDialog(true)}
-                    >
-                      <Settings className="h-3 w-3 mr-1" />
-                      Cambiar
-                    </Button>
-                  </div>
-                )}
-
-                {/* Vista previa */}
-                {(watchedName || watchedCategory || watchedRate > 0) && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="rounded-lg bg-gradient-to-r from-[#0DA2E7]/5 to-transparent p-3 border border-[#0DA2E7]/20"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                        Vista previa
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                      {selectedCategory && (
-                        <Badge 
-                          variant="outline" 
-                          className={`${getCategoryColor(selectedCategory.name)} border text-[10px] px-2 py-0`}
-                        >
-                          {selectedCategory.name}
-                        </Badge>
-                      )}
-                      {watchedName && (
-                        <span className="font-medium text-sm text-foreground">
-                          {watchedName}
-                        </span>
-                      )}
-                      {watchedRate > 0 && (
-                        <span className="text-sm font-semibold text-emerald-600 flex items-center gap-0.5 ml-auto">
-                          <DollarSign className="h-3 w-3" />
-                          {watchedRate.toFixed(2)}/hr
-                        </span>
-                      )}
-                      {selectedIconName && (
-                        <Badge className="bg-[#0DA2E7] text-white border-none text-[9px] px-2 py-0">
-                          {selectedIconName}
-                        </Badge>
-                      )}
-                      {isEditing && (
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[9px] px-2 py-0 ${
-                            watchedActive 
-                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-200' 
-                              : 'bg-red-500/10 text-red-600 border-red-200'
-                          }`}
-                        >
-                          {watchedActive ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* Acciones */}
-                <div className="flex justify-end gap-2 pt-3 border-t border-border/50">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                    disabled={isSubmitting}
-                    className="h-8 text-xs hover:bg-muted/50 transition-all"
-                  >
-                    <X className="h-3 w-3 mr-1" />
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSubmitting || !canSubmit}
-                    className="h-8 gap-1.5 text-xs text-white shadow-sm hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: HORMI_BLUE }}
-                  >
-                    {isSubmitting ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Save className="h-3 w-3" />
-                    )}
-                    {isEditing ? "Guardar Cambios" : "Crear Servicio"}
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL AGREGAR CATEGORÍA */}
-      <Dialog open={categoryDialog} onOpenChange={setCategoryDialog}>
-        <DialogContent className="sm:max-w-[400px] bg-card border-border p-0 overflow-hidden">
-          <div className="p-4 bg-gradient-to-br from-[#0DA2E7]/10 via-[#0DA2E7]/5 to-transparent border-b border-border/50">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/20 ring-4 ring-[#0DA2E7]/10">
-                <Tag className="h-4 w-4" style={{ color: HORMI_BLUE }} />
-              </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-foreground">
-                  Agregar Categoría
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Crea una nueva categoría para el servicio
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4">
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs font-medium">
-                  Nombre <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  placeholder="Ej: Mantenimiento Preventivo"
-                  value={newCategoryName}
-                  onChange={e => setNewCategoryName(e.target.value)}
-                  className="h-8 text-sm mt-1 bg-background border-border focus:ring-[#0DA2E7] focus:border-[#0DA2E7] transition-all"
-                  onKeyDown={e => e.key === 'Enter' && handleCategoryCreate()}
-                />
-              </div>
-              <div>
-                <Label className="text-xs font-medium">Descripción (opcional)</Label>
-                <Input
-                  placeholder="Breve descripción de la categoría"
-                  value={newCategoryDesc}
-                  onChange={e => setNewCategoryDesc(e.target.value)}
-                  className="h-8 text-sm mt-1 bg-background border-border focus:ring-[#0DA2E7] focus:border-[#0DA2E7] transition-all"
-                  onKeyDown={e => e.key === 'Enter' && handleCategoryCreate()}
-                />
-              </div>
-              
-              <Button
-                onClick={handleCategoryCreate}
-                size="sm"
-                className="gap-1.5 w-full h-8 text-xs text-white hover:shadow-md transition-all"
-                style={{ backgroundColor: HORMI_BLUE }}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Check className="h-3.5 w-3.5" />
-                )}
-                Continuar
-              </Button>
-              
-              <p className="text-[10px] text-muted-foreground text-center">
-                Al hacer clic en "Continuar", se abrirá la configuración de iconos
+        {/* Cabecera */}
+        <div className="bg-gradient-to-r from-[#0DA2E7]/10 via-[#0DA2E7]/5 to-transparent px-6 pb-5 pt-6">
+          <div className="flex items-center gap-4">
+            <span
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition-colors duration-300"
+              style={{ backgroundColor: `${selectedColor}1A`, color: selectedColor, boxShadow: `0 0 0 4px ${selectedColor}14` }}
+            >
+              <selectedIcon.icon className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-lg font-bold leading-tight text-foreground">
+                {editing ? "Editar servicio" : "Nuevo servicio"}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                {editing
+                  ? `Modificando: ${service?.name}`
+                  : "Completa los datos para registrar un nuevo servicio en el catálogo"}
               </p>
             </div>
           </div>
+        </div>
 
-          <DialogFooter className="p-3 pt-0 border-t border-border/50">
-            <Button
-              variant="outline"
-              onClick={() => setCategoryDialog(false)}
-              className="w-full h-8 text-xs hover:bg-muted/50 transition-all"
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        {/* Cuerpo */}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="max-h-[calc(100vh-12rem)] space-y-4 overflow-y-auto px-6 py-5">
+            {/* Nombre */}
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-semibold text-foreground">Nombre del servicio</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      placeholder="Ej. Desarrollo de aplicaciones web"
+                      className="h-10 rounded-lg border-border/60 bg-background text-sm focus-visible:ring-[#0DA2E7]/40"
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[11px]" />
+                </FormItem>
+              )}
+            />
 
-      {/* MODAL DE CONFIGURACIÓN (ICONOS) */}
-      <Dialog open={configDialog} onOpenChange={setConfigDialog}>
-        <DialogContent className="sm:max-w-[450px] bg-card border-border p-0 overflow-hidden">
-          <div className="p-4 bg-gradient-to-br from-[#0DA2E7]/10 via-[#0DA2E7]/5 to-transparent border-b border-border/50">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/20 ring-4 ring-[#0DA2E7]/10">
-                <Grid3x3 className="h-4 w-4" style={{ color: HORMI_BLUE }} />
-              </div>
-              <div>
-                <DialogTitle className="text-base font-bold text-foreground">
-                  Configurar Icono
-                </DialogTitle>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Selecciona un icono para el servicio
-                </p>
-              </div>
-            </div>
-          </div>
+            {/* Categoría y tarifa */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="category_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-foreground">Categoría</FormLabel>
+                    <DropdownMenu open={categoryOpen} onOpenChange={setCategoryOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className={TRIGGER_CLASS}>
+                          {selectedCategory ? (
+                            <span className="truncate font-medium text-foreground">{selectedCategory.name}</span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              {categoriesLoading ? "Cargando categorías…" : "Selecciona una categoría"}
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                              categoryOpen && "rotate-180"
+                            )}
+                          />
+                        </button>
+                      </DropdownMenuTrigger>
 
-          <div className="p-4">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-xs font-medium flex items-center gap-2 mb-3">
-                  <span>Iconos disponibles</span>
-                  <span className="text-red-500 text-[10px]">*</span>
-                  {selectedIconName && (
-                    <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-200 text-[8px] px-1.5 py-0">
-                      <Check className="h-2.5 w-2.5 mr-0.5" />
-                      {selectedIconName}
-                    </Badge>
-                  )}
-                </Label>
-                
-                <div className="grid grid-cols-5 gap-2">
-                  {AVAILABLE_ICONS.map(({ name, icon: Icon }) => {
-                    const isSelected = selectedIconName === name;
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => handleIconSelect(name)}
-                        className={`
-                          p-3 rounded-lg border-2 transition-all duration-200 flex flex-col items-center gap-1
-                          ${isSelected 
-                            ? 'bg-[#0DA2E7] text-white border-[#0DA2E7] shadow-lg shadow-[#0DA2E7]/20 scale-105' 
-                            : 'bg-muted/20 text-muted-foreground border-transparent hover:border-[#0DA2E7]/30 hover:bg-muted/40'
-                          }
-                        `}
+                      <DropdownMenuContent
+                        align="start"
+                        sideOffset={6}
+                        collisionPadding={12}
+                        className="max-h-80 w-[min(280px,calc(100vw-2rem))] rounded-2xl border-border/60 bg-card p-0 shadow-2xl"
                       >
-                        <Icon className={`h-5 w-5 ${isSelected ? 'text-white' : ''}`} />
-                        <span className={`text-[7px] font-medium ${isSelected ? 'text-white/90' : 'text-muted-foreground'}`}>
-                          {name}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {!selectedIconName && (
-                  <p className="text-[10px] text-muted-foreground mt-3">
-                    Haz clic en un icono para seleccionarlo
-                  </p>
-                )}
-              </div>
+                        {/* Cabecera */}
+                        <div className="flex items-center justify-between border-b border-border/40 px-3 py-2.5">
+                          <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                            <FolderKanban className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                            Categorías
+                          </span>
+                          <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[10px] text-muted-foreground">
+                            {categories.length}
+                          </span>
+                        </div>
 
+                        {/* Lista */}
+                        <div className="max-h-44 space-y-0.5 overflow-y-auto p-1.5">
+                          {categories.length === 0 && !categoriesLoading && (
+                            <p className="px-2 py-3 text-center text-xs text-muted-foreground">
+                              No hay categorías registradas. Crea la primera abajo.
+                            </p>
+                          )}
+                          {categories.map((category) => {
+                            const active = field.value === category.id;
+                            return (
+                              <div
+                                key={category.id}
+                                className={cn(
+                                  "group flex items-center rounded-lg transition-colors",
+                                  active ? "bg-[#0DA2E7]/10" : "hover:bg-muted/50"
+                                )}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    field.onChange(category.id);
+                                    setCategoryOpen(false);
+                                  }}
+                                  className="flex min-w-0 flex-1 items-center gap-2.5 px-2.5 py-2 text-left"
+                                >
+                                  <span className="truncate text-xs font-medium text-foreground">{category.name}</span>
+                                  {active && <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-[#0DA2E7]" />}
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Eliminar categoría"
+                                  onClick={() => handleDeleteCategory(category.id)}
+                                  className="mr-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-red-50 hover:text-red-500"
+                                >
+                                  {deletingCategoryId === category.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <X className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Agregar categoría */}
+                        <div className="border-t border-border/40 p-2">
+                          <div className="flex items-center gap-1.5">
+                            <Input
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAddCategory();
+                                }
+                              }}
+                              placeholder="Nueva categoría…"
+                              className="h-8 rounded-lg border-border/60 bg-background px-2.5 text-xs focus-visible:ring-[#0DA2E7]/40"
+                            />
+                            <Button
+                              type="button"
+                              size="icon"
+                              title="Agregar categoría"
+                              disabled={createCategory.isPending || !newCategoryName.trim()}
+                              onClick={handleAddCategory}
+                              className="h-8 w-8 shrink-0 rounded-lg bg-[#0DA2E7] text-white hover:bg-[#0B91D2]"
+                            >
+                              {createCategory.isPending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Plus className="h-3.5 w-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                          <p className="mt-1.5 px-1 text-[10px] text-muted-foreground/70">
+                            La categoría se guarda y queda disponible en todo el sistema.
+                          </p>
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <FormMessage className="text-[11px]" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="hourlyRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-foreground">Tarifa por hora</FormLabel>
+                    <FormControl>
+                      <div className="relative">
+                        <DollarSign className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          {...field}
+                          className="h-10 rounded-lg border-border/60 bg-background pl-9 pr-3 text-sm focus-visible:ring-[#0DA2E7]/40"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-[11px]" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Icono */}
+            <FormField
+              control={form.control}
+              name="icon"
+              render={({ field }) => (
+                <FormItem>
+                  <FormControl>
+                    <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                      <div className="mb-2.5 flex items-center justify-between gap-3">
+                        <FormLabel className="text-xs font-semibold text-foreground">
+                          Icono representativo
+                        </FormLabel>
+                        {selectedIconName ? (
+                          <span className="inline-flex max-w-[60%] items-center gap-1.5 truncate rounded-full border border-[#0DA2E7]/30 bg-[#0DA2E7]/10 px-2 py-0.5 text-[10px] font-medium text-[#0DA2E7]">
+                            {(() => {
+                              const option = ICON_OPTIONS.find((o) => o.name === selectedIconName);
+                              return option ? <option.icon className="h-3 w-3 shrink-0" /> : null;
+                            })()}
+                            <span className="truncate">{field.value}</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/70">
+                            Haz clic en un icono…
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-6 gap-1.5">
+                        {visibleIcons.map((option) => {
+                          const active = selectedIconName === option.name;
+                          return (
+                            <button
+                              key={option.name}
+                              type="button"
+                              title={option.name}
+                              onClick={() => field.onChange(option.name)}
+                              className={cn(
+                                "flex aspect-square items-center justify-center rounded-xl border transition-all duration-200",
+                                "hover:scale-105 hover:border-[#0DA2E7]/40",
+                                active
+                                  ? "border-[#0DA2E7] bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-[0_4px_14px_-6px_rgba(13,162,231,0.55)] ring-2 ring-[#0DA2E7]/20"
+                                  : "border-border/50 bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                              )}
+                            >
+                              <option.icon className="h-5 w-5" style={{ color: active ? "#0DA2E7" : "currentColor" }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-border/40 pt-2">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            title="Iconos anteriores"
+                            disabled={iconPage === 0}
+                            onClick={() => setIconPage((p) => Math.max(0, p - 1))}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                          <span className="min-w-[28px] text-center text-[10px] font-medium text-muted-foreground">
+                            {iconPage + 1}/{iconTotalPages}
+                          </span>
+                          <button
+                            type="button"
+                            title="Más iconos"
+                            disabled={iconPage >= iconTotalPages - 1}
+                            onClick={() => setIconPage((p) => Math.min(iconTotalPages - 1, p + 1))}
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground/70">
+                          {ICON_OPTIONS.length} iconos disponibles
+                        </span>
+                      </div>
+                    </div>
+                  </FormControl>
+                  <p className="mt-1.5 px-1 text-[10px] text-muted-foreground/70">
+                    Este icono identifica al servicio en catálogos y vistas.
+                  </p>
+                  <FormMessage className="text-[11px]" />
+                </FormItem>
+              )}
+            />
+
+            {/* Descripción */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs font-semibold text-foreground">Descripción</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="Describe en qué consiste este servicio…"
+                      className="min-h-[80px] resize-none rounded-lg border-border/60 bg-background text-sm focus-visible:ring-[#0DA2E7]/40"
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            {error && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-600">{error}</p>
+            )}
+
+            {/* Pie */}
+            <div className="flex items-center justify-end gap-2 border-t border-border/40 pt-4">
               <Button
-                onClick={handleSaveConfig}
-                disabled={!selectedIconName}
-                className="w-full h-8 gap-1.5 text-xs text-white hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: HORMI_BLUE }}
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="h-9 rounded-lg border-border/60 px-3 text-xs font-medium"
               >
-                <Save className="h-3.5 w-3.5" />
-                Guardar Configuración
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="h-9 gap-1.5 rounded-lg bg-[#0DA2E7] px-4 text-xs font-semibold text-white hover:bg-[#0B91D2]"
+              >
+                {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {editing ? "Guardar cambios" : "Crear servicio"}
               </Button>
             </div>
-          </div>
-
-          <DialogFooter className="p-3 pt-0 border-t border-border/50">
-            <Button
-              variant="outline"
-              onClick={() => setConfigDialog(false)}
-              className="w-full h-8 text-xs hover:bg-muted/50 transition-all"
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

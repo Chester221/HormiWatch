@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -14,6 +15,7 @@ import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from '../../common/pagination/metadata';
 import { User } from '../users/entities/user.entity';
 import { Role } from '../auth/enums/roles.enum';
+import { IActiveUser } from '../auth/interface/payload.interface';
 import { CustomerContact } from '../customers/entities/customer_contact.entity';
 import { UsersService } from '../users/users.service';
 import { ProjectResponseDto } from './dto/project-response.dto';
@@ -56,26 +58,14 @@ export class ProjectsService {
       relations: ['role', 'profile'],
     });
 
-    // ✅ LOG PARA DEPURAR
-    console.log('🔍 Líder encontrado:', {
-      id: leader?.id,
-      email: leader?.email,
-      roleName: leader?.role?.name,
-    });
-
     if (!leader) {
       throw new NotFoundException(
         `Project Leader with ID ${projectLeaderId} not found`,
       );
     }
 
-    // ✅ CORREGIDO: Comparación case-insensitive
     const roleName = leader.role?.name?.toLowerCase() || '';
     if (roleName !== 'manager' && roleName !== 'admin') {
-      console.log('❌ Rol no válido:', {
-        received: leader.role.name,
-        expected: 'Manager o Admin',
-      });
       throw new BadRequestException(
         `User ${leader.email} is not a Manager or Admin. Current role: ${leader.role.name}. Only Managers/Admins can be Project Leaders.`,
       );
@@ -93,7 +83,6 @@ export class ProjectsService {
         throw new NotFoundException('One or more technicians not found');
       }
 
-      // ✅ CORREGIDO: Comparación case-insensitive
       for (const tech of technicians) {
         const techRole = tech.role?.name?.toLowerCase() || '';
         if (techRole !== 'technician' && techRole !== 'employee') {
@@ -154,10 +143,12 @@ export class ProjectsService {
 
   async findAll(
     pageOptionsDto: ProjectPageOptionsDto,
+    user?: IActiveUser,
   ): Promise<PageDto<ProjectResponseDto>> {
     this.logger.log('Fetching projects with filters');
     const queryBuilder = this.projectRepository.createQueryBuilder('project');
 
+    // ✅ INCLUIR TODAS LAS RELACIONES NECESARIAS
     queryBuilder
       .leftJoinAndSelect('project.projectLeader', 'projectLeader')
       .leftJoinAndSelect('projectLeader.profile', 'leaderProfile')
@@ -165,6 +156,8 @@ export class ProjectsService {
       .leftJoinAndSelect('project.technicians', 'technicians')
       .leftJoinAndSelect('technicians.profile', 'techProfile')
       .leftJoinAndSelect('technicians.role', 'techRole')
+      .leftJoinAndSelect('project.customerContact', 'customerContact')
+      .leftJoinAndSelect('customerContact.customer', 'customer')
       .leftJoinAndSelect('project.tasks', 'tasks');
 
     if (pageOptionsDto.status) {
@@ -185,6 +178,12 @@ export class ProjectsService {
       });
     }
 
+    if (this.isTechnician(user)) {
+      queryBuilder.andWhere('technicians.id = :userId', {
+        userId: user.userId,
+      });
+    }
+
     if (pageOptionsDto.q) {
       queryBuilder.andWhere('project.title LIKE :q', {
         q: `%${pageOptionsDto.q}%`,
@@ -201,12 +200,34 @@ export class ProjectsService {
 
     const pageMetaDto = new PageMeta(pageOptionsDto, itemCount);
 
-    const dtos = entities.map((entity) => this.mapToResponseDto(entity));
+    // ✅ MAPEAR CON LOS DATOS COMPLETOS
+    const dtos = entities.map((entity) => {
+      const dto = this.mapToResponseDto(entity);
+      
+      // ✅ AGREGAR DATOS DEL CLIENTE
+      if (entity.customerContact?.customer) {
+        dto.customer_id = entity.customerContact.customer.id;
+        dto.customer_name = entity.customerContact.customer.name;
+        dto.contact_name = entity.customerContact.name;
+        dto.contact_email = entity.customerContact.email;
+      }
+      
+      // ✅ AGREGAR DATOS DEL LÍDER
+      if (entity.projectLeader) {
+        dto.leader_email = entity.projectLeader.email;
+        dto.leader_name = entity.projectLeader.profile?.name || entity.projectLeader.email;
+      }
+      
+      return dto;
+    });
 
     return new PageDto(dtos, pageMetaDto);
   }
 
-  async findOne(id: string): Promise<ProjectResponseDto> {
+  async findOne(
+    id: string,
+    user?: IActiveUser,
+  ): Promise<ProjectResponseDto> {
     const project = await this.projectRepository.findOne({
       where: { id },
       relations: [
@@ -217,11 +238,24 @@ export class ProjectsService {
         'technicians.profile',
         'technicians.role',
         'tasks',
+        'customerContact',
+        'customerContact.customer',
       ],
     });
 
     if (!project) {
       throw new NotFoundException(`Project with ID ${id} not found`);
+    }
+
+    if (this.isTechnician(user)) {
+      const isMember =
+        project.technicians?.some((t) => t.id === user.userId) ||
+        project.projectLeader?.id === user.userId;
+      if (!isMember) {
+        throw new ForbiddenException(
+          'You do not have access to this project',
+        );
+      }
     }
 
     return this.mapToResponseDto(project);
@@ -258,7 +292,6 @@ export class ProjectsService {
           `Project Leader with ID ${projectLeaderId} not found`,
         );
       
-      // ✅ CORREGIDO: Comparación case-insensitive
       const roleName = leader.role?.name?.toLowerCase() || '';
       if (roleName !== 'manager' && roleName !== 'admin') {
         throw new BadRequestException(
@@ -280,7 +313,6 @@ export class ProjectsService {
         throw new NotFoundException('One or more technicians not found');
       }
       
-      // ✅ CORREGIDO: Comparación case-insensitive
       for (const tech of technicians) {
         const techRole = tech.role?.name?.toLowerCase() || '';
         if (techRole !== 'technician' && techRole !== 'employee') {
@@ -369,6 +401,10 @@ export class ProjectsService {
     return this.findOne(id);
   }
 
+  private isTechnician(user?: IActiveUser): user is IActiveUser {
+    return !!user && String(user.role).toLowerCase() === 'technician';
+  }
+
   async findLeaders(): Promise<User[]> {
     return this.usersService.findManagers();
   }
@@ -394,6 +430,22 @@ export class ProjectsService {
 
     // Calculated property from entity getter
     dto.poolHoursWorked = project.poolHoursWorked;
+
+    // ✅ AGREGAR DATOS DEL CLIENTE Y CONTACTO
+    if (project.customerContact) {
+      if (project.customerContact.customer) {
+        dto.customer_id = project.customerContact.customer.id;
+        dto.customer_name = project.customerContact.customer.name;
+      }
+      dto.contact_name = project.customerContact.name;
+      dto.contact_email = project.customerContact.email;
+    }
+
+    // ✅ AGREGAR DATOS DEL LÍDER
+    if (project.projectLeader) {
+      dto.leader_email = project.projectLeader.email;
+      dto.leader_name = project.projectLeader.profile?.name || project.projectLeader.email;
+    }
 
     return dto;
   }

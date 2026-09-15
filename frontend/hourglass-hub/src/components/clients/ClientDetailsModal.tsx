@@ -11,9 +11,10 @@ import {
 import {
   Building2, FolderKanban, Clock, CheckSquare, Activity,
   Mail, Phone, Briefcase, User, MapPin, Hash, X,
-  Users, Calendar, TrendingUp, Sparkles, Crown, ArrowRight
+  Users, Calendar, TrendingUp, Sparkles, Crown, ArrowRight, CalendarDays
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { taskHours, projectStatusInfo, formatProjectDate } from "@/lib/dashboardUtils";
 
 const HORMI_BLUE = '#0DA2E7';
 const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
@@ -62,18 +63,14 @@ export default function ClientDetailsModal({
   const clientProjects = useMemo(() => {
     if (!clientData?.id) return [];
     return projects
-      .filter((p: any) => p.client_id === clientData.id)
+      .filter((p: any) => p.client_id === clientData.id || p.customer_id === clientData.id)
       .map((p: any) => {
         const projectTasks = tasks.filter((t: any) => t.project_id === p.id);
         const completed = projectTasks.filter((t: any) => t.status === "Completed").length;
         const total = projectTasks.length;
         const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
         const projectHours = projectTasks.reduce(
-          (acc: number, t: any) =>
-            acc +
-            (t.duration_in_minutes
-              ? t.duration_in_minutes / 60
-              : (t.normal_hours || 0) + (t.overtime_hours || 0)),
+          (acc: number, t: any) => acc + taskHours(t),
           0
         );
         return { ...p, progress, completed, total, projectHours };
@@ -235,7 +232,7 @@ export default function ClientDetailsModal({
               {activeTab === 'info' && (
                 <div className="space-y-5">
                   {/* Info General */}
-                  {(clientData.ruc || clientData.code || clientData.address || clientData.department) && (
+                  {(clientData.ruc || clientData.code || clientData.address || clientData.department || clientData.email || clientData.phone) && (
                     <div>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
                         <Building2 className="h-3.5 w-3.5 text-[#0DA2E7]" />
@@ -262,6 +259,34 @@ export default function ClientDetailsModal({
                             <p className="text-sm font-medium text-foreground">
                               {clientData.department}
                             </p>
+                          </div>
+                        )}
+                        {clientData.email && (
+                          <div className="p-3 rounded-lg border border-border/40 bg-muted/5">
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mb-0.5">
+                              <Mail className="h-3 w-3" />
+                              Email
+                            </p>
+                            <a
+                              href={`mailto:${clientData.email}`}
+                              className="text-sm font-medium text-foreground hover:text-[#0DA2E7] transition-colors break-all"
+                            >
+                              {clientData.email}
+                            </a>
+                          </div>
+                        )}
+                        {clientData.phone && (
+                          <div className="p-3 rounded-lg border border-border/40 bg-muted/5">
+                            <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mb-0.5">
+                              <Phone className="h-3 w-3" />
+                              Teléfono
+                            </p>
+                            <a
+                              href={`tel:${clientData.phone}`}
+                              className="text-sm font-medium text-foreground hover:text-[#0DA2E7] transition-colors"
+                            >
+                              {clientData.phone}
+                            </a>
                           </div>
                         )}
                         {clientData.address && (
@@ -330,12 +355,11 @@ export default function ClientDetailsModal({
                           className="p-3 rounded-lg border border-border/40 bg-muted/5 hover:border-[#0DA2E7]/20 transition-colors"
                         >
                           <div className="flex items-center justify-between mb-2">
-                            <h4 className="font-medium text-sm text-foreground">
+                            <h4 className="font-medium text-sm text-foreground truncate">
                               {project.name}
                             </h4>
-                            <Badge variant="outline" className="text-[10px] gap-1">
-                              <CheckSquare className="h-3 w-3" />
-                              {project.completed}/{project.total}
+                            <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border shrink-0", projectStatusInfo(project.status).cls)}>
+                              {projectStatusInfo(project.status).label}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 mb-2">
@@ -349,6 +373,10 @@ export default function ClientDetailsModal({
                           </div>
                           <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
                             <span className="flex items-center gap-1">
+                              <CheckSquare className="h-3 w-3" />
+                              {project.completed}/{project.total} tareas
+                            </span>
+                            <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
                               {project.projectHours.toFixed(1)}h
                             </span>
@@ -361,6 +389,22 @@ export default function ClientDetailsModal({
                                 : "Pendiente"}
                             </span>
                           </div>
+                          {(formatProjectDate(project.startDate || project.start_date) || formatProjectDate(project.endDate || project.end_date)) && (
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 mt-1.5 text-[11px] text-muted-foreground">
+                              {formatProjectDate(project.startDate || project.start_date) && (
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="h-3 w-3" />
+                                  Inicio: {formatProjectDate(project.startDate || project.start_date)}
+                                </span>
+                              )}
+                              {formatProjectDate(project.endDate || project.end_date) && (
+                                <span className="flex items-center gap-1">
+                                  <CalendarDays className="h-3 w-3" />
+                                  Fin: {formatProjectDate(project.endDate || project.end_date)}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </motion.div>
                       ))}
                     </div>

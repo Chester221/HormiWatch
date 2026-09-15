@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, subDays, startOfWeek, endOfWeek, isWithinInterval } from "date-fns";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { ActivityFeed } from "@/components/dashboard/ActivityFeed";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Clock, FolderKanban, TrendingUp, Loader2, AlertTriangle, RefreshCw, Shield, LayoutDashboard } from "lucide-react";
@@ -19,6 +18,10 @@ import { calculateTaskBreakdown } from "@/lib/hoursCalculator";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
+import { HoursByDayChart } from "@/components/DashboardMG/HoursByDayChart";
+import { UpcomingTasks } from "@/components/TechnicianDashboard/UpcomingTasks";
+import { MyProjects } from "@/components/TechnicianDashboard/MyProjects";
+import { Performance } from "@/components/TechnicianDashboard/Performance";
 
 const HORMI_BLUE = "#0DA2E7";
 
@@ -103,25 +106,19 @@ const TechnicianDashboard = () => {
     }
 
     const selectedService = services?.find((s: any) => s.id === data.serviceId);
-    const hourlyRate = selectedService?.default_hourly_rate || 0;
+    const hourlyRate = Number(selectedService?.hourlyRate ?? (selectedService?.default_hourly_rate || 0));
     const holidaysList = (holidays.data || []).filter((h: any) => !h.is_working_day).map((h: any) => h.date);
     const breakdown = calculateTaskBreakdown(start_time, end_time, hourlyRate, holidaysList);
 
     const tasksToCreate = breakdown.days.map((day: any) => ({
-      project_id: data.projectId,
-      service_id: data.serviceId,
-      technician_id: user.id,
-      start_time: `${day.date}T${data.startTime}:00`,
-      end_time: `${day.date}T${data.endTime}:00`,
+      projectId: data.projectId,
+      serviceId: data.serviceId,
+      technicianId: user.id,
+      startDateTime: new Date(`${day.date}T${data.startTime}:00`).toISOString(),
+      endDateTime: new Date(`${day.date}T${data.endTime}:00`).toISOString(),
       description: data.motivo ? `[${data.motivo}] ${data.description || ''}` : data.description,
-      status: data.completed ? "Completed" : "Pending",
-      priority: "Medium",
-      applied_hourly_rate: hourlyRate,
-      normal_hours: day.normalHours,
-      overtime_hours: day.overtimeHours,
-      normal_pay: day.normalPay,
-      overtime_pay: day.overtimePay,
-      total_pay: day.totalPay,
+      status: data.completed ? "COMPLETED" : "PENDING",
+      priority: "MEDIUM",
     }));
 
     createTasksMutation.mutate(tasksToCreate, {
@@ -322,9 +319,20 @@ const TechnicianDashboard = () => {
               ))}
             </div>
 
-            {/* ═══════════ ACTIVITY FEED (ocupa todo el ancho) ═══════════ */}
-            <div className="w-full">
-              <ActivityFeed />
+            {/* ═══════════ MI RENDIMIENTO + HORAS POR DÍA ═══════════ */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
+              <div className="xl:col-span-2">
+                <Performance tasks={tasks} />
+              </div>
+              <div className="xl:col-span-3">
+                <HoursByDayChart tasks={tasks} />
+              </div>
+            </div>
+
+            {/* ═══════════ PRÓXIMAS TAREAS + MIS PROYECTOS ═══════════ */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <UpcomingTasks tasks={tasks} />
+              <MyProjects projects={projects} tasks={tasks} />
             </div>
           </>
         )}
@@ -333,30 +341,34 @@ const TechnicianDashboard = () => {
       <CreateTaskModal
         open={createTaskModalOpen}
         onOpenChange={(open) => setCreateTaskModalOpen(open)}
-        projects={allProjects}
+        projects={projects}
         services={services}
         onSuccess={(data) => handleCreateTask(data)}
       />
-      <CreateProjectModal
-        open={createProjectModalOpen}
-        onOpenChange={(open) => setCreateTaskModalOpen(open)}
-        onSuccess={() => { refetchProjects(); setCreateProjectModalOpen(false); }}
-      />
-      <AddUserModal
-        open={addUserModalOpen}
-        onOpenChange={setAddUserModalOpen}
-        onSuccess={() => { setAddUserModalOpen(false); }}
-      />
-      <ManageMemberModal
-        open={manageMemberModalOpen}
-        onOpenChange={setManageMemberModalOpen}
-        onSuccess={() => { setManageMemberModalOpen(false); queryClient.invalidateQueries({ queryKey: ["team_members"] }); }}
-      />
-      <CreateServiceModal
-        open={createServiceModalOpen}
-        onOpenChange={(open) => setCreateServiceModalOpen(open)}
-        onSuccess={() => { setCreateServiceModalOpen(false); }}
-      />
+      {isManager && (
+        <>
+          <CreateProjectModal
+            open={createProjectModalOpen}
+            onOpenChange={(open) => setCreateTaskModalOpen(open)}
+            onSuccess={() => { refetchProjects(); setCreateProjectModalOpen(false); }}
+          />
+          <AddUserModal
+            open={addUserModalOpen}
+            onOpenChange={setAddUserModalOpen}
+            onSuccess={() => { setAddUserModalOpen(false); }}
+          />
+          <ManageMemberModal
+            open={manageMemberModalOpen}
+            onOpenChange={setManageMemberModalOpen}
+            onSuccess={() => { setManageMemberModalOpen(false); queryClient.invalidateQueries({ queryKey: ["team_members"] }); }}
+          />
+          <CreateServiceModal
+            open={createServiceModalOpen}
+            onOpenChange={(open) => setCreateServiceModalOpen(open)}
+            onSuccess={() => { setCreateServiceModalOpen(false); }}
+          />
+        </>
+      )}
     </DashboardLayout>
   );
 };

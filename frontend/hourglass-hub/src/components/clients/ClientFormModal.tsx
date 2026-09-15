@@ -30,6 +30,7 @@ interface ClientFormModalProps {
 }
 
 const rifRegex = /^[JG]-\d{8}-\d$/;
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const validateRif = (rif: string) => {
   if (!rif) return 'El RIF es obligatorio';
@@ -39,7 +40,7 @@ const validateRif = (rif: string) => {
 
 const validateEmail = (email: string) => {
   if (!email) return 'El email es obligatorio';
-  if (!email.includes('@') || !email.includes('.', email.indexOf('@'))) return 'Email inválido';
+  if (!emailRegex.test(email)) return 'Email inválido';
   return null;
 };
 
@@ -48,7 +49,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   const saveClientMutation = useSaveClientWithContacts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState({ name: "", rif: "", address: "" });
+  const [formData, setFormData] = useState({ name: "", rif: "", address: "", email: "", phone: "" });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -59,14 +60,14 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   useEffect(() => {
     if (open) {
       if (client) {
-        setFormData({ name: client.name, rif: client.ruc || "", address: client.address || "" });
+        setFormData({ name: client.name, rif: client.ruc || "", address: client.address || "", email: client.email || "", phone: client.phone || "" });
         setLogoPreview((client as any).logo_url || null);
         setContacts(client.contacts.map(c => ({
-          id: c.id, name: c.name, email: c.email || "", phone: c.phone || "+58 ",
+          id: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
           position: c.position || "", department: (c as any).department || "",
         })));
       } else {
-        setFormData({ name: "", rif: "", address: "" });
+        setFormData({ name: "", rif: "", address: "", email: "", phone: "" });
         setLogoPreview(null); setLogoFile(null); setContacts([]);
       }
       setTouched({});
@@ -81,6 +82,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     }
     if (touched.rif || formData.rif) { const e = validateRif(formData.rif); if (e) errs.rif = e; }
     if (touched.address || formData.address) { if (!formData.address.trim()) errs.address = 'La dirección es obligatoria'; }
+    if (formData.email.trim()) { if (!emailRegex.test(formData.email.trim())) errs.email = 'Email inválido'; }
     contacts.forEach((c, i) => {
       if (touched[`contact_name_${i}`] || c.name) { if (!c.name.trim()) errs[`contact_name_${i}`] = 'Requerido'; }
       if (touched[`contact_position_${i}`] || c.position) { if (!c.position.trim()) errs[`contact_position_${i}`] = 'Requerido'; }
@@ -94,6 +96,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     if (!formData.name.trim() || formData.name.trim().length < 2) return false;
     if (!rifRegex.test(formData.rif)) return false;
     if (!formData.address.trim()) return false;
+    if (formData.email.trim() && !emailRegex.test(formData.email.trim())) return false;
     const vc = contacts.filter(c => c.name.trim() !== "");
     if (vc.length === 0) return false;
     for (const c of vc) {
@@ -152,7 +155,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     }
   };
 
-  const addContact = () => setContacts([...contacts, { id: `new-${Date.now()}`, name: "", email: "", phone: "+58 ", position: "", department: "" }]);
+  const addContact = () => setContacts([...contacts, { id: `new-${Date.now()}`, name: "", email: "", phone: "", position: "", department: "" }]);
   const updateContact = (id: string, field: keyof LocalContact, value: string, index: number) => {
     setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
     setTouched({ ...touched, [`contact_${field}_${index}`]: true });
@@ -167,7 +170,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
 
     try {
       const result = await saveClientMutation.mutateAsync({
-        client: { id: client?.id, name: formData.name, address: formData.address, ruc: formData.rif },
+        client: { id: client?.id, name: formData.name, address: formData.address, ruc: formData.rif, email: formData.email, phone: formData.phone },
         contacts: validContacts.map(c => ({ name: c.name, email: c.email, phone: c.phone || undefined, position: c.position, department: c.department })),
         isEditing,
       });
@@ -361,6 +364,46 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                       <AlertCircle className="h-3 w-3" /> {errors.address}
                     </motion.p>
                   )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    Email <span className="text-muted-foreground/60">(Opcional)</span>
+                  </Label>
+                  <Input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => { setFormData({ ...formData, email: e.target.value }); setTouched({ ...touched, email: true }); }}
+                    placeholder="contacto@empresa.com"
+                    className={cn(
+                      "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
+                      "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
+                      errors.email ? "border-red-300 focus:border-red-500" : "border-border/60"
+                    )}
+                  />
+                  {errors.email && (
+                    <motion.p initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="text-xs text-red-500 flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" /> {errors.email}
+                    </motion.p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-1.5">
+                    Teléfono <span className="text-muted-foreground/60">(Opcional)</span>
+                  </Label>
+                  <Input
+                    value={formData.phone}
+                    onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setTouched({ ...touched, phone: true }); }}
+                    placeholder="+58 212-0000000"
+                    maxLength={20}
+                    className={cn(
+                      "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
+                      "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
+                      "border-border/60"
+                    )}
+                  />
                 </div>
               </div>
             </div>

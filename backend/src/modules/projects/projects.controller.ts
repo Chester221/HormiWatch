@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -22,6 +23,11 @@ import { ProjectPageOptionsDto } from './dto/project-page-options.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
+import { RolesGuard } from '../auth/guard/authorization.guard';
+import { Roles } from '../auth/decorator/roles.decorator';
+import { Role } from '../auth/enums/roles.enum';
+import { CurrentUser } from '../auth/decorator/current-user.decorator';
+import type { IActiveUser } from '../auth/interface/payload.interface';
 
 @Controller('projects')
 @ApiTags('Projects')
@@ -32,6 +38,8 @@ export class ProjectsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new project' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
   @ApiOkResponse({ type: ProjectResponseDto })
   async create(
     @Body() createProjectDto: CreateProjectDto,
@@ -44,8 +52,9 @@ export class ProjectsController {
   @ApiOkResponse({ type: PageDto })
   async findAll(
     @Query() pageOptionsDto: ProjectPageOptionsDto,
+    @CurrentUser() user: IActiveUser,
   ): Promise<PageDto<ProjectResponseDto>> {
-    return this.projectsService.findAll(pageOptionsDto);
+    return this.projectsService.findAll(pageOptionsDto, user);
   }
 
   @Get(':id')
@@ -53,12 +62,15 @@ export class ProjectsController {
   @ApiOkResponse({ type: ProjectResponseDto })
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: IActiveUser,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.findOne(id);
+    return this.projectsService.findOne(id, user);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a project' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
   @ApiOkResponse({ type: ProjectResponseDto })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -69,12 +81,16 @@ export class ProjectsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Soft delete a project' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.projectsService.remove(id);
   }
 
   @Patch(':id/restore')
   @ApiOperation({ summary: 'Restore a soft-deleted project' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
   @ApiOkResponse({ type: ProjectResponseDto })
   async restore(
     @Param('id', ParseUUIDPipe) id: string,

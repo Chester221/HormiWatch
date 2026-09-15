@@ -12,17 +12,23 @@ import {
   HttpCode,
   HttpStatus,
   Query,
+  UseGuards,
+  ForbiddenException,
+  Req,
 } from '@nestjs/common';
+import { Roles } from '../auth/decorator/roles.decorator';
+import { Role } from '../auth/enums/roles.enum';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Express } from 'express';
-import { SkipAuth } from '../auth/decorator/skipAuth.decorator';
 import { UserResponseDto } from './dto/user-response.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserPageOptionsDto } from './dto/user-page-options.dto';
 import { PageDto } from '../../common/pagination/pagination.dto';
+import { RolesGuard } from '../auth/guard/authorization.guard';
+import { IActiveUser } from '../auth/interface/payload.interface';
 import {
   ApiOkResponse,
   ApiOperation,
@@ -37,7 +43,8 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @SkipAuth() // ✅ PERMITE CREAR USUARIO SIN AUTENTICACIÓN
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin)
   @ApiOperation({ summary: 'Create a new user' })
   @ApiOkResponse({ type: UserResponseDto })
   @UseInterceptors(FileInterceptor('profilePicture'))
@@ -93,12 +100,50 @@ export class UsersController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateUserDto: UpdateUserDto,
+    @Req() req: { user: IActiveUser },
     @UploadedFile() profilePicture?: Express.Multer.File,
   ): Promise<UserResponseDto> {
+    const requesterRole = (req.user?.role || '').toLowerCase();
+    const isSelf = String(id) === String(req.user?.userId);
+
+    // ✅ AUTOSERVICIO: cualquier rol (incl. Técnico/Líder) puede editar SU PROPIA
+    // preferencia de apariencia, perfil, avatar, etc. — pero no su rol/estado
+    if (isSelf) {
+      if (
+        updateUserDto.role ||
+        updateUserDto.roleId ||
+        updateUserDto.isActive !== undefined
+      ) {
+        throw new ForbiddenException(
+          'No autorizado para cambiar tu propio rol o estado',
+        );
+      }
+      return this.usersService.update(id, updateUserDto, profilePicture);
+    }
+
+    // Modificación de OTROS usuarios: solo Admin/Manager
+    if (requesterRole !== 'admin' && requesterRole !== 'manager') {
+      throw new ForbiddenException('No autorizado para modificar este usuario');
+    }
+
+    // Solo Admin puede asignar rol Administrador o cambiar isActive
+    if (requesterRole !== 'admin') {
+      if (updateUserDto.role) {
+        const newRole = updateUserDto.role.toLowerCase();
+        if (newRole !== 'manager' && newRole !== 'technician') {
+          throw new ForbiddenException('No autorizado para asignar el rol Administrador');
+        }
+      }
+      if (updateUserDto.isActive !== undefined) {
+        throw new ForbiddenException('No autorizado para cambiar el estado del miembro');
+      }
+    }
     return this.usersService.update(id, updateUserDto, profilePicture);
   }
 
   @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Hard delete a user' })
   async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {

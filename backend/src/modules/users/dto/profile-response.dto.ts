@@ -36,4 +36,10 @@ export class ProfileResponseDto {
 
   @Expose()
   profilePicture: string;
+
+  @Expose()
+  full_name: string;
+
+  @Expose()
+  avatar_url: string;
 }

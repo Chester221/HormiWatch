@@ -34,6 +34,21 @@ export class Task extends BaseUuidEntity {
   })
   endDateTime: Temporal.Instant;
 
+  @Column({
+    type: 'timestamp',
+    name: 'completed_at',
+    nullable: true,
+    transformer: TemporalInstantTransformer,
+  })
+  completedAt: Temporal.Instant;
+
+  @Column({
+    type: 'uuid',
+    name: 'created_by',
+    nullable: true,
+  })
+  createdBy: string;
+
   @Column({ type: 'enum', enum: TaskStatus, nullable: true })
   status: TaskStatus;
 
@@ -52,6 +67,9 @@ export class Task extends BaseUuidEntity {
     nullable: false,
   })
   priority: TaskPriority;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  title: string;
 
   @Column({ type: 'varchar', nullable: true })
   description: string;

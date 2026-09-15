@@ -23,6 +23,8 @@ import { Task } from './entities/task.entity';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { TaskResponseDto } from './dto/task-response.dto';
 import { SkipAuth } from '../auth/decorator/skipAuth.decorator';
+import { CurrentUser } from '../auth/decorator/current-user.decorator';
+import type { IActiveUser } from '../auth/interface/payload.interface';
 
 @ApiBearerAuth()
 @ApiTags('Tasks')
@@ -37,8 +39,8 @@ export class TasksController {
     description: 'The task has been successfully created.',
     type: [TaskResponseDto],
   })
-  create(@Body() createTaskDto: CreateTaskDto) {
-    return this.tasksService.create(createTaskDto);
+  create(@Body() createTaskDto: CreateTaskDto, @CurrentUser() user: IActiveUser) {
+    return this.tasksService.create(createTaskDto, user);
   }
 
   @Get()
@@ -48,8 +50,8 @@ export class TasksController {
     description: 'Return all tasks.',
     type: PageDto,
   })
-  findAll(@Query() filterDto: FilterTaskDto) {
-    return this.tasksService.findAll(filterDto);
+  findAll(@Query() filterDto: FilterTaskDto, @CurrentUser() user: IActiveUser) {
+    return this.tasksService.findAll(filterDto, user);
   }
 
   @Get('statuses')
@@ -75,8 +77,9 @@ export class TasksController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateTaskDto: UpdateTaskDto,
+    @CurrentUser() user: IActiveUser,
   ) {
-    return this.tasksService.update(id, updateTaskDto);
+    return this.tasksService.update(id, updateTaskDto, user);
   }
 
   @Delete(':id')
@@ -86,7 +89,7 @@ export class TasksController {
     description: 'The task has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Task not found.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.tasksService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: IActiveUser) {
+    return this.tasksService.remove(id, user);
   }
 }

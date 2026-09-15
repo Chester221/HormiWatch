@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -26,6 +27,7 @@ import { plainToInstance } from 'class-transformer';
 import { User } from '../users/entities/user.entity';
 import { Service } from '../services/entities/service.entity';
 import { TaskStatus } from './enums/task-status.enum';
+import { IActiveUser } from '../auth/interface/payload.interface';
 
 @Injectable()
 export class TasksService {
@@ -47,6 +49,10 @@ export class TasksService {
     if (!isUUID(id)) {
       throw new BadRequestException(`Invalid ID format: ${id}`);
     }
+  }
+
+  private isTechnician(user?: IActiveUser): user is IActiveUser {
+    return !!user && String(user.role).toLowerCase() === 'technician';
   }
 
   private async calculateRateMultiplier(
@@ -93,7 +99,10 @@ export class TasksService {
     }
   }
 
-  async create(createTaskDto: CreateTaskDto): Promise<TaskResponseDto[]> {
+  async create(
+    createTaskDto: CreateTaskDto,
+    creator: IActiveUser,
+  ): Promise<TaskResponseDto[]> {
     const {
       technicianId,
       projectId,
@@ -102,15 +111,27 @@ export class TasksService {
       endDateTime: endIso,
     } = createTaskDto;
 
+    const isTechnicianRole = this.isTechnician(creator);
+
     // 1. Validations
-    this.validateId(technicianId);
+    const effectiveTechnicianId = isTechnicianRole
+      ? creator.userId
+      : technicianId;
+    this.validateId(effectiveTechnicianId);
     if (projectId) this.validateId(projectId);
     this.validateId(serviceId);
 
+    // Only technicians can be the task owner, and only for their own tasks
     const technician = await this.dataSource
       .getRepository(User)
-      .findOne({ where: { id: technicianId }, relations: ['profile'] });
+      .findOne({ where: { id: effectiveTechnicianId }, relations: ['profile'] });
     if (!technician) throw new NotFoundException('Technician not found');
+
+    if (isTechnicianRole && technicianId !== creator.userId) {
+      throw new ForbiddenException(
+        'A technician can only create tasks for themselves',
+      );
+    }
 
     const service = await this.dataSource
       .getRepository(Service)
@@ -119,12 +140,25 @@ export class TasksService {
 
     let project: Project | null = null;
     if (projectId) {
-      project = await this.projectRepository.findOneBy({ id: projectId });
+      project = await this.projectRepository.findOne({
+        where: { id: projectId },
+        relations: ['technicians'],
+      });
       if (!project) throw new NotFoundException('Project not found');
       if (project.status === ProjectStatus.COMPLETED) {
         throw new BadRequestException(
           'Cannot add tasks to a completed project',
         );
+      }
+      if (isTechnicianRole) {
+        const isMember =
+          project.technicians?.some((t) => t.id === creator.userId) ||
+          project.projectLeader?.id === creator.userId;
+        if (!isMember) {
+          throw new ForbiddenException(
+            'You can only create tasks in projects you are assigned to',
+          );
+        }
       }
     }
 
@@ -167,7 +201,7 @@ export class TasksService {
     await this.dataSource.transaction(async (manager) => {
       for (const segment of tasksToCreate) {
         // Overlap Check (Segment specific)
-        await this.checkForOverlaps(technicianId, segment.start, segment.end);
+        await this.checkForOverlaps(effectiveTechnicianId, segment.start, segment.end);
 
         // Rate Calculation
         const segmentZoned = segment.start.toZonedDateTimeISO(timeZone);
@@ -176,13 +210,17 @@ export class TasksService {
         const finalRate = Number(baseRate) * multiplier;
 
         // Create Task
+        const askedCompleted =
+          createTaskDto.status === TaskStatus.COMPLETED;
         const taskEntity = this.taskRepository.create({
           ...createTaskDto,
           startDateTime: segment.start,
           endDateTime: segment.end,
-          technician: { id: technicianId },
+          technician: { id: effectiveTechnicianId },
           project: projectId ? { id: projectId } : undefined,
           service: { id: serviceId },
+          createdBy: creator.userId,
+          completedAt: askedCompleted ? Temporal.Now.instant() : undefined,
           appliedHourlyRate: finalRate,
         });
 
@@ -211,6 +249,7 @@ export class TasksService {
       ...task,
       startDateTime: task.startDateTime.toString(),
       endDateTime: task.endDateTime.toString(),
+      completedAt: task.completedAt ? task.completedAt.toString() : null,
     }));
 
     return plainToInstance(TaskResponseDto, transformedTasks);
@@ -220,13 +259,22 @@ export class TasksService {
     return Object.values(TaskStatus);
   }
 
-  async findAll(filterDto: FilterTaskDto): Promise<PageDto<Task>> {
+  async findAll(
+    filterDto: FilterTaskDto,
+    user?: IActiveUser,
+  ): Promise<PageDto<Task>> {
     const queryBuilder = this.taskRepository.createQueryBuilder('task');
 
     queryBuilder
       .leftJoinAndSelect('task.technician', 'technician')
       .leftJoinAndSelect('task.project', 'project')
       .leftJoinAndSelect('task.service', 'service');
+
+    if (this.isTechnician(user)) {
+      queryBuilder.andWhere('task.technician.id = :userId', {
+        userId: user.userId,
+      });
+    }
 
     if (filterDto.projectId) {
       this.validateId(filterDto.projectId);
@@ -261,9 +309,10 @@ export class TasksService {
     }
 
     if (filterDto.q) {
-      queryBuilder.andWhere('task.description LIKE :q', {
-        q: `%${filterDto.q}%`,
-      });
+      queryBuilder.andWhere(
+        '(task.description LIKE :q OR task.title LIKE :q)',
+        { q: `%${filterDto.q}%` },
+      );
     }
 
     queryBuilder
@@ -279,7 +328,11 @@ export class TasksService {
     return new PageDto(entities, pageMetaDto);
   }
 
-  async update(id: string, updateTaskDto: UpdateTaskDto): Promise<Task> {
+  async update(
+    id: string,
+    updateTaskDto: UpdateTaskDto,
+    user?: IActiveUser,
+  ): Promise<Task> {
     this.validateId(id);
     const task = await this.taskRepository.findOne({
       where: { id },
@@ -288,6 +341,10 @@ export class TasksService {
 
     if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
+    }
+
+    if (this.isTechnician(user) && task.technician?.id !== user.userId) {
+      throw new ForbiddenException('You can only update your own tasks');
     }
 
     // 1. Calculate Old Duration
@@ -307,7 +364,25 @@ export class TasksService {
     const newDuration = newStart.until(newEnd).total({ unit: 'hours' });
     const diff = newDuration - oldDuration;
 
-    // 4. Update Project Pool if changed
+    // 4. Track completion date when status changes
+    const oldStatus = task.status;
+    const newStatus = updateTaskDto.status;
+    if (newStatus) {
+      const targetStatus = newStatus as unknown as TaskStatus;
+      if (
+        targetStatus === TaskStatus.COMPLETED &&
+        oldStatus !== TaskStatus.COMPLETED
+      ) {
+        task.completedAt = Temporal.Now.instant();
+      } else if (
+        targetStatus !== TaskStatus.COMPLETED &&
+        oldStatus === TaskStatus.COMPLETED
+      ) {
+        task.completedAt = null as unknown as Temporal.Instant;
+      }
+    }
+
+    // 5. Update Project Pool if changed
     if (Math.abs(diff) > 0 && task.project) {
       const currentPool = Number(task.project.poolHours || 0);
       task.project.poolHours = currentPool - diff;
@@ -324,15 +399,19 @@ export class TasksService {
     return await this.taskRepository.save(updatedTask);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, user?: IActiveUser): Promise<void> {
     this.validateId(id);
     const task = await this.taskRepository.findOne({
       where: { id },
-      relations: ['project'],
+      relations: ['project', 'technician'],
     });
 
     if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
+    }
+
+    if (this.isTechnician(user) && task.technician?.id !== user.userId) {
+      throw new ForbiddenException('You can only delete your own tasks');
     }
 
     // Restore Pool Hours (Always, as we reserved them on Create)

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasksApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { normalizeTask } from '@/lib/dashboardUtils';
 import type { Tables, InsertTables } from '@/types/supabase'
 
 export type Task = Tables<'tasks'> & {
@@ -15,8 +16,12 @@ export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
   const fetchTasks = async (): Promise<Task[]> => {
     try {
       const response = await tasksApi.getAll();
-      // ✅ CORREGIDO: Verificar si response es array o objeto con data
-      let tasks = Array.isArray(response) ? response : response?.data || [];
+      // ✅ CORREGIDO: Verificar si response es array u objeto { records | data }
+      let tasks = Array.isArray(response) ? response : response?.records || response?.data || [];
+
+      // ✅ NORMALIZAR al formato legacy que consume todo el frontend
+      // (project_id/technician_id/service_id, created_at, horas, estados)
+      tasks = tasks.map(normalizeTask);
 
       if (projectId && projectId !== 'all') {
         tasks = tasks.filter((t: any) => t.project_id === projectId);

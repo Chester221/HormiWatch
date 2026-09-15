@@ -11,6 +11,7 @@ import { ServiceCategory } from './service-category.entity';
 import { ServicePlatform } from './service-platform.entity';
 import { ServiceType } from './service-type.entity';
 import { Task } from 'src/modules/tasks/entities/task.entity';
+import { User } from 'src/modules/users/entities/user.entity';
 
 @Entity({ name: 'services' })
 export class Service extends BaseUuidEntity {
@@ -21,6 +22,25 @@ export class Service extends BaseUuidEntity {
 
   @Column({ type: 'varchar', nullable: true })
   description: string;
+
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    name: 'hourly_rate',
+  })
+  hourlyRate: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'icon' })
+  icon: string | null;
+
+  @Column({ type: 'varchar', length: 7, nullable: true, name: 'color' })
+  color: string | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'created_by' })
+  createdBy: User | null;
 
   // @Column({ type: 'varchar', length: 15, unique: true, nullable: true })
   // @Index('idx_redable_id_service')

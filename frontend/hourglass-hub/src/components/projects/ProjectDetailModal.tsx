@@ -1,12 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -19,21 +17,10 @@ import {
   Building2,
   Crown,
   FileText,
-  Download,
   CheckCircle,
   AlertCircle,
-  X,
-  TrendingUp,
   DollarSign,
-  Sparkles,
-  User,
-  Briefcase,
-  FileSpreadsheet,
 } from "lucide-react";
-import { useProjectExport } from "@/hooks/useProjectExport";
-
-const HORMI_BLUE = "#0DA2E7";
-const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
 
 interface ProjectDetailModalProps {
   project: any;
@@ -55,15 +42,21 @@ export function ProjectDetailModal({
   onOpenChange,
 }: ProjectDetailModalProps) {
   const [activeTab, setActiveTab] = useState("info");
-  const { exportProjectReport } = useProjectExport();
+
+  useEffect(() => {
+    if (open) setActiveTab("info");
+  }, [open]);
 
   if (!project) return null;
 
-  const statusInfo = {
+  const statusInfo: Record<string, { label: string; class: string }> = {
     active: { label: "Activo", class: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     completed: { label: "Cerrado", class: "bg-gray-100 text-gray-600 border-gray-300" },
     "on-hold": { label: "En Pausa", class: "bg-amber-50 text-amber-700 border-amber-200" },
-    "In Progress": { label: "En Progreso", class: "bg-blue-50 text-blue-700 border-blue-200" },
+    "In Progress": { label: "En Progreso", class: "bg-sky-50 text-sky-700 border-sky-200" },
+    "Not Started": { label: "Sin Empezar", class: "bg-slate-50 text-slate-700 border-slate-200" },
+    "Cancelled": { label: "Cancelado", class: "bg-red-50 text-red-700 border-red-200" },
+    inactive: { label: "Inactivo", class: "bg-amber-50 text-amber-700 border-amber-200" },
     default: { label: "Activo", class: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   };
 
@@ -131,42 +124,18 @@ export function ProjectDetailModal({
               </div>
             </div>
 
-            {/* 🔥 BOTONES DE ACCIÓN EN EL HEADER */}
-            <div className="flex items-center gap-2 shrink-0">
-              {/* Exportar Reporte */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-3 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 transition-all gap-1.5"
-                onClick={() => exportProjectReport(project)}
-                title="Exportar reporte del proyecto"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                <span className="text-xs hidden sm:inline">Exportar</span>
-              </Button>
-
-              {/* Cerrar */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 rounded-lg hover:bg-muted/50 shrink-0"
-                onClick={() => onOpenChange(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
-          </div>
         </div>
 
         {/* ═══════════════════════════════════════ */}
         {/* TABS - VERSIÓN MANUAL (FUNCIONAL) */}
         {/* ═══════════════════════════════════════ */}
         <div className="px-6 pt-4 border-b border-border/50 flex-shrink-0">
-          <div className="flex items-center gap-1 bg-muted/20 p-0.5 rounded-lg w-full sm:w-auto">
+          <div className="flex w-full items-center gap-1 bg-muted/20 p-0.5 rounded-lg">
             <button
               onClick={() => setActiveTab('info')}
               className={cn(
-                "flex-1 sm:flex-none text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer",
+                "flex-1 text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer",
                 "hover:bg-muted/50 hover:text-foreground",
                 "flex items-center justify-center gap-1.5",
                 activeTab === 'info'
@@ -179,7 +148,7 @@ export function ProjectDetailModal({
             </button>
             <button
               onClick={() => setActiveTab('tasks')}
-              className={`flex-1 sm:flex-none text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer ${
+              className={`flex-1 text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer ${
                 activeTab === 'tasks'
                   ? 'bg-white text-[#0DA2E7] shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -195,7 +164,7 @@ export function ProjectDetailModal({
             </button>
             <button
               onClick={() => setActiveTab('team')}
-              className={`flex-1 sm:flex-none text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer ${
+              className={`flex-1 text-xs rounded-md px-4 py-1.5 transition-all cursor-pointer ${
                 activeTab === 'team'
                   ? 'bg-white text-[#0DA2E7] shadow-sm'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'

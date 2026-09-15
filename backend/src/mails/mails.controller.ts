@@ -7,7 +7,6 @@ import {
 } from '@nestjs/swagger';
 import { MailService } from './mails.service';
 import { SendMailDto } from './dto/send-mail.dto';
-import { SkipAuth } from 'src/modules/auth/decorator/skipAuth.decorator';
 
 @ApiBearerAuth()
 @ApiTags('Mails')
@@ -16,7 +15,6 @@ export class MailsController {
   constructor(private readonly mailsService: MailService) {}
 
   @Post('send')
-  @SkipAuth()
   @ApiOperation({ summary: 'Send an email using a template' })
   @ApiResponse({ status: 201, description: 'Email sent successfully.' })
   @ApiResponse({ status: 400, description: 'Bad Request.' })

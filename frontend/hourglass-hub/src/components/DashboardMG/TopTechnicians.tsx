@@ -1,40 +1,64 @@
 import { motion } from "framer-motion";
-import { Award, TrendingUp, TrendingDown, Users, Clock, CheckSquare } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  Crown,
+  TrendingUp,
+  TrendingDown,
+  Users,
+  CalendarDays,
+  Lightbulb,
+  FolderKanban,
+  Medal,
+  CheckSquare,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { taskDate, taskHours } from "@/lib/dashboardUtils";
+import type { Task } from "@/hooks/useTasks";
+import type { TeamMember } from "@/hooks/useTeamMembers";
 
 interface TopTechniciansProps {
-  technicians: any[];
-  tasks: any[];
-  onViewTechnician?: (tech: any) => void;  // ← NUEVA PROP
+  technicians: TeamMember[];
+  tasks: Task[];
 }
 
-const MEDALS = ["🥇", "🥈", "🥉"];
+interface TechEntry extends TeamMember {
+  totalTasks: number;
+  completedTasks: number;
+  totalHours: number;
+  efficiency: number;
+  projects: number;
+  initials: string;
+  trend: number;
+}
 
-export function TopTechnicians({ technicians, tasks, onViewTechnician }: TopTechniciansProps) {
+const MEDAL_COLORS = ["#f59e0b", "#94a3b8", "#d97706"];
+
+const efficiencyColor = (efficiency: number) =>
+  efficiency >= 80 ? "#10b981" : efficiency >= 50 ? "#f59e0b" : "#ef4444";
+
+export function TopTechnicians({ technicians, tasks }: TopTechniciansProps) {
+  const navigate = useNavigate();
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const techData = technicians
-    .map((tech: any) => {
-      const techTasks = tasks.filter((t: any) => {
-        const taskDate = new Date(t.start_time || t.created_at);
-        return t.technician_id === tech.id && taskDate >= thirtyDaysAgo;
+  const techData: TechEntry[] = technicians
+    .map((tech) => {
+      const techTasks = tasks.filter((t) => {
+        const taskDateValue = taskDate(t);
+        return t.technician_id === tech.id && taskDateValue !== null && taskDateValue >= thirtyDaysAgo;
       });
 
       const totalTasks = techTasks.length;
-      const completedTasks = techTasks.filter((t: any) => t.status === "Completed").length;
-      const totalHours = techTasks.reduce((acc, t) => {
-        const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-        return acc + h;
-      }, 0);
+      const completedTasks = techTasks.filter((t) => t.status === "Completed").length;
+      const totalHours = techTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
       const efficiency = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-      const projects = new Set(techTasks.map((t: any) => t.project_id)).size;
+      const projects = new Set(techTasks.map((t) => t.project_id)).size;
 
       const initials = (tech.full_name || "T")
         .split(" ")
-        .map((n: string) => n[0])
+        .map((n) => n[0])
         .join("")
         .slice(0, 2)
         .toUpperCase();
@@ -42,15 +66,12 @@ export function TopTechnicians({ technicians, tasks, onViewTechnician }: TopTech
       const sixtyDaysAgo = new Date();
       sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
-      const previousTasks = tasks.filter((t: any) => {
-        const taskDate = new Date(t.start_time || t.created_at);
-        return t.technician_id === tech.id && taskDate >= sixtyDaysAgo && taskDate < thirtyDaysAgo;
+      const previousTasks = tasks.filter((t) => {
+        const taskDateValue = taskDate(t);
+        return t.technician_id === tech.id && taskDateValue !== null && taskDateValue >= sixtyDaysAgo && taskDateValue < thirtyDaysAgo;
       });
 
-      const prevHours = previousTasks.reduce((acc, t) => {
-        const h = t.duration_in_minutes ? t.duration_in_minutes / 60 : 0;
-        return acc + h;
-      }, 0);
+      const prevHours = previousTasks.reduce((acc, t) => acc + taskHours(t), 0);
 
       let trend = 0;
       if (prevHours > 0) {
@@ -76,17 +97,18 @@ export function TopTechnicians({ technicians, tasks, onViewTechnician }: TopTech
 
   if (techData.length === 0) {
     return (
-      <div className="rounded-xl border border-border/40 bg-white dark:bg-card p-6 shadow-sm text-center">
-        <div className="flex flex-col items-center justify-center py-6">
-          <div className="h-14 w-14 rounded-full bg-muted/30 flex items-center justify-center mb-4">
-            <Users className="h-7 w-7 text-muted-foreground/50" />
+      <div className="h-full rounded-xl border border-border/40 bg-white p-6 shadow-sm dark:bg-card">
+        <div className="flex h-full flex-col items-center justify-center py-6 text-center">
+          <div className="bg-gradient-to-br from-amber-400 to-orange-500 mb-4 flex h-14 w-14 items-center justify-center rounded-2xl shadow-sm shadow-amber-500/30">
+            <Users className="h-7 w-7 text-white" />
           </div>
-          <p className="text-base font-medium text-foreground">Sin técnicos activos</p>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-base font-semibold text-foreground">Sin técnicos activos</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             No hay técnicos con tareas en los últimos 30 días
           </p>
-          <Badge variant="outline" className="mt-3 text-[10px] border-border/40">
-            💡 Asigna tareas para ver estadísticas
+          <Badge variant="outline" className="mt-3 gap-1.5 border-border/40 text-xs">
+            <Lightbulb className="h-3 w-3 text-amber-500" />
+            Asigna tareas para ver estadísticas
           </Badge>
         </div>
       </div>
@@ -94,33 +116,36 @@ export function TopTechnicians({ technicians, tasks, onViewTechnician }: TopTech
   }
 
   return (
-    <div className="rounded-xl border border-border/40 bg-white dark:bg-card p-4 shadow-sm hover:shadow-md transition-all duration-300">
+    <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-border/40 bg-white p-5 shadow-sm transition-all duration-300 hover:shadow-lg dark:bg-card">
+      {/* Blob decorativo */}
+      <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-amber-400 opacity-[0.06] blur-2xl" />
+
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2.5">
-          <div className="p-1.5 rounded-lg bg-[#0DA2E7]/10">
-            <Award className="h-4 w-4 text-[#0DA2E7]" />
+      <div className="relative mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-xl p-2 shadow-sm shadow-amber-500/30">
+            <Crown className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-foreground">
+            <h3 className="text-base font-semibold tracking-tight text-foreground">
               Técnicos Destacados
             </h3>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Top {techData.length} técnicos · Últimos 30 días
             </p>
           </div>
         </div>
-        <Badge variant="outline" className="text-[10px] border-border/40">
-          <Clock className="h-3 w-3 mr-1" />
+        <Badge variant="outline" className="border-border/40 text-xs">
+          <CalendarDays className="mr-1 h-3 w-3" />
           30 días
         </Badge>
       </div>
 
       {/* LISTA DE TÉCNICOS */}
-      <div className="space-y-2.5">
-        {techData.map((tech: any, idx: number) => {
+      <div className="relative flex flex-1 flex-col gap-2.5">
+        {techData.map((tech, idx) => {
           const isTop3 = idx < 3;
-          const medal = isTop3 ? MEDALS[idx] : `${idx + 1}`;
+          const effColor = efficiencyColor(tech.efficiency);
 
           return (
             <motion.div
@@ -128,75 +153,95 @@ export function TopTechnicians({ technicians, tasks, onViewTechnician }: TopTech
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.05 }}
-              onClick={() => onViewTechnician?.(tech)}  // ← ABRE EL MODAL
-              className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/10 transition-all duration-200 cursor-pointer group"
+              onClick={() => navigate(`/team?member=${tech.id}`)}
+              className="group relative flex items-center gap-3 rounded-xl border border-border/30 p-3 transition-all duration-200 hover:border-[#0DA2E7]/40 hover:bg-muted/10 cursor-pointer"
             >
               {/* Ranking */}
-              <div className="flex items-center justify-center w-7 h-7 text-sm font-bold flex-shrink-0">
-                {medal}
+              <div className="flex w-8 flex-shrink-0 items-center justify-center">
+                {isTop3 ? (
+                  <div
+                    className="flex h-8 w-8 items-center justify-center rounded-full transition-transform duration-200 group-hover:scale-110"
+                    style={{ backgroundColor: `${MEDAL_COLORS[idx]}1a` }}
+                  >
+                    <Medal
+                      className="h-4 w-4"
+                      style={{ color: MEDAL_COLORS[idx], fill: `${MEDAL_COLORS[idx]}22` }}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground tabular-nums">
+                    {idx + 1}
+                  </div>
+                )}
               </div>
 
               {/* Avatar */}
-              <Avatar className="h-8 w-8 flex-shrink-0 ring-2 ring-border group-hover:ring-[#0DA2E7]/30 transition-all">
-                <AvatarFallback className="text-[10px] bg-[#0DA2E7]/10 text-[#0DA2E7] font-semibold">
+              <Avatar className="h-9 w-9 flex-shrink-0 ring-2 ring-border transition-all group-hover:ring-[#0DA2E7]/40">
+                <AvatarImage
+                  src={tech.avatar_url || tech.profile?.avatar_url || ""}
+                  alt={tech.full_name || "Técnico"}
+                />
+                <AvatarFallback className="bg-[#0DA2E7]/10 text-[11px] font-semibold text-[#0DA2E7]">
                   {tech.initials}
                 </AvatarFallback>
               </Avatar>
 
-              {/* Nombre */}
-              <span className="text-sm font-medium text-foreground truncate flex-1">
-                {tech.full_name || "Técnico"}
-              </span>
-
-              {/* Métricas */}
-              <div className="flex items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
-                <span className="flex items-center gap-1">
-                  <CheckSquare className="h-3 w-3" />
-                  {tech.completedTasks}/{tech.totalTasks}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Users className="h-3 w-3" />
-                  {tech.projects}
-                </span>
+              {/* Nombre + métricas */}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {tech.full_name || "Técnico"}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <CheckSquare className="h-3 w-3" />
+                    <span className="tabular-nums">{tech.completedTasks}/{tech.totalTasks} tareas</span>
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <FolderKanban className="h-3 w-3" />
+                    <span className="tabular-nums">{tech.projects} proy.</span>
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <div className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-muted/60">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${tech.efficiency}%` }}
+                      transition={{ delay: 0.2 + idx * 0.05, duration: 0.6, ease: "easeOut" }}
+                      className="h-full rounded-full"
+                      style={{ backgroundColor: effColor }}
+                    />
+                  </div>
+                  <span
+                    className="text-[10px] font-bold tabular-nums"
+                    style={{ color: effColor }}
+                  >
+                    {tech.efficiency}%
+                  </span>
+                </div>
               </div>
 
-              {/* Horas + Eficiencia */}
-              <div className="text-right flex-shrink-0 min-w-[70px]">
-                <span className="text-sm font-bold text-foreground">
+              {/* Horas */}
+              <div className="flex flex-shrink-0 flex-col items-end">
+                <span className="text-lg font-bold leading-none text-foreground tabular-nums">
                   {tech.totalHours.toFixed(1)}h
                 </span>
-                <Badge
-                  variant="outline"
-                  className={`text-[10px] ml-2 px-1.5 py-0 ${
-                    tech.efficiency >= 80
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-200"
-                      : tech.efficiency >= 50
-                      ? "bg-amber-50 text-amber-600 border-amber-200"
-                      : "bg-red-50 text-red-600 border-red-200"
-                  }`}
-                >
-                  {tech.efficiency}%
-                </Badge>
-              </div>
-
-              {/* Tendencia */}
-              <div className="flex items-center gap-1 flex-shrink-0 min-w-[50px]">
-                {tech.trend !== 0 && (
-                  <>
-                    {tech.trend > 0 ? (
-                      <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
+                <div className="mt-1 flex items-center gap-0.5">
+                  {tech.trend !== 0 &&
+                    (tech.trend > 0 ? (
+                      <TrendingUp className="h-3 w-3 text-emerald-500" />
                     ) : (
-                      <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-                    )}
+                      <TrendingDown className="h-3 w-3 text-red-500" />
+                    ))}
+                  {tech.trend !== 0 && (
                     <span
-                      className={`text-[10px] font-medium ${
+                      className={`text-[10px] font-medium tabular-nums ${
                         tech.trend > 0 ? "text-emerald-500" : "text-red-500"
                       }`}
                     >
                       {tech.trend > 0 ? "+" : ""}{tech.trend}%
                     </span>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
             </motion.div>
           );

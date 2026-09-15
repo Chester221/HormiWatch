@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi, tasksApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
+import { normalizeTask, taskHours } from '@/lib/dashboardUtils';
 
 export type Project = {
   id: string;
@@ -16,6 +17,8 @@ export type Project = {
   hourly_rate?: number;
   created_at: string;
   created_by?: string;
+  project_leader_id?: string | null;
+  technicians?: { id: string; name?: string; lastName?: string }[];
   tasks?: any[];
 };
 
@@ -35,10 +38,13 @@ export const useProjects = () => {
         }
 
         const responseTasks = await tasksApi.getAll();
-        const tasks = Array.isArray(responseTasks) 
+        const rawTasks = Array.isArray(responseTasks) 
           ? responseTasks 
           : responseTasks?.records || responseTasks?.data || [];
-        
+
+        // ✅ NORMALIZAR al formato legacy (incluye project_id de la relación anidada)
+        const tasks = rawTasks.map(normalizeTask);
+
         const tasksByProject: Record<string, any[]> = {};
         tasks.forEach((task: any) => {
           if (task.project_id) {
@@ -71,28 +77,24 @@ export const useProjects = () => {
             // ✅ CLIENTE Y LÍDER - usar lo que haya, aunque sea null
             customer_id: project.customer_id || null,
             customer_name: project.customer_name || 'Sin cliente',
-            project_leader_id: project.project_leader_id || null,
-            leader_email: project.leader_email || 'Sin líder',
+            client_id: project.client_id || project.customer_id || null,
+            clients: project.clients ??
+              (project.customer_id
+                ? { name: project.customer_name || 'Sin cliente' }
+                : null),
+            lead_id: project.lead_id || project.project_leader_id || project.projectLeader?.id || null,
+            project_leader_id: project.project_leader_id || project.projectLeader?.id || null,
+            leader_email: project.leader_email || project.projectLeader?.email || 'Sin líder',
+            // ✅ PROPAGAR LOS OBJETOS DEL BACKEND (líder y técnicos)
+            projectLeader: project.projectLeader || null,
+            technicians: project.technicians || [],
             tasks: [],
           };
         
           const projectTasks = tasksByProject[project.id] || [];
           
-          const totalHours = projectTasks.reduce((total: number, task: any) => {
-            if (task.duration_in_minutes) {
-              return total + (task.duration_in_minutes / 60);
-            }
-            if (task.start_time && task.end_time) {
-              const hours = Math.abs(
-                new Date(task.end_time).getTime() - new Date(task.start_time).getTime()
-              ) / 3600000;
-              return total + hours;
-            }
-            if (task.hours) {
-              return total + task.hours;
-            }
-            return total;
-          }, 0);
+          const totalHours = projectTasks.reduce((total: number, task: any) =>
+            total + taskHours(task), 0);
         
           return {
             ...normalizedProject,

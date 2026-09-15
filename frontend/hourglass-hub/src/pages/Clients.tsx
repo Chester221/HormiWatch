@@ -1,21 +1,29 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ClientFormModal } from "@/components/clients/ClientFormModal";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Building2, MapPin, Search, Plus, ChevronDown, Phone, Mail, User,
+  Building2, MapPin, Plus, ChevronDown, Phone, Mail,
   Pencil, Trash2, Loader2, FileText, AlertTriangle,
-  FolderKanban, Briefcase, Users, Crown
+  FolderKanban, Briefcase, Users, ArrowUpDown, CalendarDays
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { projectStatusInfo, formatProjectDate } from "@/lib/dashboardUtils";
 import { useClientsWithContacts, useDeleteClient, type ClientWithContacts } from "@/hooks/useClientes";
 import { toast } from "sonner";
 import { customersApi, projectsApi } from "@/lib/api";
@@ -23,13 +31,45 @@ import { motion, AnimatePresence } from "framer-motion";
 
 const HORMI_BLUE = '#0DA2E7';
 
-// 🔥 FUNCIONES AUXILIARES
+// Firebase-like helper (back-compat) — la app usa separador de miles con punto
 const formatNumber = (num: number): string => {
   if (num === 0) return '0';
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 };
 
-function ClientCard({ client, expandedClients, toggleClient, handleEditClient, handleDeleteClick, index }: any) {
+const isProjectActive = (p: { status?: string }) => p.status !== 'Completed' && p.status !== 'Cancelled';
+
+interface ProjectRef {
+  id: string;
+  title?: string;
+  name?: string;
+  status?: string;
+  startDate?: string;
+  endDate?: string;
+  start_date?: string;
+  end_date?: string;
+  client_id?: string | null;
+  customer_id?: string | null;
+}
+
+type SortOrder = 'az' | 'za' | 'contacts';
+
+// 🔥 Traer TODOS los proyectos (el endpoint pagina; default take=10, máx 50)
+const fetchAllProjects = async (): Promise<ProjectRef[]> => {
+  const all: ProjectRef[] = [];
+  let page = 1;
+  let hasNext = true;
+  while (hasNext) {
+    const response = await projectsApi.getAll({ page, take: 50, order: 'ASC' });
+    const records = Array.isArray(response) ? response : response?.records || response?.data || [];
+    all.push(...(records as ProjectRef[]));
+    hasNext = response?.meta?.hasNextPage ?? false;
+    page += 1;
+  }
+  return all;
+};
+
+function ClientCard({ client, expandedClients, toggleClient, handleEditClient, handleDeleteClick, clientProjects, index }: any) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -69,12 +109,34 @@ function ClientCard({ client, expandedClients, toggleClient, handleEditClient, h
                         </Badge>
                       )}
                     </div>
+                    {(client.email || client.phone) && (
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
+                        {client.email && (
+                          <a href={`mailto:${client.email}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-[#0DA2E7] transition-colors">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate max-w-[160px]">{client.email}</span>
+                          </a>
+                        )}
+                        {client.phone && (
+                          <a href={`tel:${client.phone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-[#0DA2E7] transition-colors">
+                            <Phone className="h-3 w-3 shrink-0" />
+                            {client.phone}
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
                   <span className="text-xs text-muted-foreground mr-1">
                     {client.contacts.length} {client.contacts.length === 1 ? 'contacto' : 'contactos'}
                   </span>
+                  {(clientProjects?.length > 0) ? (
+                    <Badge variant="outline" className="text-[10px] gap-1 mr-1 border-border/50">
+                      <FolderKanban className="h-2.5 w-2.5" />
+                      {clientProjects.length}
+                    </Badge>
+                  ) : null}
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -112,11 +174,63 @@ function ClientCard({ client, expandedClients, toggleClient, handleEditClient, h
                   exit={{ height: 0, opacity: 0 }}
                   transition={{ duration: 0.25, ease: "easeInOut" }}
                 >
-                  <CardContent className="border-t border-border/50 pt-3 px-4 pb-4">
+                  <CardContent className="border-t border-border/50 pt-3 px-4 pb-4 space-y-4">
+                    <div className="space-y-2.5">
+                      <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <FolderKanban className="h-3 w-3" />
+                        Proyectos
+                        {clientProjects?.length > 0 && (
+                          <span className="text-muted-foreground/50">({clientProjects.length})</span>
+                        )}
+                      </h4>
+                      {clientProjects?.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">Sin proyectos asociados</p>
+                      ) : (
+                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                          {clientProjects.map((p: ProjectRef) => {
+                            const info = projectStatusInfo(p.status);
+                            const start = formatProjectDate(p.startDate || p.start_date);
+                            const end = formatProjectDate(p.endDate || p.end_date);
+                            return (
+                              <div key={p.id} className="rounded-lg border border-border/20 bg-muted/20 p-2.5 transition-colors hover:bg-muted/40">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className="text-xs font-medium text-foreground truncate">
+                                    {p.title || p.name || 'Proyecto sin nombre'}
+                                  </p>
+                                  <Badge variant="outline" className={cn("text-[10px] px-2 py-0 border shrink-0", info.cls)}>
+                                    {info.label}
+                                  </Badge>
+                                </div>
+                                {(start || end) && (
+                                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                                    {start && (
+                                      <span className="flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" />
+                                        Inicio: {start}
+                                      </span>
+                                    )}
+                                    {end && (
+                                      <span className="flex items-center gap-1">
+                                        <CalendarDays className="h-3 w-3" />
+                                        Fin: {end}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="space-y-2.5">
                       <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                         <Users className="h-3 w-3" />
                         Contactos
+                        {client.contacts.length > 0 && (
+                          <span className="text-muted-foreground/50">({client.contacts.length})</span>
+                        )}
                       </h4>
                       {client.contacts.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic">No hay contactos registrados</p>
@@ -169,19 +283,63 @@ function ClientCard({ client, expandedClients, toggleClient, handleEditClient, h
 }
 
 export default function Clients() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>('az');
   const [expandedClients, setExpandedClients] = useState<string[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientWithContacts | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Abrir un cliente desde la búsqueda global (?client=id)
+  useEffect(() => {
+    const clientId = searchParams.get("client");
+    if (!clientId) return;
+    setExpandedClients(prev => prev.includes(clientId) ? prev : [...prev, clientId]);
+    setSearchParams({}, { replace: true });
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
   
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; clientId: string; clientName: string }>({ open: false, clientId: '', clientName: '' });
-  const [cannotDeleteDialog, setCannotDeleteDialog] = useState<{ open: boolean; clientName: string; projectCount: number }>({ open: false, clientName: '', projectCount: 0 });
+  const [cannotDeleteDialog, setCannotDeleteDialog] = useState<{ open: boolean; clientName: string; projectCount: number; hasActive: boolean }>({ open: false, clientName: '', projectCount: 0, hasActive: false });
 
-  const { data: clients = [], isLoading, refetch } = useClientsWithContacts(searchQuery);
+  const { data: clients = [], isLoading, refetch } = useClientsWithContacts();
   const deleteClientMutation = useDeleteClient();
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [projectsData, setProjectsData] = useState<ProjectRef[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+
+  const loadProjects = useCallback(async () => {
+    try {
+      const projects = await fetchAllProjects();
+      setProjectsData(projects);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+      setProjectsData([]);
+    } finally {
+      setProjectsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
   const totalContacts = clients.reduce((acc, c) => acc + c.contacts.length, 0);
+  const totalProjects = projectsData.length;
+
+  // Proyectos agrupados por cliente (client_id o customer_id)
+  const clientProjectsMap = useMemo(() => {
+    const map: Record<string, ProjectRef[]> = {};
+    projectsData.forEach((p) => {
+      const key = p.client_id || p.customer_id;
+      if (key) (map[key] = map[key] || []).push(p);
+    });
+    return map;
+  }, [projectsData]);
+
+  const getClientProjects = useCallback((clientId: string) => {
+    return clientProjectsMap[clientId] || [];
+  }, [clientProjectsMap]);
 
   const toggleClient = (clientId: string) => {
     setExpandedClients(prev => prev.includes(clientId) ? prev.filter(id => id !== clientId) : [...prev, clientId]);
@@ -190,28 +348,19 @@ export default function Clients() {
   const handleAddClient = () => { setEditingClient(null); setIsModalOpen(true); };
   const handleEditClient = (client: ClientWithContacts, e: React.MouseEvent) => { e.stopPropagation(); setEditingClient(client); setIsModalOpen(true); };
   
-  const handleDeleteClick = async (client: any, e: React.MouseEvent) => {
+  const handleDeleteClick = (client: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    try {
-      const response = await projectsApi.getAll();
-      const projects = Array.isArray(response) ? response : response?.data || [];
-      const clientProjects = projects.filter((p: any) => p.client_id === client.id);
-      const activeProjects = clientProjects.filter((p: any) => 
-        p.status !== 'Completed' && p.status !== 'Cancelled'
-      );
-      
-      if (activeProjects && activeProjects.length > 0) {
-        setCannotDeleteDialog({ 
-          open: true, 
-          clientName: client.name, 
-          projectCount: activeProjects.length 
-        });
-      } else {
-        setDeleteDialog({ open: true, clientId: client.id, clientName: client.name });
-      }
-    } catch (error) {
-      console.error('Error checking client projects:', error);
+    const clientProjects = getClientProjects(client.id);
+    const activeProjects = clientProjects.filter(isProjectActive);
+
+    if (clientProjects.length > 0) {
+      setCannotDeleteDialog({
+        open: true,
+        clientName: client.name,
+        projectCount: clientProjects.length,
+        hasActive: activeProjects.length > 0,
+      });
+    } else {
       setDeleteDialog({ open: true, clientId: client.id, clientName: client.name });
     }
   };
@@ -219,16 +368,13 @@ export default function Clients() {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
-      const response = await projectsApi.getAll();
-      const projects = Array.isArray(response) ? response : response?.data || [];
-      const activeProjects = projects.filter((p: any) => 
-        p.client_id === deleteDialog.clientId &&
-        p.status !== 'Completed' && 
-        p.status !== 'Cancelled'
+      const projects = await fetchAllProjects();
+      const clientProjects = projects.filter((p) =>
+        (p.client_id === deleteDialog.clientId || p.customer_id === deleteDialog.clientId)
       );
-      
-      if (activeProjects && activeProjects.length > 0) {
-        toast.error(`No se puede eliminar: tiene ${activeProjects.length} proyecto(s) activos`);
+
+      if (clientProjects.length > 0) {
+        toast.error(`No se puede eliminar: tiene ${clientProjects.length} proyecto(s) asociados`);
         setDeleteDialog({ open: false, clientId: '', clientName: '' });
         setIsDeleting(false);
         return;
@@ -239,6 +385,7 @@ export default function Clients() {
       toast.success(`"${deleteDialog.clientName}" eliminado`);
       setDeleteDialog({ open: false, clientId: '', clientName: '' });
       refetch();
+      loadProjects();
     } catch (error: any) { 
       toast.error(error.message || 'Error al eliminar');
     }
@@ -247,8 +394,18 @@ export default function Clients() {
 
   const handleModalClose = (open: boolean) => { setIsModalOpen(open); if (!open) refetch(); };
 
-  const leftClients = clients.filter((_, i) => i % 2 === 0);
-  const rightClients = clients.filter((_, i) => i % 2 === 1);
+  const sortedClients = useMemo(() => {
+    const copy = [...clients];
+    switch (sortOrder) {
+      case 'az': return copy.sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      case 'za': return copy.sort((a, b) => b.name.localeCompare(a.name, 'es'));
+      case 'contacts': return copy.sort((a, b) => b.contacts.length - a.contacts.length);
+      default: return copy;
+    }
+  }, [clients, sortOrder]);
+
+  const leftClients = sortedClients.filter((_, i) => i % 2 === 0);
+  const rightClients = sortedClients.filter((_, i) => i % 2 === 1);
 
   const cardProps = { expandedClients, toggleClient, handleEditClient, handleDeleteClick };
 
@@ -280,6 +437,17 @@ export default function Clients() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as SortOrder)}>
+                <SelectTrigger className="w-full sm:w-[200px] h-9 rounded-xl bg-card/60 border-border/50">
+                  <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground mr-1.5" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="az">Nombre (A-Z)</SelectItem>
+                  <SelectItem value="za">Nombre (Z-A)</SelectItem>
+                  <SelectItem value="contacts">Más contactos</SelectItem>
+                </SelectContent>
+              </Select>
               <Button
                 onClick={handleAddClient}
                 className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
@@ -342,7 +510,7 @@ export default function Clients() {
             <div className="relative flex items-start justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Proyectos</p>
-                <p className="text-2xl font-bold text-foreground mt-1.5">0</p>
+                <p className="text-2xl font-bold text-foreground mt-1.5">{projectsLoading ? "—" : formatNumber(totalProjects)}</p>
                 <p className="text-xs text-muted-foreground mt-1">en total</p>
               </div>
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#0DA2E7]/10 transition-transform duration-300 group-hover:scale-110">
@@ -358,25 +526,25 @@ export default function Clients() {
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 animate-spin text-[#0DA2E7]" />
           </div>
-        ) : clients.length === 0 ? (
+        ) : sortedClients.length === 0 ? (
           <div className="text-center py-16 rounded-xl border border-border bg-card">
-            <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-30" />
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+              <Building2 className="h-6 w-6 text-muted-foreground opacity-50" />
+            </div>
             <p className="text-sm text-muted-foreground">No se encontraron clientes</p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              Haz clic en "Nuevo Cliente" para agregar uno
-            </p>
+            <p className="text-xs text-muted-foreground/50 mt-1">Haz clic en "Nuevo Cliente" para agregar uno</p>
           </div>
         ) : (
           <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3">
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="flex flex-col gap-3">
                 {leftClients.map((client, index) => (
-                  <ClientCard key={client.id} client={client} {...cardProps} index={index * 2} />
+                  <ClientCard key={client.id} client={client} {...cardProps} index={index * 2} clientProjects={getClientProjects(client.id)} />
                 ))}
               </div>
               <div className="flex flex-col gap-3">
                 {rightClients.map((client, index) => (
-                  <ClientCard key={client.id} client={client} {...cardProps} index={index * 2 + 1} />
+                  <ClientCard key={client.id} client={client} {...cardProps} index={index * 2 + 1} clientProjects={getClientProjects(client.id)} />
                 ))}
               </div>
             </div>
@@ -425,16 +593,27 @@ export default function Clients() {
               </div>
               <div>
                 <DialogTitle className="text-lg font-semibold text-foreground">No se puede eliminar</DialogTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">El cliente tiene proyectos en curso</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {cannotDeleteDialog.hasActive ? "El cliente tiene proyectos en curso" : "El cliente tiene proyectos asociados"}
+                </p>
               </div>
             </div>
           </div>
           <div className="p-6 pt-4">
-            <p className="text-sm text-foreground"><span className="font-semibold">"{cannotDeleteDialog.clientName}"</span> tiene <span className="font-semibold text-blue-400">{cannotDeleteDialog.projectCount} proyecto(s)</span> sin finalizar.</p>
-            <p className="text-xs text-muted-foreground mt-3 bg-muted/50 rounded-lg p-3">Debes completar o cancelar todos los proyectos del cliente antes de poder eliminarlo permanentemente.</p>
+            {cannotDeleteDialog.hasActive ? (
+              <>
+                <p className="text-sm text-foreground"><span className="font-semibold">"{cannotDeleteDialog.clientName}"</span> tiene <span className="font-semibold text-blue-400">{cannotDeleteDialog.projectCount} proyecto(s)</span> sin finalizar.</p>
+                <p className="text-xs text-muted-foreground mt-3 bg-muted/50 rounded-lg p-3">Debes completar o cancelar todos los proyectos del cliente antes de poder eliminarlo permanentemente.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-foreground"><span className="font-semibold">"{cannotDeleteDialog.clientName}"</span> tiene <span className="font-semibold text-blue-400">{cannotDeleteDialog.projectCount} proyecto(s)</span> asociados.</p>
+                <p className="text-xs text-muted-foreground mt-3 bg-muted/50 rounded-lg p-3">El borrado es permanente (incluye el historial y reportes). Se conserva el cliente para no perder sus proyectos.</p>
+              </>
+            )}
           </div>
           <DialogFooter className="p-4 pt-0">
-            <Button variant="outline" onClick={() => setCannotDeleteDialog({ open: false, clientName: '', projectCount: 0 })} className="w-full">Entendido</Button>
+            <Button variant="outline" onClick={() => setCannotDeleteDialog({ open: false, clientName: '', projectCount: 0, hasActive: false })} className="w-full">Entendido</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

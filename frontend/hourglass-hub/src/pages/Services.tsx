@@ -1,90 +1,39 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Layers,
-  Wrench,
-  DollarSign,
-  Loader2,
-  FileText,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Package,
-  TrendingUp,
-  Table,
-  Grid3x3,
+  Plus, Package, Layers, DollarSign, TrendingUp,
+  ChevronLeft, ChevronRight, Grid3x3, Table, Eye, SearchX, Wrench,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { ServiceFormModal } from "@/components/services/ServiceFormModal";
-import { useServices, useDeleteService, type Service } from "@/hooks/useServices";
+import { ServiceCard, ServiceActionsMenu, ServiceStatusBadge } from "@/components/services/ServiceCard";
+import { ServiceFilters } from "@/components/services/ServiceFilters";
+import { ServiceDetailModal } from "@/components/services/ServiceDetailModal";
+import { ServiceDeleteDialog } from "@/components/services/ServiceDeleteDialog";
+import { getServiceIconVisual, pickServiceColor } from "@/components/services/serviceIcons";
+import { useServices, useServiceCategories, useDeleteService, type Service } from "@/hooks/useServices";
 import { useAuth } from "@/hooks/useAuth";
-import { motion, AnimatePresence } from "framer-motion";
-
-const HORMI_BLUE = "#0DA2E7";
-
-// ============================================
-// MAPA DE ICONOS Y COLORES POR CATEGORÍA
-// ============================================
-const categoryIcons: Record<string, any> = {
-  "Desarrollo": Layers,
-  "Evaluación": FileText,
-  "Mantenimiento": Wrench,
-  "Integración Bancaria": DollarSign,
-  "Análisis de Datos": TrendingUp,
-  "Infraestructura": Package,
-  "Diseño": Grid3x3,
-  "Consultoría": Filter,
-  "Consulta": ChevronRight,
-  "Sin categoría": Package,
-};
-
-const categoryColors: Record<string, string> = {
-  "Desarrollo": "#3B82F6",
-  "Evaluación": "#8B5CF6",
-  "Mantenimiento": "#F59E0B",
-  "Integración Bancaria": "#10B981",
-  "Análisis de Datos": "#06B6D4",
-  "Infraestructura": "#6366F1",
-  "Diseño": "#EC4899",
-  "Consultoría": "#F97316",
-  "Consulta": "#14B8A6",
-  "Sin categoría": "#6B7280",
-};
 
 export default function Services() {
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">(() => {
     const saved = localStorage.getItem("servicesViewMode");
     return (saved === "grid" || saved === "table") ? saved : "grid";
   });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
-  const [formModal, setFormModal] = useState<{
-    open: boolean;
-    service: Service | null;
-  }>({
+  const [formModal, setFormModal] = useState<{ open: boolean; service: Service | null }>({
     open: false,
     service: null,
   });
+  const [detailService, setDetailService] = useState<Service | null>(null);
+  const [serviceToDelete, setServiceToDelete] = useState<Service | null>(null);
+
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { profile } = useAuth();
   const userRole = profile?.role;
@@ -92,66 +41,96 @@ export default function Services() {
   const canEdit = isManager;
   const canCreate = isManager;
 
-  const { data: services = [], isLoading, refetch } = useServices();
+  const { data: services = [], isLoading } = useServices(undefined, true);
+  const { data: categories = [] } = useServiceCategories();
   const deleteServiceMutation = useDeleteService();
 
-  const uniqueCategories = [
-    ...new Set(services.map((s) => s.categories?.name || "Sin categoría")),
-  ];
+  const activeFilterCount =
+    (categoryFilter !== "" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0);
 
-  const filteredServices = services.filter((s) => {
-    const matchesCategory =
-      categoryFilter === "all" ||
-      (s.categories?.name || "Sin categoría") === categoryFilter;
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "active" && s.is_active === true) ||
-      (statusFilter === "inactive" && s.is_active === false);
-    return matchesCategory && matchesStatus;
-  });
+  const filteredServices = useMemo(() => {
+    return services.filter((s) => {
+      const categoryId = s.categories?.id || s.category?.id || "";
+      const categoryName = s.categories?.name || s.category?.name || "Sin categoría";
+      const matchesCategory =
+        categoryFilter === "" ||
+        categoryId === categoryFilter ||
+        categoryName === (categories.find((c) => c.id === categoryFilter)?.name ?? "");
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && s.is_active !== false) ||
+        (statusFilter === "inactive" && s.is_active === false);
+      return matchesCategory && matchesStatus;
+    });
+  }, [services, categories, categoryFilter, statusFilter]);
 
   const indexOfLast = currentPage * itemsPerPage;
   const indexOfFirst = indexOfLast - itemsPerPage;
   const currentServices = filteredServices.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredServices.length / itemsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filteredServices.length / itemsPerPage));
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   const stats = {
     total: services.length,
-    categories: uniqueCategories.length,
+    categories: new Set(services.map((s) => s.categories?.name || s.category?.name || "Sin categoría")).size,
     avgRate:
       services.length > 0
         ? Math.round(
-            services.reduce((sum, s) => sum + (s.default_hourly_rate || 0), 0) /
-              services.length
+            services.reduce((sum, s) => sum + (Number(s.hourlyRate) || Number(s.default_hourly_rate) || 0), 0) / services.length
           )
         : 0,
-    active: services.filter((s) => s.is_active === true).length,
+    active: services.filter((s) => s.is_active !== false).length,
   };
 
-  const handleEdit = (service: Service) => {
-    if (!canEdit) return;
-    setFormModal({ open: true, service });
-  };
   const handleAdd = () => {
     if (!canCreate) return;
     setFormModal({ open: true, service: null });
   };
 
-  const handleDelete = async (service: Service) => {
-    if (!service) return;
-    if (!confirm(`¿Eliminar "${service.name}"?`)) return;
-    try {
-      await deleteServiceMutation.mutateAsync(service.id);
-      toast.success(`"${service.name}" eliminado`);
-      refetch();
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-    }
+  const handleEdit = (service: Service) => {
+    if (!canEdit) return;
+    setDetailService(null);
+    setFormModal({ open: true, service });
+  };
+
+  const handleView = (service: Service) => setDetailService(service);
+
+  // Abrir el detalle de un servicio desde la búsqueda global (?service=id)
+  useEffect(() => {
+    const serviceId = searchParams.get("service");
+    if (!serviceId) return;
+    const target = services.find((s: Service) => String(s.id) === serviceId);
+    if (target) setDetailService(target);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, services]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleDeleteRequest = (service: Service) => {
+    setDetailService(null);
+    setServiceToDelete(service);
+  };
+
+  const handleDeleteConfirm = (service: Service) => {
+    deleteServiceMutation.mutate(service.id, {
+      onSuccess: () => setServiceToDelete(null),
+    });
   };
 
   const handleModalClose = (open: boolean) => {
     setFormModal((prev) => ({ ...prev, open }));
-    if (!open) refetch();
+  };
+
+  const clearFilters = () => {
+    setCategoryFilter("");
+    setStatusFilter("all");
+    setCurrentPage(1);
+  };
+
+  const switchView = (mode: "grid" | "table") => {
+    setViewMode(mode);
+    localStorage.setItem("servicesViewMode", mode);
   };
 
   if (isLoading) {
@@ -195,25 +174,23 @@ export default function Services() {
                     Servicios
                   </span>
                   <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
-                    {stats.total} servicios
+                    {stats.total} servicio{stats.total !== 1 ? "s" : ""}
                   </Badge>
                 </h1>
                 <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
                   <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
-                  Gestiona los servicios que ofreces a tus clientes
+                  Aquí podrás gestionar los servicios que ofreces a tus clientes
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {canCreate && (
-                <Button
-                  onClick={handleAdd}
-                  className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] hover:from-[#0B8BC7] hover:to-[#0DA2E7]"
-                >
-                  <Plus className="h-4 w-4" /> Nuevo Servicio
-                </Button>
-              )}
-            </div>
+            {canCreate && (
+<Button
+                 onClick={handleAdd}
+                 className="gap-2 self-start sm:self-auto text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
+               >
+                 <Plus className="h-4 w-4" /> Nuevo Servicio
+              </Button>
+            )}
           </div>
         </div>
 
@@ -222,7 +199,7 @@ export default function Services() {
           {[
             { icon: Package, label: "Total Servicios", value: stats.total, sub: `${stats.categories} categorías` },
             { icon: Layers, label: "Categorías", value: stats.categories, sub: "tipos de servicio" },
-            { icon: DollarSign, label: "Tarifa Promedio", value: `$${stats.avgRate}/hr`, sub: "por hora" },
+            { icon: DollarSign, label: "Tarifa Promedio", value: `$${stats.avgRate}`, sub: "por hora" },
             { icon: TrendingUp, label: "Servicios Activos", value: stats.active, sub: `${services.length - stats.active} inactivos` },
           ].map((metric, i) => (
             <motion.div
@@ -248,124 +225,48 @@ export default function Services() {
         </div>
 
         {/* ========== BARRA DE HERRAMIENTAS ========== */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1" />
-          <div className="flex items-center gap-1 rounded-lg border border-border/30 bg-card/50 p-1 shadow-sm backdrop-blur-sm">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="relative h-8 w-8 p-0 rounded-md hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-                >
-                  <MoreVertical className="h-4 w-4 text-muted-foreground" />
-                  {(statusFilter !== "all" || categoryFilter !== "all") && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#0DA2E7] ring-2 ring-background" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-card border-border shadow-xl rounded-xl p-3">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Categoría
-                    </label>
-                    <Select
-                      value={categoryFilter}
-                      onValueChange={(v) => { setCategoryFilter(v); setCurrentPage(1); }}
-                    >
-                      <SelectTrigger className="h-8 text-xs bg-muted/20 border-border/50 w-full">
-                        <SelectValue placeholder="Todas las categorías" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas las categorías</SelectItem>
-                        {uniqueCategories.map((cat) => (
-                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Estado
-                    </label>
-                    <div className="flex gap-1 bg-muted/20 rounded-lg p-0.5">
-                      <button
-                        onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 ${
-                          statusFilter === "all" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Todos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("active"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "active" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "active" ? "bg-white" : "bg-emerald-500"}`} />
-                        Activos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("inactive"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "inactive" 
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20" 
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "inactive" ? "bg-white" : "bg-red-400"}`} />
-                        Inactivos
-                      </button>
-                    </div>
-                  </div>
-
-                  {(statusFilter !== "all" || categoryFilter !== "all") && (
-                    <div className="pt-1 border-t border-border/30">
-                      <button
-                        onClick={() => { setStatusFilter("all"); setCategoryFilter("all"); setCurrentPage(1); }}
-                        className="text-[10px] text-muted-foreground hover:text-[#0DA2E7] transition-colors w-full text-center"
-                      >
-                        Limpiar filtros
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            <div className="h-6 w-px bg-border/50" />
-            <span className="text-xs text-muted-foreground whitespace-nowrap px-1.5">
-              {filteredServices.length}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <ServiceFilters
+              categories={categories}
+              categoryFilter={categoryFilter}
+              onCategoryChange={(v) => { setCategoryFilter(v); setCurrentPage(1); }}
+              statusFilter={statusFilter}
+              onStatusChange={(v) => { setStatusFilter(v as "all" | "active" | "inactive"); setCurrentPage(1); }}
+              resultCount={filteredServices.length}
+              activeCount={activeFilterCount}
+              onClear={clearFilters}
+            />
+            <span className="hidden text-xs text-muted-foreground sm:inline">
+              {filteredServices.length} de {services.length} servicios
             </span>
-            <div className="h-6 w-px bg-border/50" />
+          </div>
 
+          {/* Toggle de vista */}
+          <div className="flex shrink-0 items-center gap-0.5 self-start rounded-lg border border-border/30 bg-card/50 p-0.5 shadow-sm md:self-auto">
             <button
-              onClick={() => {
-                const newMode = viewMode === "grid" ? "table" : "grid";
-                setViewMode(newMode);
-                localStorage.setItem("servicesViewMode", newMode);
-              }}
-              className="relative h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-[#0DA2E7]/10 transition-all duration-200"
+              type="button"
+              onClick={() => switchView("grid")}
+              title="Vista de tarjetas"
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
+                viewMode === "grid"
+                  ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
             >
-              <motion.div
-                key={viewMode}
-                initial={{ rotate: -90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-              >
-                {viewMode === "grid" ? (
-                  <Table className="h-4 w-4" />
-                ) : (
-                  <Grid3x3 className="h-4 w-4" />
-                )}
-              </motion.div>
+              <Grid3x3 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => switchView("table")}
+              title="Vista de tabla"
+              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
+                viewMode === "table"
+                  ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <Table className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -373,112 +274,147 @@ export default function Services() {
         {/* ========== LISTA DE SERVICIOS ========== */}
         <motion.div
           key={viewMode}
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
+          transition={{ duration: 0.25, ease: "easeInOut" }}
         >
-          {currentServices.length === 0 ? (
-            <div className="text-center py-16 rounded-xl border border-dashed border-border/50 bg-card/50">
-              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-30" />
-              <p className="text-sm text-muted-foreground">No se encontraron servicios</p>
+          {services.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/50 bg-card/50 py-16 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0DA2E7]/10">
+                <Package className="h-7 w-7 text-[#0DA2E7]" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Todavía no hay servicios</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Crea tu primer servicio para comenzar a gestionar tu catálogo.
+                </p>
+              </div>
+              {canCreate && (
+                <Button
+                  onClick={handleAdd}
+                  className="mt-1 gap-2 rounded-lg bg-[#0DA2E7] px-4 text-xs font-semibold text-white hover:bg-[#0B91D2]"
+                >
+                  <Plus className="h-4 w-4" /> Crear servicio
+                </Button>
+              )}
+            </div>
+          ) : filteredServices.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/50 bg-card/50 py-16 text-center">
+              <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/60">
+                <SearchX className="h-7 w-7 text-muted-foreground" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Sin resultados</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Ningún servicio coincide con los filtros seleccionados.
+                </p>
+              </div>
+              <Button
+                onClick={clearFilters}
+                className="mt-1 rounded-lg border border-border/60 px-4 text-xs font-medium"
+                variant="outline"
+              >
+                Limpiar filtros
+              </Button>
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <AnimatePresence mode="wait">
-                {currentServices.map((service, idx) => (
+              {currentServices.map((service, idx) => (
+                <motion.div
+                  key={service.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.04, duration: 0.22, ease: "easeOut" }}
+                >
                   <ServiceCard
-                    key={service.id}
                     service={service}
-                    idx={idx}
                     canEdit={canEdit}
+                    onView={handleView}
                     onEdit={handleEdit}
-                    onDelete={handleDelete}
+                    onDelete={handleDeleteRequest}
                   />
-                ))}
-              </AnimatePresence>
+                </motion.div>
+              ))}
             </div>
           ) : (
-            <div className="rounded-xl border border-border/30 bg-card/50 overflow-hidden shadow-sm">
+            <div className="overflow-hidden rounded-xl border border-border/30 bg-card/50 shadow-sm">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-muted/20 border-b border-border/30">
+                  <thead className="border-b border-border/30 bg-muted/20">
                     <tr>
-                      <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Servicio</th>
-                      <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Categoría</th>
-                      <th className="text-center p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Tarifa</th>
-                      <th className="text-center p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Estado</th>
-                      <th className="text-right p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Acciones</th>
+                      <th className="p-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Servicio</th>
+                      <th className="p-4 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Categoría</th>
+                      <th className="p-4 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Tarifa</th>
+                      <th className="p-4 text-center text-xs font-medium uppercase tracking-wider text-muted-foreground">Estado</th>
+                      <th className="p-4 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {currentServices.map((service) => {
-                      const categoryName = service.categories?.name || "Sin categoría";
-                      const Icon = categoryIcons[categoryName] || Package;
-                      const color = categoryColors[categoryName] || "#6B7280";
+                      const serviceIcon = getServiceIconVisual(service.icon);
+                      const visual = serviceIcon || { icon: Wrench, color: "#0DA2E7" };
+                      const Icon = visual.icon;
+                      const color = service.color ?? pickServiceColor(service.name);
+                      const categoryName = service.categories?.name || service.category?.name || "Sin categoría";
 
                       return (
-                        <tr key={service.id} className="border-b border-border/20 hover:bg-muted/5 transition-colors group">
+                        <tr
+                          key={service.id}
+                          onClick={() => handleView(service)}
+                          className="group cursor-pointer border-b border-border/20 transition-colors hover:bg-[#0DA2E7]/[0.03]"
+                        >
                           <td className="p-4">
                             <div className="flex items-center gap-3">
-                              <div
-                                className="h-9 w-9 rounded-lg flex items-center justify-center flex-shrink-0"
-                                style={{ backgroundColor: `${color}15` }}
+                              <span
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                                style={{ backgroundColor: `${color}15`, color }}
                               >
-                                <Icon className="h-4 w-4" style={{ color }} />
-                              </div>
-                              <div>
-                                <p className="font-medium text-foreground">{service.name}</p>
-                                <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-[200px]">
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-foreground">{service.name}</p>
+                                <p className="line-clamp-1 max-w-[200px] text-[10px] text-muted-foreground">
                                   {service.description || "Sin descripción"}
                                 </p>
                               </div>
                             </div>
                           </td>
                           <td className="p-4">
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] px-2 py-0 bg-muted/30 border-border/50"
+                            <span
+                              className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium"
+                              style={{ backgroundColor: `${color}14`, color: `${color}CC` }}
                             >
                               {categoryName}
-                            </Badge>
+                            </span>
                           </td>
                           <td className="p-4 text-center font-semibold text-emerald-600">
-                            ${service.default_hourly_rate?.toFixed(2) || "0.00"}
-                            <span className="text-[9px] text-muted-foreground font-normal ml-0.5">/hr</span>
+                            ${Number(service.hourlyRate ?? service.default_hourly_rate ?? 0).toFixed(2)}
+                            <span className="ml-0.5 text-[9px] font-normal text-muted-foreground">/h</span>
                           </td>
                           <td className="p-4 text-center">
-                            <Badge
-                              variant="outline"
-                              className={`text-[9px] px-2 py-0 ${
-                                service.is_active
-                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-200"
-                                  : "bg-red-500/10 text-red-600 border-red-200"
-                              }`}
-                            >
-                              {service.is_active ? "Activo" : "Inactivo"}
-                            </Badge>
+                            <ServiceStatusBadge active={service.is_active !== false} />
                           </td>
                           <td className="p-4 text-right">
-                            {canEdit && (
-                              <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
-                                  onClick={() => handleEdit(service)}
+                            {canEdit ? (
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  title="Ver detalle"
+                                  onClick={(e) => { e.stopPropagation(); handleView(service); }}
+                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
                                 >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-500 rounded-lg"
-                                  onClick={() => handleDelete(service)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                                <ServiceActionsMenu service={service} onEdit={handleEdit} onDelete={handleDeleteRequest} />
                               </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); handleView(service); }}
+                                className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-[#0DA2E7] transition-colors hover:bg-[#0DA2E7]/10"
+                              >
+                                <Eye className="h-3.5 w-3.5" /> Ver
+                              </button>
                             )}
                           </td>
                         </tr>
@@ -492,120 +428,51 @@ export default function Services() {
         </motion.div>
 
         {/* ========== PAGINACIÓN ========== */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-2">
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1}>
+        {totalPages > 1 && filteredServices.length > 0 && (
+          <div className="mt-2 flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-lg"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+            >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-xs text-muted-foreground min-w-[60px] text-center">Pág. {currentPage} de {totalPages}</span>
-            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}>
+            <span className="min-w-[60px] text-center text-xs text-muted-foreground">
+              Pág. {currentPage} de {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-lg"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+            >
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         )}
       </div>
 
+      {/* ========== MODALES ========== */}
       <ServiceFormModal open={formModal.open} onOpenChange={handleModalClose} service={formModal.service} />
+
+      <ServiceDetailModal
+        open={Boolean(detailService)}
+        service={detailService}
+        onOpenChange={(open) => { if (!open) setDetailService(null); }}
+        onEdit={handleEdit}
+        onDelete={handleDeleteRequest}
+      />
+
+      <ServiceDeleteDialog
+        open={Boolean(serviceToDelete)}
+        service={serviceToDelete}
+        onOpenChange={(open) => { if (!open) setServiceToDelete(null); }}
+        onConfirm={handleDeleteConfirm}
+        isPending={deleteServiceMutation.isPending}
+      />
     </DashboardLayout>
-  );
-}
-
-// ============================================
-// COMPONENTE ServiceCard
-// ============================================
-function ServiceCard({
-  service,
-  idx,
-  canEdit,
-  onEdit,
-  onDelete,
-}: {
-  service: Service;
-  idx: number;
-  canEdit: boolean;
-  onEdit: (service: Service) => void;
-  onDelete: (service: Service) => void;
-}) {
-  const categoryName = service.categories?.name || "Sin categoría";
-  const Icon = categoryIcons[categoryName] || Package;
-  const color = categoryColors[categoryName] || "#6B7280";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -15 }}
-      transition={{ delay: idx * 0.03, duration: 0.2 }}
-      whileHover={{ y: -3 }}
-      className="group relative rounded-xl border border-border/30 bg-card p-4 shadow-sm hover:shadow-md hover:border-[#0DA2E7]/30 transition-all duration-300"
-    >
-      <div className="flex items-start gap-3">
-        <div
-          className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all duration-300 group-hover:scale-105"
-          style={{ backgroundColor: `${color}15` }}
-        >
-          <Icon className="h-5 w-5" style={{ color }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-foreground group-hover:text-[#0DA2E7] transition-colors truncate">
-            {service.name}
-          </h3>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-[10px] text-muted-foreground truncate">{categoryName}</span>
-            <Badge
-              variant="outline"
-              className={`text-[8px] px-1.5 py-0 h-4 ${
-                service.is_active
-                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-200"
-                  : "bg-red-500/10 text-red-600 border-red-200"
-              }`}
-            >
-              {service.is_active ? "Activo" : "Inactivo"}
-            </Badge>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground/70 line-clamp-2 mt-2 min-h-[32px]">
-        {service.description || "Sin descripción"}
-      </p>
-
-      <div className="flex items-center justify-between pt-2 mt-2 border-t border-border/20">
-        <div className="flex items-baseline gap-1">
-          <span className="text-sm font-bold text-emerald-600">
-            ${service.default_hourly_rate?.toFixed(2) || "0.00"}
-          </span>
-          <span className="text-[9px] text-muted-foreground">/hr</span>
-        </div>
-
-        {canEdit && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 rounded-full hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-              >
-                <MoreVertical className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32 bg-card border-border shadow-lg rounded-lg p-1">
-              <DropdownMenuItem
-                className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-md px-2 py-1.5 transition-all duration-200"
-                onClick={() => onEdit(service)}
-              >
-                <Pencil className="h-3 w-3" /> Editar
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-red-50 hover:text-red-500 rounded-md px-2 py-1.5 transition-all duration-200"
-                onClick={() => onDelete(service)}
-              >
-                <Trash2 className="h-3 w-3" /> Eliminar
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
-    </motion.div>
   );
 }

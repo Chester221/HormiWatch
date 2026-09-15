@@ -35,6 +35,11 @@ lerna-debug.log*
 !.vscode/launch.json
 !.vscode/extensions.json
 
+# Security - migration scripts with potential credentials
+migrate.bat
+schema.sql
+data.dump
+
 # dotenv environment variable files
 .env
 .env.development.local

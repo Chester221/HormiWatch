@@ -3,9 +3,23 @@ echo ==========================================
 echo MIGRACION SUPABASE -> NEON
 echo ==========================================
 echo.
-
-set SUPABASE_DB_URL=postgresql://postgres:04263643667j.@db.tniprkdojqzpicukqvbe.supabase.co:5432/postgres
-set NEON_DB_URL=postgresql://neondb_owner:npg_z49ULyiVjNdY@ep-crimson-waterfall-axw0klvr-pooler.c-4.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+echo ATENCION: Esta migracion ya se realizo.
+echo Los scripts de migracion se mantienen con fines historicos.
+echo.
+echo Las credenciales reales se eliminaron de este archivo por seguridad.
+echo Para reutilizar, configurar las variables de entorno:
+echo   SUPABASE_DB_URL y NEON_DB_URL
+echo.
+if "%SUPABASE_DB_URL%"=="" (
+  echo ERROR: Variable SUPABASE_DB_URL no definida.
+  echo Configurala antes de ejecutar: set SUPABASE_DB_URL=postgresql://...
+  exit /b 1
+)
+if "%NEON_DB_URL%"=="" (
+  echo ERROR: Variable NEON_DB_URL no definida.
+  echo Configurala antes de ejecutar: set NEON_DB_URL=postgresql://...
+  exit /b 1
+)
 
 echo PASO 1: Exportando esquema desde Supabase...
 pg_dump --dbname="%SUPABASE_DB_URL%" --schema=public --schema-only --no-owner --no-privileges --verbose --file="schema.sql"

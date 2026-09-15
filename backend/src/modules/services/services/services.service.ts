@@ -17,8 +17,8 @@ import {
 } from '../dto/service-page-options.dto';
 import { Brackets } from 'typeorm';
 import { ServiceCategory } from '../entities/service-category.entity';
-import { ServicePlatform } from '../entities/service-platform.entity';
-import { ServiceType } from '../entities/service-type.entity';
+import { User } from 'src/modules/users/entities/user.entity';
+import { pickServiceColor } from '../service-color';
 
 @Injectable()
 export class ServicesService {
@@ -30,31 +30,54 @@ export class ServicesService {
     private readonly typeService: ServiceTypeService,
   ) {}
 
-  async create(createDto: CreateServiceDto): Promise<ServiceResponseDto> {
-    const { categoryId, platformId, typeId, ...serviceData } = createDto;
-
-    // Validate relations by finding them
-    // Note: The individual services return DTOs, but here we need internal entities for relations or we can trust IDs if we just want to link.
-    // However, TypeORM create allows passing IDs. But standard practice relates to checking existence.
-    // My other services return DTOs, so I can't easily get the entity back unless I exposing a method or just try to save.
-    // For now, I will assume valid IDs or let DB constraint fail, but better to check existence.
-    // Since my other services return DTOs, I'll just check if they exist (throws NotFound if not).
+  async create(
+    createDto: CreateServiceDto,
+    createdByUserId?: string,
+  ): Promise<ServiceResponseDto> {
+    const { categoryId, ...serviceData } = createDto;
 
     await this.categoryService.findOne(categoryId);
-    await this.platformService.findOne(platformId);
-    await this.typeService.findOne(typeId);
+
+    // El cliente no envía plataforma/tipo; se asigna el valor por defecto "General"
+    const platform = await this.findDefaultPlatform();
+    const type = await this.findDefaultType();
 
     const service = this.serviceRepository.create({
       ...serviceData,
+      hourlyRate:
+        serviceData.hourlyRate != null
+          ? String(serviceData.hourlyRate)
+          : undefined,
+      color: serviceData.color ?? pickServiceColor(serviceData.name),
+      createdBy: createdByUserId ? ({ id: createdByUserId } as User) : null,
       category: { id: categoryId },
-      platform: { id: platformId },
-      type: { id: typeId },
+      platform: { id: platform.id },
+      type: { id: type.id },
     });
 
     const savedService = await this.serviceRepository.save(service);
 
     // We need to return full relations. save() might not return them populated.
     return this.findOne(savedService.id);
+  }
+
+  private async findDefaultPlatform(): Promise<{ id: string }> {
+    const platforms = await this.platformService.findAll();
+    const platform =
+      platforms.find((p) => p.name === 'General') || platforms[0];
+    if (!platform) {
+      throw new NotFoundException('No hay plataformas de servicio configuradas');
+    }
+    return { id: platform.id };
+  }
+
+  private async findDefaultType(): Promise<{ id: string }> {
+    const types = await this.typeService.findAll();
+    const type = types.find((t) => t.name === 'General') || types[0];
+    if (!type) {
+      throw new NotFoundException('No hay tipos de servicio configurados');
+    }
+    return { id: type.id };
   }
 
   async findAll(
@@ -67,7 +90,9 @@ export class ServicesService {
       .leftJoinAndSelect('service.category', 'category')
       .leftJoinAndSelect('service.platform', 'platform')
       .leftJoinAndSelect('service.type', 'type')
-      .leftJoinAndSelect('service.tasks', 'tasks'); // Added tasks join
+      .leftJoin('service.tasks', 'tasks') // Solo para filtros; no cargar tareas (evita transformar Temporal.Instant)
+      .leftJoinAndSelect('service.createdBy', 'createdBy')
+      .leftJoinAndSelect('createdBy.profile', 'createdByProfile');
 
     // Filters (IN support)
     if (pageOptionsDto.categoryIds && pageOptionsDto.categoryIds.length > 0) {
@@ -110,10 +135,6 @@ export class ServicesService {
             })
             .orWhere('type.name ILIKE :q', {
               q: `%${pageOptionsDto.q}%`,
-            })
-            .orWhere('tasks.name ILIKE :q', {
-              // Assuming tasks have a 'name' or 'title' property. Adjust if needed. User prompt implies "name of ... tasks".
-              q: `%${pageOptionsDto.q}%`,
             });
         }),
       );
@@ -133,14 +154,6 @@ export class ServicesService {
         break;
       case ServiceOrderBy.TYPE:
         orderField = 'type.name';
-        break;
-      case ServiceOrderBy.TASKS:
-        // Ordering by tasks (OneToMany) often leads to duplicates or arbitrary selection if not aggregated.
-        // Assuming user wants to order by task count or just the first task's name?
-        // "ordenar por name de ... tareas". I'll default to tasks.name but this is tricky in 1:M.
-        // Usually you don't sort a primary list by a detail list property unless you aggregate.
-        // I will try tasks.name.
-        orderField = 'tasks.name'; // Verify task entity property name!
         break;
       case ServiceOrderBy.UPDATED_AT:
         orderField = 'service.updatedAt';
@@ -169,11 +182,11 @@ export class ServicesService {
   async findOne(id: string): Promise<ServiceResponseDto> {
     const service = await this.serviceRepository.findOne({
       where: { id },
-      relations: ['category', 'platform', 'type', 'tasks'],
+      relations: ['category', 'platform', 'type', 'createdBy'],
     });
 
     if (!service) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+      throw new NotFoundException(`Servicio con ID ${id} no encontrado`);
     }
 
     return plainToInstance(ServiceResponseDto, service);
@@ -189,22 +202,14 @@ export class ServicesService {
     });
 
     if (!service) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+      throw new NotFoundException(`Servicio con ID ${id} no encontrado`);
     }
 
-    const { categoryId, platformId, typeId, ...serviceData } = updateDto;
+    const { categoryId, ...serviceData } = updateDto;
 
     if (categoryId) {
       await this.categoryService.findOne(categoryId);
       service.category = { id: categoryId } as ServiceCategory;
-    }
-    if (platformId) {
-      await this.platformService.findOne(platformId);
-      service.platform = { id: platformId } as ServicePlatform;
-    }
-    if (typeId) {
-      await this.typeService.findOne(typeId);
-      service.type = { id: typeId } as ServiceType;
     }
 
     Object.assign(service, serviceData);
@@ -220,7 +225,7 @@ export class ServicesService {
     });
 
     if (!service) {
-      throw new NotFoundException(`Service with ID ${id} not found`);
+      throw new NotFoundException(`Servicio con ID ${id} no encontrado`);
     }
 
     const removedService = await this.serviceRepository.softRemove(service);

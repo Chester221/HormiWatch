@@ -30,7 +30,7 @@ export class ServiceTypeService {
   async findOne(id: string): Promise<ServiceTypeResponseDto> {
     const type = await this.typeRepository.findOneBy({ id });
     if (!type) {
-      throw new NotFoundException(`Service Type with ID ${id} not found`);
+      throw new NotFoundException(`Tipo de servicio con ID ${id} no encontrado`);
     }
     return plainToInstance(ServiceTypeResponseDto, type);
   }
@@ -41,7 +41,7 @@ export class ServiceTypeService {
   ): Promise<ServiceTypeResponseDto> {
     const type = await this.typeRepository.findOneBy({ id });
     if (!type) {
-      throw new NotFoundException(`Service Type with ID ${id} not found`);
+      throw new NotFoundException(`Tipo de servicio con ID ${id} no encontrado`);
     }
     this.typeRepository.merge(type, updateDto);
     const updatedType = await this.typeRepository.save(type);
@@ -51,7 +51,7 @@ export class ServiceTypeService {
   async remove(id: string): Promise<ServiceTypeResponseDto> {
     const type = await this.typeRepository.findOneBy({ id });
     if (!type) {
-      throw new NotFoundException(`Service Type with ID ${id} not found`);
+      throw new NotFoundException(`Tipo de servicio con ID ${id} no encontrado`);
     }
     const removedType = await this.typeRepository.softRemove(type);
     return plainToInstance(ServiceTypeResponseDto, removedType);

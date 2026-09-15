@@ -2,8 +2,9 @@ import { Exclude, Expose, Type } from 'class-transformer';
 import { ServiceCategoryResponseDto } from './service-category-response.dto';
 import { ServicePlatformResponseDto } from './service-platform-response.dto';
 import { ServiceTypeResponseDto } from './service-type-response.dto';
+import { ServiceCreatorResponseDto } from './service-creator-response.dto';
 
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 @Exclude()
 export class ServiceResponseDto {
@@ -27,6 +28,35 @@ export class ServiceResponseDto {
   })
   @Expose()
   description: string;
+
+  @ApiPropertyOptional({
+    example: 25,
+    description: 'Hourly rate for the service',
+  })
+  @Expose()
+  hourlyRate?: string | number;
+
+  @ApiPropertyOptional({
+    example: 'Code',
+    description: 'Icon identifier of the service',
+  })
+  @Expose()
+  icon?: string | null;
+
+  @ApiPropertyOptional({
+    example: '#0DA2E7',
+    description: 'Accent color used for the service icon',
+  })
+  @Expose()
+  color?: string | null;
+
+  @ApiPropertyOptional({
+    type: () => ServiceCreatorResponseDto,
+    description: 'Usuario que registró el servicio',
+  })
+  @Expose()
+  @Type(() => ServiceCreatorResponseDto)
+  createdBy?: ServiceCreatorResponseDto | null;
 
   @ApiProperty({
     example: '2023-01-01T00:00:00.000Z',

@@ -1,8 +1,9 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
+import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import TechnicianDashboard from "./pages/TechnicianDashboard";  
@@ -19,9 +20,33 @@ import NotFound from "./pages/NotFound";
 import AdminDashboard from "@/pages/AdminDashboard";
 import { Button } from "@/components/ui/button";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      retry: 1,
+    },
+  },
+});
 
-// Componente para manejar errores globales de autenticación
+// ✅ Fuente única del tema: modo oscuro SOLO con sesión activa y fuera de /auth.
+// La página de login/registro SIEMPRE se muestra clara.
+const ThemeController = () => {
+  const { profile } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    const isAuthRoute = location.pathname === "/auth";
+    if (isAuthRoute || !profile?.dark_mode) {
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+    }
+  }, [location.pathname, profile]);
+
+  return null;
+};
+
 const AuthErrorBoundary = ({ children }: { children: React.ReactNode }) => {
   const { error, refreshProfile } = useAuth();
 
@@ -116,6 +141,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <HashRouter>
+          <ThemeController />
           <AuthErrorBoundary>
             <Routes>
               <Route path="/auth" element={<Auth />} />
