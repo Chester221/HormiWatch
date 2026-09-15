@@ -35,7 +35,6 @@ export class CustomersController {
 
   // --- Endpoints para Customer ---
   @Post()
-  @SkipAuth()
   @ApiOperation({ summary: 'Create a new customer' })
   @ApiResponse({ status: 201, description: 'Customer created successfully.' })
   @ApiBody({ type: CreateCustomerDto })
@@ -44,7 +43,6 @@ export class CustomersController {
   }
 
   @Get('dashboard')
-  @SkipAuth()
   @ApiOperation({ summary: 'Get customers dashboard data' })
   @ApiResponse({
     status: 200,
@@ -62,7 +60,6 @@ export class CustomersController {
   }
 
   @Get()
-  @SkipAuth()
   @ApiOperation({ summary: 'Get all customers with optional filtering' })
   @ApiResponse({ status: 200, description: 'List of customers.' })
   @ApiQuery({ name: 'search', required: false, description: 'Search by name' })
@@ -83,7 +80,6 @@ export class CustomersController {
   }
 
   @Get(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Get a customer by ID' })
   @ApiResponse({ status: 200, description: 'The customer details.' })
   @ApiResponse({ status: 404, description: 'Customer not found.' })
@@ -93,7 +89,6 @@ export class CustomersController {
   }
 
   @Patch(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Update a customer' })
   @ApiResponse({ status: 200, description: 'Customer updated successfully.' })
   @ApiResponse({ status: 404, description: 'Customer not found.' })
@@ -107,7 +102,6 @@ export class CustomersController {
   }
 
   @Delete(':id')
-  @SkipAuth()
   @ApiOperation({ summary: 'Soft delete a customer' })
   @ApiResponse({ status: 200, description: 'Customer deleted successfully.' })
   @ApiResponse({ status: 404, description: 'Customer not found.' })

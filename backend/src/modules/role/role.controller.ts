@@ -23,7 +23,6 @@ import { RoleResponseDto } from './dto/role-response.dto';
 @ApiBearerAuth()
 @ApiTags('Roles')
 @Controller('role')
-@SkipAuth()
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
 

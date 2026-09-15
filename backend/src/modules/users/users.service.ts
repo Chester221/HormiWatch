@@ -538,7 +538,6 @@ export class UsersService {
       where: { id },
       relations: ['profile', 'role'],
     });
-
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }

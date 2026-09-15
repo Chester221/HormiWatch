@@ -74,7 +74,22 @@ export default function AdminDashboard() {
     try {
       const data = await usersApi.getAll();
       const list = Array.isArray(data) ? data : data?.records || data?.data || [];
-      setUsers(list);
+      setUsers(
+        list.map((u: any) => ({
+          ...u,
+          full_name:
+            u.full_name ||
+            u.profile?.full_name ||
+            u.profile?.fullName ||
+            [u.profile?.name, u.profile?.last_name]
+              .filter(Boolean)
+              .join(" "),
+          role:
+            typeof u.role === "string"
+              ? u.role
+              : u.role?.name || "Technician",
+        })),
+      );
     } catch (error) {
       console.error("Error fetching users:", error);
       toast.error("Error al cargar usuarios");
@@ -185,9 +200,9 @@ export default function AdminDashboard() {
   };
 
   const handleToggleActive = async (user: any) => {
-    const newStatus = !user.is_active;
+    const newStatus = !user.isActive;
     try {
-      await usersApi.update(user.id, { is_active: newStatus });
+      await usersApi.update(user.id, { isActive: newStatus });
       toast.success(`Usuario ${newStatus ? "activado" : "desactivado"}`);
       fetchUsers();
       setSuspendDialog({ open: false, user: null });
@@ -198,13 +213,8 @@ export default function AdminDashboard() {
 
   const handleDeleteUser = async (user: any) => {
     try {
-      const token = localStorage.getItem("auth_token");
-
-      if (!token) {
-        toast.error("No tienes sesión activa. Inicia sesión de nuevo.");
-        return;
-      }
-
+      // ✅ El token vive en la cookie httpOnly; el apiClient maneja el
+      // auto-refresh en 401. No hay gate de localStorage aquí.
       await usersApi.delete(user.id)
         .then(() => toast.success(`Usuario "${user.full_name || user.email}" eliminado completamente`))
         .catch((e: any) => { throw e; });
