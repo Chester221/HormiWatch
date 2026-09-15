@@ -130,6 +130,18 @@ export class UsersController {
 
     // Solo Admin puede asignar rol Administrador o cambiar isActive
     if (requesterRole !== 'admin') {
+      // 🔒 Un Manager/Líder NO puede modificar a un Administrador existente
+      const targetUser = await this.usersService.findOne(id);
+      const targetRoleLower =
+        typeof targetUser?.role === 'string'
+          ? targetUser.role.toLowerCase()
+          : String(targetUser?.role?.name || '').toLowerCase();
+      if (targetRoleLower === 'admin') {
+        throw new ForbiddenException(
+          'No autorizado para modificar a un Administrador',
+        );
+      }
+
       if (updateUserDto.role) {
         const newRole = updateUserDto.role.toLowerCase();
         if (newRole !== 'manager' && newRole !== 'technician') {
