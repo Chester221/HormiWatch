@@ -811,22 +811,22 @@ export default function AdminDashboard() {
       <Dialog open={suspendDialog.open} onOpenChange={(open) => setSuspendDialog({ open, user: open ? suspendDialog.user : null })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">{suspendDialog.user?.is_active !== false ? "Desactivar Usuario" : "Activar Usuario"}</DialogTitle>
+            <DialogTitle className="text-lg font-bold">{suspendDialog.user?.isActive !== false ? "Desactivar Usuario" : "Activar Usuario"}</DialogTitle>
             <DialogDescription className="text-sm">
-              {suspendDialog.user?.is_active !== false
+              {suspendDialog.user?.isActive !== false
                 ? "El usuario no podrá iniciar sesión ni interactuar con el sistema."
                 : "El usuario recuperará el acceso al sistema."}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-muted-foreground">
-              ¿Estás seguro de {suspendDialog.user?.is_active !== false ? "desactivar" : "activar"} a <strong className="text-foreground">{suspendDialog.user?.full_name || suspendDialog.user?.email}</strong>?
+              ¿Estás seguro de {suspendDialog.user?.isActive !== false ? "desactivar" : "activar"} a <strong className="text-foreground">{suspendDialog.user?.full_name || suspendDialog.user?.email}</strong>?
             </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSuspendDialog({ open: false, user: null })}>Cancelar</Button>
-            <Button onClick={() => handleToggleActive(suspendDialog.user)} className={suspendDialog.user?.is_active !== false ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}>
-              {suspendDialog.user?.is_active !== false ? <><UserX className="h-4 w-4 mr-1.5" /> Desactivar</> : <><UserCheck className="h-4 w-4 mr-1.5" /> Activar</>}
+            <Button onClick={() => handleToggleActive(suspendDialog.user)} className={suspendDialog.user?.isActive !== false ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}>
+              {suspendDialog.user?.isActive !== false ? <><UserX className="h-4 w-4 mr-1.5" /> Desactivar</> : <><UserCheck className="h-4 w-4 mr-1.5" /> Activar</>}
             </Button>
           </DialogFooter>
         </DialogContent>
