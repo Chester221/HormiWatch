@@ -100,35 +100,9 @@ const Auth = () => {
           return;
         }
 
-        if (profileData.is_active === false) {
+        if (profileData.isActive === false) {
           await authApi.logout();
           toast.error("Tu cuenta está desactivada. Contacta al administrador.");
-          return;
-        }
-
-        const backendUrl = 'http://localhost:3000/api/v1';
-        const response = await fetch(`${backendUrl}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: loginEmail, password: loginPassword })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Error al obtener token del backend:', errorData);
-          toast.error('Error al obtener token de autenticación');
-          await authApi.logout();
-          return;
-        }
-
-        const tokenData = await response.json();
-        if (tokenData.accessToken) {
-          localStorage.setItem('auth_token', tokenData.accessToken);
-          console.log('✅ Token del backend guardado en localStorage');
-        } else {
-          console.error('No se recibió access_token del backend');
-          toast.error('Error al obtener token de autenticación');
-          await authApi.logout();
           return;
         }
 

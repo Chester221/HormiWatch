@@ -60,6 +60,8 @@ export class UsersController {
   }
 
   @Get()
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
   @ApiOperation({ summary: 'Get all users with pagination and filters' })
   @ApiOkResponse({ type: PageDto })
   async findAll(
