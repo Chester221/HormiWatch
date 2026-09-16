@@ -134,7 +134,7 @@ export class UsersController {
       const targetUser = await this.usersService.findOne(id);
       const targetRoleLower =
         typeof targetUser?.role === 'string'
-          ? targetUser.role.toLowerCase()
+          ? (targetUser.role as string).toLowerCase()
           : String(targetUser?.role?.name || '').toLowerCase();
       if (targetRoleLower === 'admin') {
         throw new ForbiddenException(
