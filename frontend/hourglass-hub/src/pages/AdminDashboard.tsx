@@ -56,6 +56,7 @@ export default function AdminDashboard() {
   const [editAvatar, setEditAvatar] = useState<string | null>(null);
   const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (profile?.role !== "Admin") {
     return (
@@ -216,13 +217,17 @@ export default function AdminDashboard() {
     try {
       // ✅ El token vive en la cookie httpOnly; el apiClient maneja el
       // auto-refresh en 401. No hay gate de localStorage aquí.
-      await usersApi.delete(user.id)
+      const deletedId = user.id;
+      // OPTIMISTIC: cerrar el modal y quitar la fila AL INSTANTE, sin esperar el DELETE.
+      setDeleteDialog({ open: false, user: null });
+      setUsers((prev) => prev.filter((u: any) => u.id !== deletedId));
+      await usersApi.delete(deletedId)
         .then(() => toast.success(`Usuario "${user.full_name || user.email}" eliminado completamente`))
         .catch((e: any) => { throw e; });
-
-      fetchUsers();
-      setDeleteDialog({ open: false, user: null });
+      fetchUsers(); // refetch silencioso en segundo plano (no bloquea la UI)
     } catch (error: any) {
+      // ROLLBACK optimista: el backend rechazó (422/409/otro) -> restituir la fila.
+      setUsers((prev) => (prev.some((u: any) => u.id === deletedId) ? prev : [user, ...prev]));
       console.error("Error en handleDeleteUser:", error);
       const msg = error?.message || "";
       console.log("DEBUG DELETE:", error, "status:", error?.status, "code:", error?.statusCode, "msg:", msg);
@@ -863,8 +868,14 @@ export default function AdminDashboard() {
             </p>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, user: null })}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => handleDeleteUser(deleteDialog.user)}><Trash2 className="h-4 w-4 mr-1.5" /> Eliminar</Button>
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, user: null })} disabled={isDeleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={() => handleDeleteUser(deleteDialog.user)} disabled={isDeleting}>
+              {isDeleting ? (
+                <><Loader2 className="h-4 w-4 animate-spin mr-1.5" /> Eliminando...</>
+              ) : (
+                <><Trash2 className="h-4 w-4 mr-1.5" /> Eliminar</>
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
