@@ -242,7 +242,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (result?.error) {
                 return { error: result.error };
             }
-            
+
+            // ✅ CORREGIDO (#1): usersApi.create() SOLO crea el registro y NO setea la
+            // cookie HttpOnly de sesión → sin ella, TODO /auth/refresh respondía 401
+            // justo después de registrarse. Hacemos AUTO-LOGIN para establecer la sesión
+            // (cookie + access token) y que el refresh del token funcione.
+            const loginResult = await authApi.login(email, password);
+            if (loginResult?.accessToken) {
+                setAccessToken(loginResult.accessToken);
+            }
+
             return { error: null };
         } catch (err: any) {
             return { error: { message: err.message || 'Error al crear la cuenta' } };

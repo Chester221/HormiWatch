@@ -137,6 +137,7 @@ export default function Profile() {
                             <h1 className="text-xl font-bold text-foreground tracking-tight">
                                 Mi Perfil
                             </h1>
+                            <p className="mt-0.5 text-sm text-muted-foreground">{fullName || profile?.full_name || "No configurado"}</p>
                             <p className="text-sm text-muted-foreground">
                                 Gestiona tu información personal y foto de perfil
                             </p>
