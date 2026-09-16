@@ -182,18 +182,22 @@ export default function AdminDashboard() {
         full_name: editFullName,
         email: editEmail,
       });
-      const result = await usersApi.update(editModal.user.id, {
+      const result =       await usersApi.update(editModal.user.id, {
         full_name: editFullName,
         email: editEmail,
         phone: editPhone || null,
-        cedula: editCedula || null,
+        // ✅ El UpdateUserDto del backend usa whitelist:true + forbidNonWhitelisted:true
+        // (class-validator en update-user.dto.ts). SOLO estos campos estan permitidos:
+        // email, password, name, lastName, phone, idCard, position, deparment, roleId,
+        // role, isActive, profilePicture, preferences, avatar_url, full_name.
+        // -> NO mando 'cedula' ni 'updated_at' (el DTO los rechaza con 400
+        //    "property cedula should not exist" / "property updated_at should not exist").
         avatar_url: avatarUrl,
         roleId:
           editModal.user.role?.id ||
           editModal.user.roleId ||
           editModal.user.role_id ||
           editModal.user.role?.uuid,
-        updated_at: new Date().toISOString(),
       });
       console.log("DEBUG: Respuesta del backend:", result);
       toast.success("Usuario actualizado correctamente");
