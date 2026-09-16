@@ -888,7 +888,6 @@ export default function AdminDashboard() {
       </Dialog>
 
       {/* Diálogo No se puede eliminar (backend 422/409 - recurso referenciado) — render FALTANTE corregido */}
-      {console.log("DEBUG: Renderizando diálogo cannotDelete", cannotDeleteDialog)}
       <Dialog open={cannotDeleteDialog.open} onOpenChange={(open) => setCannotDeleteDialog({ open, user: open ? cannotDeleteDialog.user : null, message: open ? cannotDeleteDialog.message : "" })}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
