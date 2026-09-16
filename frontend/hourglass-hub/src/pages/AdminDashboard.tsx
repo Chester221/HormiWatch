@@ -177,7 +177,12 @@ export default function AdminDashboard() {
     }
 
     try {
-      await usersApi.update(editModal.user.id, {
+      console.log("DEBUG: Guardando usuario...", {
+        id: editModal.user.id,
+        full_name: editFullName,
+        email: editEmail,
+      });
+      const result = await usersApi.update(editModal.user.id, {
         full_name: editFullName,
         email: editEmail,
         phone: editPhone || null,
@@ -196,19 +201,18 @@ export default function AdminDashboard() {
           roles[0]?.id,
         updated_at: new Date().toISOString(),
       });
-    } catch (error) {
-      // El error se maneja en el catch de abajo
-      throw error;
-    }
-
-    if (error) {
-      toast.error("Error al guardar cambios");
-    } else {
+      console.log("DEBUG: Respuesta del backend:", result);
       toast.success("Usuario actualizado correctamente");
       setEditModal({ open: false, user: null });
       fetchUsers();
+    } catch (error: any) {
+      console.error("DEBUG: Error al guardar:", error);
+      toast.error("Error al guardar cambios");
+    } finally {
+      // ✅ GARANTIZA apagar el spinner SIEMPRE (éxito O error) -> evita "Guardando..." infinito.
+      console.log("DEBUG: handleSaveEdit terminó, apagando spinner");
+      setIsSaving(false);
     }
-    setIsSaving(false);
   };
 
   const handleToggleActive = useCallback(async (user: any) => {
