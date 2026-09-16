@@ -177,7 +177,6 @@ export default function AdminDashboard() {
     }
 
     try {
-      console.log("DEBUG: Guardando usuario...", {
         id: editModal.user.id,
         full_name: editFullName,
         email: editEmail,
@@ -199,16 +198,13 @@ export default function AdminDashboard() {
           editModal.user.role_id ||
           editModal.user.role?.uuid,
       });
-      console.log("DEBUG: Respuesta del backend:", result);
       toast.success("Usuario actualizado correctamente");
       setEditModal({ open: false, user: null });
       fetchUsers();
     } catch (error: any) {
-      console.error("DEBUG: Error al guardar:", error);
       toast.error("Error al guardar cambios");
     } finally {
       // ✅ GARANTIZA apagar el spinner SIEMPRE (éxito O error) -> evita "Guardando..." infinito.
-      console.log("DEBUG: handleSaveEdit terminó, apagando spinner");
       setIsSaving(false);
     }
   };
@@ -243,7 +239,6 @@ export default function AdminDashboard() {
       setUsers((prev) => (prev.some((u: any) => u.id === deletedId) ? prev : [user, ...prev]));
       console.error("Error en handleDeleteUser:", error);
       const msg = error?.message || "";
-      console.log("DEBUG DELETE:", error, "status:", error?.status, "code:", error?.statusCode, "msg:", msg);
       if (
         msg.includes("No se puede eliminar") ||
         msg.includes("tareas o proyectos") ||
@@ -253,7 +248,6 @@ export default function AdminDashboard() {
         (typeof error?.status === "number" && (error.status === 409 || error.status === 422))
       ) {
         setDeleteDialog({ open: false, user: null });
-        console.log("DEBUG: Abriendo diálogo cannotDelete", { open: true, user: user?.full_name || user?.email || user?.id, message: msg });
         setCannotDeleteDialog({ open: true, user, message: msg });
         return;
       }
