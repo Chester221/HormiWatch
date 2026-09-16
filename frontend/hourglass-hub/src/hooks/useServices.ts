@@ -71,6 +71,7 @@ export const useServices = (searchQuery?: string, includeInactive: boolean = fal
   const query = useQuery({
     queryKey: ['services'],
     queryFn: async () => {
+      console.log("useServices: ejecutando query -> servicesApi.getAll()");
       try {
         const response = await servicesApi.getAll();
         const services = (Array.isArray(response)
