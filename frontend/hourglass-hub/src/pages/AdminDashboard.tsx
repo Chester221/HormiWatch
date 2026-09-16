@@ -177,20 +177,11 @@ export default function AdminDashboard() {
     }
 
     try {
-        id: editModal.user.id,
-        full_name: editFullName,
-        email: editEmail,
-      });
-      const result =       await usersApi.update(editModal.user.id, {
+      const result = await usersApi.update(editModal.user.id, {
         full_name: editFullName,
         email: editEmail,
         phone: editPhone || null,
-        // ✅ El UpdateUserDto del backend usa whitelist:true + forbidNonWhitelisted:true
-        // (class-validator en update-user.dto.ts). SOLO estos campos estan permitidos:
-        // email, password, name, lastName, phone, idCard, position, deparment, roleId,
-        // role, isActive, profilePicture, preferences, avatar_url, full_name.
-        // -> NO mando 'cedula' ni 'updated_at' (el DTO los rechaza con 400
-        //    "property cedula should not exist" / "property updated_at should not exist").
+        idCard: editCedula || null,
         avatar_url: avatarUrl,
         roleId:
           editModal.user.role?.id ||
