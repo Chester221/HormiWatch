@@ -183,6 +183,17 @@ export default function AdminDashboard() {
         phone: editPhone || null,
         cedula: editCedula || null,
         avatar_url: avatarUrl,
+        roleId:
+          editModal.user.role?.id ||
+          editModal.user.roleId ||
+          editModal.user.role_id ||
+          editModal.user.role?.uuid ||
+          roles.find(
+            (r: any) =>
+              (r.name || "").toLowerCase() ===
+              String(editModal.user.role?.name || editModal.user.role || "").toLowerCase()
+          )?.id ||
+          roles[0]?.id,
         updated_at: new Date().toISOString(),
       });
     } catch (error) {
