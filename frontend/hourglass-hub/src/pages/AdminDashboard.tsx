@@ -7,26 +7,18 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Search, UserPlus, Pencil, Trash2, Shield, UserCheck, UserX,
   Loader2, Users, Mail, AlertTriangle, Settings2, Briefcase, Wrench,
   ChevronLeft, ChevronRight, CheckCircle, XCircle,
-  Phone, User, Upload, Camera, X, CreditCard, MoreVertical, Filter,
+  Phone, User, Upload, Camera, X, CreditCard, MoreVertical,
   Table, Grid3x3
 } from "lucide-react";
 import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
 import { AddUserModal } from "@/components/team/AddUserModal";
+import { UserFilters, DEFAULT_ROLE_OPTIONS } from "@/components/admin/UserFilters";
 import { motion, AnimatePresence } from "framer-motion";
 
 const HORMI_BLUE = "#0DA2E7";
@@ -335,91 +327,16 @@ const handleDeleteUser = async (user: any) => {
         {/* ═══════════ BARRA DE HERRAMIENTAS ═══════════ */}
         <div className="flex items-center justify-end gap-4">
           <div className="flex items-center gap-1 rounded-lg border border-border/30 bg-card/50 p-1 shadow-sm backdrop-blur-sm">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="relative h-8 w-8 p-0 rounded-md hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-                >
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  {(statusFilter !== "all" || roleFilter !== "all") && (
-                    <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#0DA2E7] ring-2 ring-background" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 bg-card border-border shadow-xl rounded-xl p-3">
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Rol
-                    </label>
-                    <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setCurrentPage(1); }}>
-                      <SelectTrigger className="h-8 text-xs bg-muted/20 border-border/50 w-full">
-                        <SelectValue placeholder="Todos los roles" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los roles</SelectItem>
-                        <SelectItem value="Admin">Admin</SelectItem>
-                        <SelectItem value="Manager">Manager</SelectItem>
-                        <SelectItem value="Technician">Técnico</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider block mb-1.5">
-                      Estado
-                    </label>
-                    <div className="flex gap-1 bg-muted/20 rounded-lg p-0.5">
-                      <button
-                        onClick={() => { setStatusFilter("all"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 ${
-                          statusFilter === "all"
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20"
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        Todos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("active"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "active"
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20"
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "active" ? "bg-white" : "bg-emerald-500"}`} />
-                        Activos
-                      </button>
-                      <button
-                        onClick={() => { setStatusFilter("inactive"); setCurrentPage(1); }}
-                        className={`flex-1 h-7 text-xs rounded-md transition-all duration-200 flex items-center justify-center gap-1 ${
-                          statusFilter === "inactive"
-                            ? "bg-[#0DA2E7] text-white shadow-sm shadow-[#0DA2E7]/20"
-                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${statusFilter === "inactive" ? "bg-white" : "bg-red-400"}`} />
-                        Inactivos
-                      </button>
-                    </div>
-                  </div>
-
-                  {(statusFilter !== "all" || roleFilter !== "all") && (
-                    <div className="pt-1 border-t border-border/30">
-                      <button
-                        onClick={() => { setStatusFilter("all"); setRoleFilter("all"); setCurrentPage(1); }}
-                        className="text-[10px] text-muted-foreground hover:text-[#0DA2E7] transition-colors w-full text-center"
-                      >
-                        Limpiar filtros
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <UserFilters
+              roleOptions={DEFAULT_ROLE_OPTIONS}
+              roleFilter={roleFilter}
+              onRoleChange={(v) => { setRoleFilter(v); setCurrentPage(1); }}
+              statusFilter={statusFilter}
+              onStatusChange={(v) => { setStatusFilter(v); setCurrentPage(1); }}
+              resultCount={filteredUsers.length}
+              activeCount={(roleFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0)}
+              onClear={() => { setRoleFilter("all"); setStatusFilter("all"); setCurrentPage(1); }}
+            />
 
             <div className="h-6 w-px bg-border/50" />
             <span className="text-xs text-muted-foreground whitespace-nowrap px-1.5">
