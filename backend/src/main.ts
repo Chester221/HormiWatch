@@ -16,6 +16,14 @@ async function bootstrap() {
   app.set('trust proxy', true);
   app.use(cookieParser());
 
+  // 🛡️ Anti-caché: evitar que el navegador guarde respuestas 304
+  app.use((req, res, next) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    next();
+  });
+
   const config = new DocumentBuilder()
     .setTitle('HormiWatch API')
     .setDescription('API endpoints and schemas')

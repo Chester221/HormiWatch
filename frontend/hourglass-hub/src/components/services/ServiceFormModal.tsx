@@ -48,7 +48,8 @@ const serviceSchema = z.object({
     .min(2, "El nombre debe tener al menos 2 caracteres")
     .max(100, "El nombre no puede superar los 100 caracteres"),
   category_id: z.string().min(1, "Selecciona una categoría"),
-  hourlyRate: z.coerce.number().min(0, "La tarifa no puede ser negativa"),
+  hourlyRate: z.coerce.number({ invalid_type_error: "La tarifa por hora es obligatoria" })
+    .min(1, "La tarifa por hora es obligatoria"),
   description: z.string().optional(),
   icon: z.string().min(1, "Selecciona un icono"),
 });

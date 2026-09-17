@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { usersApi } from '@/lib/api'
+import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
@@ -42,10 +43,27 @@ export const useTeamMembers = (options?: {
     searchQuery?: string
 }) => {
     const { role = 'all', searchQuery } = options || {}
+    const { profile } = useAuth()
+    const currentRole = profile?.role || 'Technician'
+    const canSeeAllUsers = currentRole === 'Admin' || currentRole === 'Manager'
 
     const fetchMembers = async (): Promise<TeamMember[]> => {
         try {
-            const response = await usersApi.getAll();
+            // ✅ ROL-AWARE: Admin/Manager ven el listado completo; Técnico/Empleado
+            // solo Managers + Técnicos (evita 403 de GET /users y no expone admins)
+            let response: any;
+            if (canSeeAllUsers) {
+                response = await usersApi.getAll();
+            } else {
+                const [managers, technicians] = await Promise.all([
+                    usersApi.getManagers(),
+                    usersApi.getTechnicians(),
+                ]);
+                response = [
+                    ...(Array.isArray(managers) ? managers : managers?.records || []),
+                    ...(Array.isArray(technicians) ? technicians : technicians?.records || []),
+                ];
+            }
             let members = Array.isArray(response) ? response : response?.records || [];
             
             // ✅ CONSTRUIR full_name correctamente

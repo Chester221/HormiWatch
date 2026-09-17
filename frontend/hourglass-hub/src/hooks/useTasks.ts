@@ -14,38 +14,38 @@ export type CreateTaskData = InsertTables<'tasks'>
 
 export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
   const fetchTasks = async (): Promise<Task[]> => {
-    try {
-      const response = await tasksApi.getAll();
-      // ✅ CORREGIDO: Verificar si response es array u objeto { records | data }
-      let tasks = Array.isArray(response) ? response : response?.records || response?.data || [];
+    const response = await tasksApi.getAll();
+    // ✅ CORREGIDO: Verificar si response es array u objeto { records | data }
+    let tasks = Array.isArray(response) ? response : response?.records || response?.data || [];
 
-      // ✅ NORMALIZAR al formato legacy que consume todo el frontend
-      // (project_id/technician_id/service_id, created_at, horas, estados)
-      tasks = tasks.map(normalizeTask);
+    // ✅ NORMALIZAR al formato legacy que consume todo el frontend
+    // (project_id/technician_id/service_id, created_at, horas, estados)
+    tasks = tasks.map(normalizeTask);
 
-      if (projectId && projectId !== 'all') {
-        tasks = tasks.filter((t: any) => t.project_id === projectId);
-      }
-
-      if (technicianId) {
-        tasks = tasks.filter((t: any) => t.technician_id === technicianId);
-      }
-
-      // Ordenar por created_at descendente
-      tasks.sort((a: any, b: any) => {
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-
-      return tasks as Task[];
-    } catch (err) {
-      console.error('Error fetching tasks:', err)
-      return []
+    if (projectId && projectId !== 'all') {
+      tasks = tasks.filter((t: any) => t.project_id === projectId);
     }
+
+    if (technicianId) {
+      tasks = tasks.filter((t: any) => t.technician_id === technicianId);
+    }
+
+    // Ordenar por created_at descendente
+    tasks.sort((a: any, b: any) => {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+
+    return tasks as Task[];
   }
 
   return useQuery({
     queryKey: ['tasks', projectId, technicianId],
     queryFn: fetchTasks,
+    // 🛡️ ANTICACHÉ: staleTime 0 → refetch SIEMPRE al montar la página,
+    // aunque TopBar/Dashboard ya hayan cargado la key hace <30s.
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   })
 }
 

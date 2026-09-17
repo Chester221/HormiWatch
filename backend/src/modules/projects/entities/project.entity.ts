@@ -40,7 +40,17 @@ export class Project extends BaseUuidEntity {
   @Column({ type: 'enum', enum: ProjectStatus, nullable: true })
   status: ProjectStatus;
 
-  @Column({ type: 'integer', name: 'pool_hours', default: 0 })
+  @Column({
+    type: 'decimal',
+    name: 'pool_hours',
+    precision: 13,
+    scale: 4,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
   poolHours: number;
 
   /**
@@ -77,7 +87,18 @@ export class Project extends BaseUuidEntity {
   @Column({ type: 'varchar', nullable: true, name: 'customer_id' })
   customerId: string;
 
-  @Column({ type: 'int', nullable: true, name: 'hours_consumed', default: 0 })
+  @Column({
+    type: 'decimal',
+    nullable: true,
+    name: 'hours_consumed',
+    precision: 13,
+    scale: 4,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => (value != null ? parseFloat(value) : null),
+    },
+  })
   hoursConsumed: number;
 
   //entity relations

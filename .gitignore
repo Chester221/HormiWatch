@@ -28,3 +28,6 @@ frontend/hourglass-hub/.env.local
 # OS
 .DS_Store
 Thumbs.db
+
+# TypeScript incremental build caches
+*.tsbuildinfo

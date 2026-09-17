@@ -110,13 +110,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const fetchProfile = useCallback(async (userId: string): Promise<UserProfile | null> => {
         try {
-            const profileData = await usersApi.getById(userId);
-            if (profileData && typeof profileData.role !== 'string') {
-                profileData.role = profileData.role?.name || 'Technician';
-            }
-            // ✅ dark_mode vive en preferences (jsonb) — exponerlo para el toggle
-            profileData.dark_mode = profileData.preferences?.dark_mode ?? false;
-            return profileData as UserProfile;
+            const data = await usersApi.getById(userId);
+            // ✅ NORMALIZAR la respuesta del backend: UserResponseDto devuelve el
+            // perfil ANIDADO en data.profile (name/lastName/full_name/avatar_url),
+            // pero la app consume UserProfile PLANO. Aplanar aquí para que
+            // profile.full_name / profile.avatar_url existan en todo el frontend.
+            const p = data?.profile ?? {};
+            const role: UserRole =
+                typeof data.role === 'string'
+                    ? (data.role as UserRole)
+                    : (data.role?.name as UserRole) || 'Technician';
+            const preferences = data.preferences ?? {};
+            return {
+                id: data.id,
+                full_name:
+                    p.full_name ||
+                    `${p.name || ''} ${p.lastName || ''}`.trim() ||
+                    null,
+                avatar_url: p.avatar_url ?? p.profilePicture ?? null,
+                email: data.email ?? null,
+                role,
+                dark_mode: preferences.dark_mode ?? false,
+                preferences,
+                created_at: data.created_at ?? data.createdAt ?? p.createdAt,
+                updated_at: data.updated_at ?? data.updatedAt ?? p.updatedAt,
+            } as UserProfile;
         } catch (err: any) {
             console.error('Error crítico en fetchProfile:', err)
             throw err;
@@ -278,14 +296,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!user) return { error: new Error('No hay usuario autenticado') };
         
         try {
-            // ✅ Enviar full_name al perfil (dark_mode vive en preferences)
-            await usersApi.update(user.id, {
-                full_name: updates.full_name,
-                avatar_url: updates.avatar_url,
-                preferences: updates.dark_mode !== undefined
-                    ? { ...(profile?.preferences || {}), dark_mode: updates.dark_mode }
-                    : undefined,
-            });
+            const body: {
+                full_name?: string;
+                name?: string;
+                lastName?: string;
+                avatar_url?: string;
+                preferences?: UserProfile['preferences'];
+            } = {};
+
+            if (updates.dark_mode !== undefined) {
+                body.preferences = { ...(profile?.preferences || {}), dark_mode: updates.dark_mode };
+            }
+
+            if (updates.avatar_url !== undefined) {
+                body.avatar_url = updates.avatar_url;
+            }
+
+            if (updates.full_name !== undefined) {
+                const fullName = updates.full_name.trim();
+                body.full_name = fullName;
+                // ✅ Mantener name/lastName sincronizados en el perfil: Team, modales
+                // y listas leen esos campos. Primera palabra → name, el resto → lastName.
+                const [first, ...rest] = fullName.split(/\s+/);
+                body.name = first ?? '';
+                body.lastName = rest.join(' ') || '';
+            }
+
+            await usersApi.update(user.id, body);
             
             setProfile(prev => prev ? { ...prev, ...updates } : null);
             return { error: null };

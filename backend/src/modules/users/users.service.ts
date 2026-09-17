@@ -102,6 +102,16 @@ export class UsersService {
     });
   }
 
+  async updatePassword(id: string, passwordHash: string): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+    user.password = passwordHash;
+    user.updatedAt = new Date();
+    await this.userRepository.save(user);
+  }
+
   async create(
     createUserDto: CreateUserDto,
     profilePicture?: Express.Multer.File,
@@ -593,20 +603,23 @@ export class UsersService {
   }
 
   async findManagers(): Promise<User[]> {
-    return this.userRepository.find({
-      where: { role: { name: Role.manager } },
-      relations: ['profile', 'role'],
-    });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('user.role', 'role')
+      .where('LOWER(role.name) = :name', { name: Role.manager.toLowerCase() })
+      .getMany();
   }
 
   async findTechnicians(): Promise<User[]> {
-    return this.userRepository.find({
-      where: [
-        { role: { name: Role.technician } },
-        { role: { name: Role.employee } },
-      ],
-      relations: ['profile', 'role'],
-    });
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .leftJoinAndSelect('user.role', 'role')
+      .where('LOWER(role.name) IN (:...names)', {
+        names: [Role.technician.toLowerCase(), Role.employee.toLowerCase()],
+      })
+      .getMany();
   }
 
   private extractFileKey(url: string): string | null {

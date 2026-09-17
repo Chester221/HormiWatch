@@ -18,7 +18,7 @@ import { UpdateServiceDto } from '../dto/update-service.dto';
 import { ServiceResponseDto } from '../dto/service-response.dto';
 import { ServicePageOptionsDto } from '../dto/service-page-options.dto';
 import { PageDto } from '../../../common/pagination/pagination.dto';
-import { IJwtPayload } from '../../auth/interface/payload.interface';
+import { IActiveUser } from '../../auth/interface/payload.interface';
 import { RolesGuard } from '../../auth/guard/authorization.guard';
 import { Roles } from '../../auth/decorator/roles.decorator';
 import { Role } from '../../auth/enums/roles.enum';
@@ -26,7 +26,7 @@ import { Role } from '../../auth/enums/roles.enum';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
 interface AuthenticatedRequest extends Request {
-  user?: IJwtPayload;
+  user?: IActiveUser;
 }
 
 @ApiBearerAuth()
@@ -44,7 +44,7 @@ export class ServicesController {
     @Req() req: AuthenticatedRequest,
   ): Promise<ServiceResponseDto> {
     const user = req.user;
-    return this.servicesService.create(createDto, user?.sub);
+    return this.servicesService.create(createDto, user?.userId);
   }
 
   @Get()

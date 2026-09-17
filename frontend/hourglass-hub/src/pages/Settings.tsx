@@ -4,6 +4,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -16,9 +18,12 @@ import {
   AlertTriangle,
   Bell,
   Calendar,
+  Eye,
+  EyeOff,
   Fingerprint,
   KeyRound,
   Loader2,
+  Lock,
   LogOut,
   Mail,
   Moon,
@@ -53,6 +58,10 @@ const ROLE_BADGE: Record<string, string> = {
 const roleName = (role: any): string => {
   return typeof role === "string" ? role : role?.name || "Technician";
 };
+
+// ✅ Requisitos de la nueva contraseña según la política del backend
+// (mínimo 8 caracteres, mayúscula, minúscula, número y símbolo)
+const PASSWORD_POLICY = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 // ✅ Sección de configuración: encabezado consistente + cuerpo alineado
 function Section({
@@ -114,6 +123,13 @@ export default function Settings() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const themeTimeoutRef = useRef<number | null>(null);
+
+  // Estado del formulario de cambio de contraseña
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -193,6 +209,45 @@ export default function Settings() {
       toast.error(err?.message || "No se pudo eliminar la cuenta");
       setDeleting(false);
       setDeleteOpen(false);
+    }
+  };
+
+  // ✅ Requisitos de la nueva contraseña según la política del backend
+  const handleChangePassword = async () => {
+    if (!currentPassword) {
+      toast.error("Ingresa tu contraseña actual");
+      return;
+    }
+    if (!newPassword) {
+      toast.error("Ingresa la nueva contraseña");
+      return;
+    }
+    if (!PASSWORD_POLICY.test(newPassword)) {
+      toast.error(
+        "La nueva contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula, un número y un símbolo"
+      );
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("Las contraseñas nuevas no coinciden");
+      return;
+    }
+    if (newPassword === currentPassword) {
+      toast.error("La nueva contraseña no puede ser igual a la actual");
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      toast.success("Contraseña actualizada correctamente");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err: any) {
+      toast.error(err?.message || "No se pudo cambiar la contraseña");
+    } finally {
+      setChangingPassword(false);
     }
   };
 
@@ -363,6 +418,93 @@ export default function Settings() {
                 <LogOut className="h-3.5 w-3.5" />
                 Salir
               </Button>
+            </div>
+          </Section>
+        </motion.div>
+
+        {/* ═══════════ CAMBIAR CONTRASEÑA ═══════════ */}
+        <motion.div {...fadeUp} transition={{ delay: 0.135 }}>
+          <Section
+            icon={Lock}
+            iconClass="bg-violet-50 text-violet-600 dark:bg-violet-950/30 dark:text-violet-400"
+            title="Cambiar Contraseña"
+            description="Actualiza la contraseña de tu cuenta"
+          >
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="currentPassword" className="text-xs font-semibold text-foreground">
+                  Contraseña actual
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="currentPassword"
+                    type={showPasswords ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="h-10 pr-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswords(!showPasswords)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showPasswords ? "Ocultar contraseñas" : "Mostrar contraseñas"}
+                  >
+                    {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword" className="text-xs font-semibold text-foreground">
+                    Nueva contraseña
+                  </Label>
+                  <Input
+                    id="newPassword"
+                    type={showPasswords ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="text-xs font-semibold text-foreground">
+                    Confirmar nueva contraseña
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type={showPasswords ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo.
+              </p>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={changingPassword}
+                  className="gap-2 bg-[#0DA2E7] hover:bg-[#0B8BC7] text-white shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  {changingPassword ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <KeyRound className="h-4 w-4" />
+                  )}
+                  Actualizar contraseña
+                </Button>
+              </div>
             </div>
           </Section>
         </motion.div>

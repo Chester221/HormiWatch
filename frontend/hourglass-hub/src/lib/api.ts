@@ -36,6 +36,7 @@ const apiClient = async (endpoint: string, options: RequestInit = {}, retry = tr
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     credentials: 'include',
+    cache: 'no-store',
     headers: {
       'Content-Type': 'application/json',
       ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
@@ -59,7 +60,10 @@ const apiClient = async (endpoint: string, options: RequestInit = {}, retry = tr
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    const err = new Error(error.message || `Error del servidor (${response.status})`) as any;
+    const msg = Array.isArray(error.message)
+      ? error.message.join('. ')
+      : error.message || `Error del servidor (${response.status})`;
+    const err = new Error(msg) as any;
     err.status = response.status;
     err.statusCode = response.status;
     err.statusText = response.statusText;
@@ -105,6 +109,13 @@ export const authApi = {
 
   refresh: () =>
     apiClient('/auth/refresh', { method: 'POST' }),
+
+  // ✅ NUEVO: cambiar la contraseña del usuario autenticado
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiClient('/auth/change-password', {
+      method: 'PATCH',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
 
   // ✅ NUEVO: session para obtener sesión actual
   session: () =>

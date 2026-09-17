@@ -75,7 +75,7 @@ export default function Tasks() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<any>(null);
 
-  const { data: allTasks = [], isLoading, refetch } = useTasks();
+  const { data: allTasks = [], isLoading, isError, error, refetch } = useTasks();
   const { data: allProjects = [] } = useProjects();
   const { data: services = [] } = useServices();
   const { holidays } = useHolidays();
@@ -388,6 +388,18 @@ export default function Tasks() {
         {isLoading ? (
           <div className="flex justify-center py-16">
             <Loader2 className="h-8 w-8 animate-spin text-[#0DA2E7]" />
+          </div>
+        ) : isError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+            <p className="text-sm font-medium text-red-600">
+              Error al cargar las tareas: {(error as any)?.message || 'Error desconocido'}
+            </p>
+            <Button
+              onClick={() => refetch()}
+              className="mt-3 gap-2 text-white bg-[#0DA2E7] hover:bg-[#0B8BC7]"
+            >
+              <Loader2 className="h-4 w-4" /> Reintentar
+            </Button>
           </div>
         ) : (
           <TaskList

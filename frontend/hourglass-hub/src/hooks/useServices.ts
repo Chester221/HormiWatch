@@ -76,7 +76,7 @@ export const useServices = (searchQuery?: string, includeInactive: boolean = fal
         const response = await servicesApi.getAll();
         const services = (Array.isArray(response)
           ? (response as Service[])
-          : (response as ServicesResponse)?.data || []) as Service[];
+          : (response as any)?.records || (response as ServicesResponse)?.data || []) as Service[];
         return services.sort((a, b) => a.name.localeCompare(b.name));
       } catch {
         return [];

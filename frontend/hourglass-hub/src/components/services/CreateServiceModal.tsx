@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Plus, Check, X, DollarSign, Wrench, FolderKanban } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getCategoryIconKey } from "./serviceIcons";
 import {
@@ -27,25 +28,30 @@ export function CreateServiceModal({ open, onOpenChange, onSuccess }: CreateServ
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [newCategoryName, setNewCategoryName] = useState("");
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
-  const [hourlyRate, setHourlyRate] = useState("25");
+  const [hourlyRate, setHourlyRate] = useState("");
 
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId) || null;
   const isSubmitting = createService.isPending || createCategory.isPending;
 
   const handleSubmit = () => {
     if (!selectedCategory) return;
+    const rate = Number(hourlyRate);
+    if (!hourlyRate || isNaN(rate) || rate <= 0) {
+      toast.error("La tarifa por hora es obligatoria");
+      return;
+    }
     createService.mutate(
       {
         name: selectedCategory.name,
         description: selectedCategory.description || null,
         categoryId: selectedCategory.id,
-        hourlyRate: Number(hourlyRate),
+        hourlyRate: rate,
         icon: getCategoryIconKey(selectedCategory.name),
       },
       {
         onSuccess: () => {
           setSelectedCategoryId("");
-          setHourlyRate("25");
+          setHourlyRate("");
           onSuccess?.();
           onOpenChange(false);
         },

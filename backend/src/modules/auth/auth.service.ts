@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { UsersService } from '../users/users.service';
@@ -6,6 +6,7 @@ import { JwtService } from '@nestjs/jwt';
 import { HashingService } from '../../common/hashing/hashing.service';
 import { User } from '../users/entities/user.entity';
 import { IJwtPayload } from './interface/payload.interface';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -143,5 +144,25 @@ export class AuthService {
       return null;
     }
     return user as User;
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.usersService.findOneById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Usuario no encontrado');
+    }
+
+    const isCurrentPasswordValid = await this.hashingService.compare(
+      dto.currentPassword,
+      user.password,
+    );
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('La contraseña actual es incorrecta');
+    }
+
+    const hashedPassword = await this.hashingService.hash(dto.newPassword);
+    await this.usersService.updatePassword(userId, hashedPassword);
+
+    return { message: 'Contraseña actualizada correctamente' };
   }
 }

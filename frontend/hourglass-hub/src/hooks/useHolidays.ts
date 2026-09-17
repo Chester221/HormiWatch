@@ -23,7 +23,8 @@ export const useHolidays = () => {
 
     const fetchHolidays = async (): Promise<Holiday[]> => {
         const data = await holidaysApi.getAll();
-        return data || [];
+        // ✅ Normalizar: el backend responde { records, meta } (paginado)
+        return Array.isArray(data) ? data : data?.records || data?.data || [];
     };
 
     const addHolidayMutation = useMutation({

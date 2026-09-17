@@ -176,7 +176,21 @@ export default function Projects() {
   // ✅ CORREGIDO: loadProjectMembers con verificación de array
   const loadProjectMembers = async () => {
     try {
-      const response = await usersApi.getAll();
+      // ✅ ROL-AWARE: Admin/Manager cargan GET /users; Técnico/Empleado solo
+      // managers y técnicos (evita 403 de GET /users)
+      let response: any;
+      if (userRole === 'Admin' || userRole === 'Manager') {
+        response = await usersApi.getAll();
+      } else {
+        const [managers, technicians] = await Promise.all([
+          usersApi.getManagers(),
+          usersApi.getTechnicians(),
+        ]);
+        response = [
+          ...(Array.isArray(managers) ? managers : managers?.records || []),
+          ...(Array.isArray(technicians) ? technicians : technicians?.records || []),
+        ];
+      }
       const members = Array.isArray(response) ? response : response?.records || response?.data || [];
       const formattedMembers = members.map((m: any) => ({
         id: m.id,

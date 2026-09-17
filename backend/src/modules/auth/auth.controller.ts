@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Delete,
   Body,
   UnauthorizedException,
@@ -14,6 +15,7 @@ import {
 import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { IActiveUser } from './interface/payload.interface';
 import { SkipAuth } from './decorator/skipAuth.decorator';
@@ -129,5 +131,16 @@ export class AuthController {
   @ApiOkResponse({ description: 'Returns current user session data' })
   async getSession(@Request() req: { user: IActiveUser }) {
     return this.authService.getSession(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('change-password')
+  @ApiOperation({ summary: 'Cambiar la contraseña del usuario autenticado' })
+  @ApiOkResponse({ description: 'Contraseña actualizada correctamente' })
+  async changePassword(
+    @Request() req: { user: IActiveUser },
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(req.user.userId, changePasswordDto);
   }
 }
