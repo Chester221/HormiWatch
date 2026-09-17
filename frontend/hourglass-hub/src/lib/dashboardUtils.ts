@@ -54,7 +54,7 @@ const HUMAN_STATUS: Record<string, string> = {
   CANCELED: "Cancelled",
 };
 
-const humanStatus = (status: unknown): string => {
+export const humanStatus = (status: unknown): string => {
   const key = String(status ?? "").toUpperCase().trim();
   if (HUMAN_STATUS[key]) return HUMAN_STATUS[key];
   if (!key) return "Pending";

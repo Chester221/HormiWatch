@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { usersApi } from "@/lib/api";
+import { useUpdateTeamMember } from "@/hooks/useTeamMembers";
 import { Users, Shield, Search } from "lucide-react";
 
 interface ManageMemberModalProps {
@@ -50,6 +51,7 @@ const getRoleName = (role: any) => {
 };
 
 export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isManager }: ManageMemberModalProps) {
+  const updateMember = useUpdateTeamMember();
   const [users, setUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,8 +129,8 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isMa
 
     setIsLoading(true);
     try {
-      await usersApi.update(selectedUser.id, { role: newRole });
-      toast.success(`✅ Rol actualizado para ${getFullName(selectedUser)}`);
+      // ✅ UPDATE OPTIMISTA de rol: se refleja al instante en la lista
+      await updateMember.mutateAsync({ id: selectedUser.id, data: { role: newRole } });
       onSuccess();
       onOpenChange(false);
     } catch (error: any) {

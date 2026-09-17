@@ -92,7 +92,6 @@ export function LogTimeModal({ open, onOpenChange, onSubmit, projects: propProje
       return;
     }
     setIsSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
     if (onSubmit) onSubmit(data);
   };
 

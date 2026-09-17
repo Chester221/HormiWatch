@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasksApi } from '@/lib/api';
 import { toast } from 'sonner';
-import { normalizeTask } from '@/lib/dashboardUtils';
+import { normalizeTask, humanStatus } from '@/lib/dashboardUtils';
 import type { Tables, InsertTables } from '@/types/supabase'
 
 export type Task = Tables<'tasks'> & {
@@ -11,6 +11,13 @@ export type Task = Tables<'tasks'> & {
 }
 
 export type CreateTaskData = InsertTables<'tasks'>
+
+const TASKS_KEY = ['tasks'] as const;
+
+const sortTasksDesc = (list: any[]): any[] =>
+  list.slice().sort((a: any, b: any) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
 
 export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
   const fetchTasks = async (): Promise<Task[]> => {
@@ -41,31 +48,13 @@ export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
   return useQuery({
     queryKey: ['tasks', projectId, technicianId],
     queryFn: fetchTasks,
-    // 🛡️ ANTICACHÉ: staleTime 0 → refetch SIEMPRE al montar la página,
-    // aunque TopBar/Dashboard ya hayan cargado la key hace <30s.
-    staleTime: 0,
+    // ✅ CACHÉ: 30s de staleTime → navegar entre páginas es instantáneo (muestra
+    // la caché al instante y refresca en segundo plano solo si está vieja).
+    staleTime: 30_000,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   })
 }
-
-export const useCreateTask = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (newTask: any) => {
-      const task = await tasksApi.create(newTask);
-      return task;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      toast.success('Tarea creada correctamente');
-    },
-    onError: (error: Error) => {
-      toast.error(`Error: ${error.message}`);
-    },
-  });
-};
 
 export const useCreateTasks = () => {
   const queryClient = useQueryClient();
@@ -78,9 +67,87 @@ export const useCreateTasks = () => {
       );
       return results;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    onMutate: async (newTasks) => {
+      await queryClient.cancelQueries({ queryKey: TASKS_KEY });
+      const previous = queryClient.getQueriesData({ queryKey: TASKS_KEY });
+
+      // ✅ UPDATE OPTIMISTA: la tarea aparece AL INSTANTE en todas las listas
+      const nowIso = new Date().toISOString();
+      const optimistic = newTasks.map((t, i) => {
+        const tempId = `temp-task-${Date.now()}-${i}`;
+        return {
+          ...normalizeTask({
+            id: tempId,
+            _tempId: tempId,
+            status: t.status || 'PENDING',
+            priority: t.priority || 'MEDIUM',
+            title: t.title,
+            description: t.description,
+            startDateTime: t.startDateTime,
+            endDateTime: t.endDateTime,
+            created_at: nowIso,
+            project: t.projectId ? { id: t.projectId } : undefined,
+            project_id: t.projectId,
+            service: t.serviceId ? { id: t.serviceId } : undefined,
+            service_id: t.serviceId,
+            technician_id: t.technicianId,
+            appliedHourlyRate: t.appliedHourlyRate,
+          }),
+          _tempId: tempId,
+        };
+      });
+
+      queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return sortTasksDesc([...optimistic, ...old]);
+      });
+
+      return { previous, tempIds: optimistic.map((o) => o.id) };
+    },
+    onSuccess: (results, _vars, context) => {
+      const tempIds = context?.tempIds ?? [];
+      const realList = (Array.isArray(results) ? results : [results])
+        .map((r) => normalizeTask(r));
+
+      // ✅ Reemplazar temporales por reales + refresco en segundo plano
+      queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
+        if (!Array.isArray(old)) return old;
+        let list = old.slice();
+        realList.forEach((item, i) => {
+          const tempId = tempIds[i];
+          if (tempId) {
+            list = list.map((t) => (t.id === tempId ? item : t));
+          } else {
+            list = [item, ...list];
+          }
+        });
+        return sortTasksDesc(list);
+      });
+      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
       toast.success('Tareas creadas correctamente');
+    },
+    onError: (error: Error, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+};
+
+export const useCreateTask = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (newTask: any) => {
+      const task = await tasksApi.create(newTask);
+      return task;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
+      toast.success('Tarea creada correctamente');
     },
     onError: (error: Error) => {
       toast.error(`Error: ${error.message}`);
@@ -96,11 +163,43 @@ export const useUpdateTask = () => {
       const updated = await tasksApi.update(id.toString(), data);
       return updated;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: TASKS_KEY });
+      const previous = queryClient.getQueriesData({ queryKey: TASKS_KEY });
+
+      // ✅ UPDATE OPTIMISTA: cambiar título/descripción/estado al instante
+      queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((t: any) => {
+          if (String(t.id) !== String(id)) return t;
+          const patch: any = {};
+          if (data.title !== undefined) patch.title = data.title;
+          if (data.description !== undefined) patch.description = data.description;
+          if (data.status !== undefined) patch.status = humanStatus(data.status);
+          return { ...t, ...patch };
+        });
+      });
+
+      return { previous };
+    },
+    onSuccess: (updated) => {
+      // ✅ Reemplazar con la respuesta real (normalizada) + refresco en segundo plano
+      if (updated) {
+        const real = normalizeTask(updated);
+        queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
+          if (!Array.isArray(old)) return old;
+          return old.map((t) => (String(t.id) === String(real.id) ? real : t));
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
       toast.success('Tarea actualizada');
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast.error(`Error: ${error.message}`);
     },
   })
@@ -114,11 +213,28 @@ export const useDeleteTask = () => {
       await tasksApi.delete(taskId);
       return true;
     },
+    onMutate: async (taskId) => {
+      await queryClient.cancelQueries({ queryKey: TASKS_KEY });
+      const previous = queryClient.getQueriesData({ queryKey: TASKS_KEY });
+
+      // ✅ DELETE OPTIMISTA: desaparece al instante de todas las listas
+      queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((t: any) => String(t.id) !== String(taskId));
+      });
+
+      return { previous };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
       toast.success('Tarea eliminada');
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _vars, context) => {
+      if (context?.previous) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
+      }
       toast.error(`Error: ${error.message}`);
     },
   })

@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { usersApi, rolesApi, storageApi } from "@/lib/api";
+import { useCreateTeamMember } from "@/hooks/useTeamMembers";
 import { motion } from "framer-motion";
 
 interface AddUserModalProps {
@@ -65,6 +66,7 @@ const getRoleAccent = (name: string) => {
 };
 
 export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProps) {
+  const createMember = useCreateTeamMember();
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -155,14 +157,18 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
     try {
       const phoneDigits = phone.replace(/[^\d]/g, "");
       const hasPhone = phoneDigits.length >= 10;
-      const created: any = await usersApi.create({
+      // ✅ CREATE OPTIMISTA: el miembro aparece al instante en el listado
+      const created: any = await createMember.mutateAsync({
         name: fullName.split(" ")[0] || fullName,
         lastName: fullName.split(" ").slice(1).join(" ") || undefined,
         email,
         password,
         roleId: roleUuid,
+        roleName,
         phone: hasPhone ? `+${phoneDigits}` : undefined,
         idCard: cedula ? `${cedulaType}-${cedula}` : undefined,
+        _fullName: fullName,
+        _role: roleName,
       });
 
       const userId = created?.id || created?.data?.id;
@@ -176,7 +182,6 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
         } catch {}
       }
 
-      toast.success(`¡${fullName} creado exitosamente!`);
       reset();
       onSuccess?.();
       onOpenChange(false);

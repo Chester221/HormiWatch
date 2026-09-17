@@ -236,9 +236,7 @@ export default function Tasks() {
 
     createTasksMutation.mutate(tasksToCreate, {
       onSuccess: () => {
-        toast.success("Tarea registrada correctamente");
         setCreateModalOpen(false);
-        refetch();
       },
       onError: (error: any) => {
         toast.error(`Error al crear tarea: ${error.message}`);
@@ -258,8 +256,6 @@ export default function Tasks() {
       setDeleteOpen(false);
       setTaskToDelete(null);
       setDetailOpen(false);
-      toast.success("Tarea eliminada correctamente");
-      refetch();
     } catch (e: any) {
       toast.error(`Error: ${e.message}`);
     }
@@ -282,7 +278,6 @@ export default function Tasks() {
     }
     await updateTaskMutation.mutateAsync({ id: selectedTask.id, data: payload });
     setEditOpen(false);
-    refetch();
   };
 
   const openEdit = (task: TaskLike) => {

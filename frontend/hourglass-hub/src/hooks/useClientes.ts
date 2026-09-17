@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { customersApi } from '@/lib/api'
 import { toast } from 'sonner';
@@ -34,48 +35,67 @@ export interface Client {
     updated_at?: string
 }
 
+// ✅ Llaves ESTABLES: las listas se cachean una sola vez y el buscador filtra en memoria
+// (antes cada tecleo disparaba un refetch). Los updates optimistas usan el prefijo
+// ['clients'] que cubre TANTO 'clients' como 'clients_with_contacts'.
+const CLIENTS_KEY = ['clients'];
+const CLIENTS_WITH_CONTACTS_KEY = ['clients_with_contacts'];
+
+const restorePrevious = (queryClient: ReturnType<typeof useQueryClient>, previous: [unknown, unknown][]) => {
+    if (!previous) return;
+    for (const [key, data] of previous) {
+        queryClient.setQueryData(key as any, data);
+    }
+};
+
 export const useClientsWithContacts = (searchQuery?: string) => {
     const fetchClientsWithContacts = async (): Promise<ClientWithContacts[]> => {
         try {
             const response = await customersApi.getAll();
             const clientsData = Array.isArray(response) ? response : response?.records || [];
-            
+
             if (!clientsData || clientsData.length === 0) return [];
 
-            const activeClients = clientsData.filter((client: any) => 
-                client.deleted_at === null || 
+            const activeClients = clientsData.filter((client: any) =>
+                client.deleted_at === null ||
                 client.deleted_at === undefined ||
                 client.deleted_at === 'null'
             );
 
-            let clients: ClientWithContacts[] = activeClients.map((client: any) => ({
+            const clients: ClientWithContacts[] = activeClients.map((client: any) => ({
                 ...client,
                 contacts: client.contacts || []
             }));
 
             clients.sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
-            if (searchQuery) {
-                const search = searchQuery.toLowerCase()
-                clients = clients.filter(c =>
-                    c.name.toLowerCase().includes(search) ||
-                    (c.address && c.address.toLowerCase().includes(search)) ||
-                    (c.ruc && c.ruc.toLowerCase().includes(search))
-                )
-            }
-
-            return clients
+            return clients;
         } catch (err) {
             console.error('Error en useClientsWithContacts:', err)
             return []
         }
     }
 
-    return useQuery({
-        queryKey: ['clients_with_contacts', searchQuery],
+    const query = useQuery({
+        queryKey: CLIENTS_WITH_CONTACTS_KEY,
         queryFn: fetchClientsWithContacts,
         retry: false,
-    })
+        staleTime: 30_000,
+    });
+
+    // ✅ Filtro client-side por invocación (sin duplicar peticiones por tecleo)
+    const data = useMemo(() => {
+        const all = query.data ?? [];
+        if (!searchQuery) return all;
+        const search = searchQuery.toLowerCase();
+        return all.filter(c =>
+            c.name.toLowerCase().includes(search) ||
+            (c.address && c.address.toLowerCase().includes(search)) ||
+            (c.ruc && c.ruc.toLowerCase().includes(search))
+        );
+    }, [query.data, searchQuery]);
+
+    return { ...query, data };
 }
 
 export const useClients = (searchQuery?: string) => {
@@ -83,29 +103,33 @@ export const useClients = (searchQuery?: string) => {
         try {
             const response = await customersApi.getAll();
             const clientsData = Array.isArray(response) ? response : response?.records || [];
-            
-            const activeClients = clientsData.filter((c: any) => 
-                c.deleted_at === null || 
+
+            const activeClients = clientsData.filter((c: any) =>
+                c.deleted_at === null ||
                 c.deleted_at === undefined ||
                 c.deleted_at === 'null'
             );
-            
-            let clients = (activeClients || []) as Client[]
-            if (searchQuery) {
-                const search = searchQuery.toLowerCase()
-                clients = clients.filter(c =>
-                    c.name.toLowerCase().includes(search) ||
-                    (c.ruc && c.ruc.toLowerCase().includes(search))
-                )
-            }
-            return clients
+
+            return (activeClients || []) as Client[];
         } catch (err) {
             console.error('Error en useClients:', err)
             return []
         }
     }
 
-    return useQuery({ queryKey: ['clients', searchQuery], queryFn: fetchClients, retry: false })
+    const query = useQuery({ queryKey: CLIENTS_KEY, queryFn: fetchClients, retry: false, staleTime: 30_000 });
+
+    const data = useMemo(() => {
+        const all = query.data ?? [];
+        if (!searchQuery) return all;
+        const search = searchQuery.toLowerCase();
+        return all.filter(c =>
+            c.name.toLowerCase().includes(search) ||
+            (c.ruc && c.ruc.toLowerCase().includes(search))
+        );
+    }, [query.data, searchQuery]);
+
+    return { ...query, data };
 }
 
 export const useClientContacts = (clientId: string | undefined) => {
@@ -128,12 +152,45 @@ export const useCreateClient = () => {
             const newClient = await customersApi.create(data);
             return newClient as Client
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['clients'] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+        onMutate: async (data) => {
+            await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
+            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+
+            // ✅ UPDATE OPTIMISTA: el cliente aparece al instante
+            const optimistic = {
+                id: `temp-client-${Date.now()}`,
+                name: data.name,
+                ruc: data.ruc || null,
+                address: data.address || null,
+                contacts: [] as ClientContact[],
+                created_at: new Date().toISOString(),
+            };
+
+            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                if (!Array.isArray(old)) return old;
+                return [optimistic, ...old];
+            });
+
+            return { previous, tempId: optimistic.id };
+        },
+        onSuccess: (newClient: any, _vars, context) => {
+            if (context?.tempId) {
+                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((c: any) =>
+                        c.id === context.tempId
+                            ? { ...(newClient || {}), id: newClient?.id, contacts: c.contacts || [] }
+                            : c,
+                    );
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
             toast.success('Cliente creado correctamente')
         },
-        onError: (error: Error) => toast.error(`Error: ${error.message}`),
+        onError: (error: Error, _vars, context) => {
+            restorePrevious(queryClient, context?.previous ?? []);
+            toast.error(`Error: ${error.message}`)
+        },
     })
 }
 
@@ -144,12 +201,41 @@ export const useUpdateClient = () => {
             const updated = await customersApi.update(id, data);
             return updated as Client
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['clients'] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+        onMutate: async ({ id, data }) => {
+            await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
+            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+
+            // ✅ UPDATE OPTIMISTA: los campos editados cambian al instante
+            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.map((c: any) => {
+                    if (String(c.id) !== String(id)) return c;
+                    const patch: any = {};
+                    if (data.name !== undefined) patch.name = data.name;
+                    if (data.ruc !== undefined) patch.ruc = data.ruc;
+                    if (data.address !== undefined) patch.address = data.address;
+                    if (data.email !== undefined) patch.email = data.email;
+                    if (data.phone !== undefined) patch.phone = data.phone;
+                    return { ...c, ...patch };
+                });
+            });
+
+            return { previous };
+        },
+        onSuccess: (updated: any, _vars, context) => {
+            if (updated) {
+                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((c: any) => (String(c.id) === String(updated.id) ? { ...c, ...updated } : c));
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
             toast.success('Cliente actualizado correctamente')
         },
-        onError: (error: Error) => toast.error(`Error: ${error.message}`),
+        onError: (error: Error, _vars, context) => {
+            restorePrevious(queryClient, context?.previous ?? []);
+            toast.error(`Error: ${error.message}`)
+        },
     })
 }
 
@@ -160,12 +246,26 @@ export const useDeleteClient = () => {
             await customersApi.delete(id);
             return true
         },
+        onMutate: async (id) => {
+            await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
+            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+
+            // ✅ DELETE OPTIMISTA: desaparece al instante
+            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                if (!Array.isArray(old)) return old;
+                return old.filter((c: any) => String(c.id) !== String(id));
+            });
+
+            return { previous };
+        },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['clients'] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
             toast.success('Cliente eliminado correctamente')
         },
-        onError: (error: Error) => toast.error(`Error: ${error.message}`),
+        onError: (error: Error, _vars, context) => {
+            restorePrevious(queryClient, context?.previous ?? []);
+            toast.error(`Error: ${error.message}`)
+        },
     })
 }
 
@@ -180,7 +280,7 @@ export const useCreateContact = () => {
         },
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['client_contacts', variables.client_id] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
             toast.success('Contacto agregado correctamente')
         },
         onError: (error: Error) => toast.error(`Error: ${error.message}`),
@@ -195,7 +295,7 @@ export const useDeleteContact = () => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['client_contacts'] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
         },
     })
 }
@@ -225,12 +325,65 @@ export const useSaveClientWithContacts = () => {
                 return { clientId: newClient.id };
             }
         },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['clients'] })
-            queryClient.invalidateQueries({ queryKey: ['clients_with_contacts'] })
+        onMutate: async ({ client, contacts, isEditing }) => {
+            await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
+            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+            let tempId: string | null = null;
+
+            if (isEditing && client.id) {
+                // ✅ UPDATE OPTIMISTA: edición → los datos cambian al instante
+                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((c: any) => {
+                        if (String(c.id) !== String(client.id)) return c;
+                        const patch: any = {};
+                        if (client.name !== undefined) patch.name = client.name;
+                        if (client.ruc !== undefined) patch.ruc = client.ruc;
+                        if (client.address !== undefined) patch.address = client.address;
+                        if (client.email !== undefined) patch.email = client.email;
+                        if (client.phone !== undefined) patch.phone = client.phone;
+                        patch.contacts = contacts;
+                        return { ...c, ...patch };
+                    });
+                });
+            } else {
+                // ✅ CREATE OPTIMISTA: nuevo cliente aparece al instante
+                tempId = `temp-client-${Date.now()}`;
+                const optimistic = {
+                    id: tempId,
+                    name: client.name,
+                    ruc: client.ruc || null,
+                    address: client.address || null,
+                    email: client.email,
+                    phone: client.phone,
+                    contacts: contacts,
+                    created_at: new Date().toISOString(),
+                };
+                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return [optimistic, ...old];
+                });
+            }
+
+            return { previous, tempId };
+        },
+        onSuccess: (result, { isEditing }, context) => {
+            if (!isEditing && context?.tempId) {
+                // ✅ Reemplazar temporal por id real (el resto lo reconcilia el invalidate)
+                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                    if (!Array.isArray(old)) return old;
+                    return old.map((c: any) =>
+                        c.id === context.tempId ? { ...c, id: result.clientId } : c,
+                    );
+                });
+            }
+            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
             queryClient.invalidateQueries({ queryKey: ['client_contacts'] })
             toast.success('Cliente guardado correctamente')
         },
-        onError: (error: Error) => toast.error(`Error: ${error.message}`),
+        onError: (error: Error, _vars, context) => {
+            restorePrevious(queryClient, context?.previous ?? []);
+            toast.error(`Error: ${error.message}`)
+        },
     })
 }

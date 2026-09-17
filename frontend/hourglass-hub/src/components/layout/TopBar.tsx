@@ -27,7 +27,6 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
 
   const { data: tasks = [] } = useTasks();
   const { data: projects = [] } = useProjects();
@@ -46,11 +45,8 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
 
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  // ✅ Debounce real de 250ms para la búsqueda
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 250);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  // ✅ BÚSQUEDA EN TIEMPO REAL: filtra en memoria mientras escribes (datos ya cacheados)
+  const q = searchQuery.trim().toLowerCase();
 
   const getRoleLabel = (role: string) => {
     switch (role) { 
@@ -79,8 +75,6 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const isTechnician = userRole === 'Technician';
   const canSearchUsers = isAdmin || isManager;
   const canSearchClients = isAdmin || isManager;
-
-  const q = debouncedQuery.toLowerCase();
 
   // ✅ Etiqueta legible de estado de tarea
   const taskStatusLabel = (status?: any): string => {

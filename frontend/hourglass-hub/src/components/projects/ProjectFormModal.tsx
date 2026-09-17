@@ -22,7 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { projectsApi } from "@/lib/api";
+import { useCreateProject, useUpdateProject } from "@/hooks/useProjects";
 import { useClients, useClientContacts } from "@/hooks/useClientes";
 import { useTechnicians, useAllUsers } from "@/hooks/useTeamMembers";
 
@@ -68,6 +68,8 @@ type StepType = 'basicos' | 'cliente' | 'equipo' | 'resumen';
 
 export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: ProjectFormModalProps) {
   const isEditing = !!project;
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
   
   const [activeTab, setActiveTab] = useState<TabType>('general');
   const [currentStep, setCurrentStep] = useState<StepType>('basicos');
@@ -140,16 +142,16 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
 
       let projectId = project?.id || '';
 
+      // ✅ MUTACIONES OPTIMISTAS: el proyecto se refleja en la lista al instante
       if (isEditing && project) {
-        await projectsApi.update(project.id, projectData);
-        projectId = project.id;
+        const updated = await updateProject.mutateAsync({ id: project.id, data: projectData });
+        projectId = updated?.id || project.id;
       } else {
-        const newProject = await projectsApi.create(projectData);
-        projectId = newProject.id;
+        const newProject = await createProject.mutateAsync(projectData);
+        projectId = newProject?.id || '';
       }
 
       setShowSuccess(true);
-      toast.success(isEditing ? "Proyecto actualizado" : "Proyecto creado");
       setIsSubmitting(false);
       
       if (onSubmit) onSubmit(data);
@@ -157,7 +159,7 @@ export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: Proj
       setTimeout(() => {
         onOpenChange(false);
         setShowSuccess(false);
-      }, 1500);
+      }, 600);
 
     } catch (error: any) {
       toast.error(`Error: ${error.message}`);

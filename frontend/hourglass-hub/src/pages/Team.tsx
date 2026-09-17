@@ -19,9 +19,8 @@ import {
   Pencil, Trash2, TrendingUp, UserPlus, Ban, Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
+import { useTeamMembers, useUpdateTeamMember, useDeleteTeamMember } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/hooks/useAuth";
-import { usersApi } from "@/lib/api";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -176,7 +175,9 @@ export default function Team() {
   });
   const itemsPerPage = 12;
 
-  const { data: teamMembers = [], isLoading, refetch } = useTeamMembers();
+  const { data: teamMembers = [], isLoading } = useTeamMembers();
+  const updateMember = useUpdateTeamMember();
+  const deleteMemberMutation = useDeleteTeamMember();
   const { profile } = useAuth();
   const canViewTeam = profile?.role === 'Admin' || profile?.role === 'Manager';
   const isAdmin = profile?.role === 'Admin';
@@ -259,26 +260,22 @@ export default function Team() {
 
   const handleEditSubmit = async (data: { id?: string; name?: string; email?: string; phone?: string | null }) => {
     if (!data?.id) return;
-    await usersApi.update(data.id, {
-      name: data.name,
-      email: data.email,
-      phone: data.phone || null,
+    // ✅ UPDATE OPTIMISTA: se refleja al instante, sin esperar el refetch
+    await updateMember.mutateAsync({
+      id: data.id,
+      data: { name: data.name, email: data.email, phone: data.phone || null },
     });
-    toast.success("Miembro actualizado correctamente");
     setEditOpen(false);
-    refetch();
   };
 
   const handleToggleActive = async (m: Member) => {
     if (!m?.id) return;
     const next = !getIsActive(m);
     try {
-      await usersApi.update(m.id, { isActive: next });
-      toast.success(next ? `${getFullName(m)} activado` : `${getFullName(m)} desactivado`);
+      await updateMember.mutateAsync({ id: m.id, data: { isActive: next, is_active: next } });
       if (detailMember?.id === m.id) {
         setDetailMember({ ...detailMember, isActive: next, is_active: next });
       }
-      refetch();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(`Error: ${message}`);
@@ -296,16 +293,15 @@ export default function Team() {
     setDeleting(true);
     try {
       if (deleteMode === "remove") {
-        await usersApi.delete(deleteMember.id);
-        toast.success(`${getFullName(deleteMember)} eliminado del equipo`);
+        // ✅ DELETE OPTIMISTA: desaparece al instante
+        await deleteMemberMutation.mutateAsync(deleteMember.id);
       } else {
-        await usersApi.update(deleteMember.id, { isActive: false });
-        toast.success(`${getFullName(deleteMember)} desactivado`);
+        // ✅ UPDATE OPTIMISTA: se desactiva al instante
+        await updateMember.mutateAsync({ id: deleteMember.id, data: { isActive: false, is_active: false } });
       }
       setDeleteOpen(false);
       setDetailOpen(false);
       setCurrentPage(1);
-      refetch();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(`Error: ${message}`);
@@ -577,14 +573,14 @@ export default function Team() {
       <AddUserModal
         open={addOpen}
         onOpenChange={setAddOpen}
-        onSuccess={() => { setAddOpen(false); refetch(); }}
+        onSuccess={() => setAddOpen(false)}
       />
 
       {/* Gestionar rol */}
       <ManageMemberModal
         open={manageMemberOpen}
         onOpenChange={setManageMemberOpen}
-        onSuccess={() => refetch()}
+        onSuccess={() => {}}
         isAdmin={isAdmin}
         isManager={isManager}
       />

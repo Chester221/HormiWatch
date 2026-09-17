@@ -117,10 +117,7 @@ const TechnicianDashboard = () => {
 
     createTasksMutation.mutate(tasksToCreate, {
       onSuccess: () => {
-        toast.success("Tarea registrada correctamente");
         setCreateTaskModalOpen(false);
-        refetchTasks();
-        queryClient.invalidateQueries({ queryKey: ["tasks"] });
       },
       onError: (error: any) => {
         toast.error(`Error al crear tarea: ${error.message}`);

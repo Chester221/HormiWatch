@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { projectStatusInfo, formatProjectDate } from "@/lib/dashboardUtils";
 import { useClientsWithContacts, useDeleteClient, type ClientWithContacts } from "@/hooks/useClientes";
 import { toast } from "sonner";
-import { customersApi, projectsApi } from "@/lib/api";
+import { projectsApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
 const HORMI_BLUE = '#0DA2E7';
@@ -301,7 +301,7 @@ export default function Clients() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; clientId: string; clientName: string }>({ open: false, clientId: '', clientName: '' });
   const [cannotDeleteDialog, setCannotDeleteDialog] = useState<{ open: boolean; clientName: string; projectCount: number; hasActive: boolean }>({ open: false, clientName: '', projectCount: 0, hasActive: false });
 
-  const { data: clients = [], isLoading, refetch } = useClientsWithContacts();
+  const { data: clients = [], isLoading } = useClientsWithContacts();
   const deleteClientMutation = useDeleteClient();
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -380,11 +380,10 @@ export default function Clients() {
         return;
       }
 
-      await customersApi.delete(deleteDialog.clientId);
+      // ✅ DELETE OPTIMISTA: desaparece al instante de la lista
+      await deleteClientMutation.mutateAsync(deleteDialog.clientId);
 
-      toast.success(`"${deleteDialog.clientName}" eliminado`);
       setDeleteDialog({ open: false, clientId: '', clientName: '' });
-      refetch();
       loadProjects();
     } catch (error: any) { 
       toast.error(error.message || 'Error al eliminar');
@@ -392,7 +391,7 @@ export default function Clients() {
     setIsDeleting(false);
   };
 
-  const handleModalClose = (open: boolean) => { setIsModalOpen(open); if (!open) refetch(); };
+  const handleModalClose = (open: boolean) => { setIsModalOpen(open); if (!open) setEditingClient(null); };
 
   const sortedClients = useMemo(() => {
     const copy = [...clients];

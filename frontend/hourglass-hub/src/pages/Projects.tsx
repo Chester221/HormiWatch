@@ -145,7 +145,7 @@ export default function Projects() {
     return (saved === "grid" || saved === "list") ? saved as ViewMode : "grid";
   });
 
-  const { data: rawProjects = [], isLoading: loading, refetch } = useProjects();
+  const { data: rawProjects = [], isLoading: loading } = useProjects();
   const { data: clients = [] } = useClients("");
 
   // Guardar filtros en localStorage (fallback)
@@ -164,14 +164,8 @@ export default function Projects() {
     }
   }, [profile]);
 
-  useEffect(() => {
-    refetch();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') refetch();
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [refetch]);
+  // ✅ Las mutaciones (create/edit/delete) son OPTIMISTAS y refrescan la caché
+  // automáticamente; no hace falta refetch manual por foco de ventana.
 
   // ✅ CORREGIDO: loadProjectMembers con verificación de array
   const loadProjectMembers = async () => {
@@ -459,10 +453,9 @@ export default function Projects() {
   const confirmDelete = async () => {
     setIsDeleting(true);
     try {
+      // ✅ DELETE OPTIMISTA: desaparece al instante de la lista
       await deleteProjectMutation.mutateAsync({ projectId: deleteDialog.projectId, userId: user?.id || '' });
-      toast.success(`"${deleteDialog.projectName}" eliminado`);
       setDeleteDialog({ open: false, projectId: '', projectName: '' });
-      refetch();
       loadProjectMembers();
     } catch (error: any) { 
       toast.error(`Error: ${error.message}`); 
@@ -477,7 +470,6 @@ export default function Projects() {
     setFormModalOpen(open);
     if (!open) {
       setEditingProject(null);
-      refetch();
     }
   };
 
@@ -808,9 +800,7 @@ export default function Projects() {
         open={formModalOpen} 
         onOpenChange={handleFormModalClose} 
         project={editingProject}
-        onSubmit={() => {
-          refetch();
-        }}
+        onSubmit={() => {}}
       />
     </DashboardLayout>
   );
