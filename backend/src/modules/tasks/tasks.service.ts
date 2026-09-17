@@ -171,7 +171,7 @@ export class TasksService {
     }
 
     if (Temporal.Instant.compare(startInstant, now) > 0) {
-      throw new BadRequestException('Cannot create tasks in the future');
+      throw new BadRequestException('No se pueden crear tareas en el futuro');
     }
 
     // 2. Split Logic (Overnight)
