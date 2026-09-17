@@ -213,11 +213,12 @@ export default function AdminDashboard() {
   }, [fetchUsers]);
 
 
-  const handleDeleteUser = async (user: any) => {
+const handleDeleteUser = async (user: any) => {
+    // ⚠️ Fuera del try: el catch también lo necesita (evita ReferenceError → pantalla en blanco)
+    const deletedId = user.id;
     try {
       // ✅ El token vive en la cookie httpOnly; el apiClient maneja el
       // auto-refresh en 401. No hay gate de localStorage aquí.
-      const deletedId = user.id;
       // OPTIMISTIC: cerrar el modal y quitar la fila AL INSTANTE, sin esperar el DELETE.
       setDeleteDialog({ open: false, user: null });
       setUsers((prev) => prev.filter((u: any) => u.id !== deletedId));
@@ -240,20 +241,6 @@ export default function AdminDashboard() {
       ) {
         setDeleteDialog({ open: false, user: null });
         setCannotDeleteDialog({ open: true, user, message: msg });
-        return;
-      }
-      if (
-        msg.toLowerCase().includes("recurso referenciado") ||
-        (typeof error?.status === "number" && (error.status === 409 || error.status === 422))
-      ) {
-        try {
-          await usersApi.update(user.id, { isActive: false });
-          toast.info(`Usuario "${user.full_name || user.email}" desactivado (tiene datos asociados)`);
-          fetchUsers();
-        } catch {
-          toast.error(msg || "Error al eliminar usuario");
-        }
-        setDeleteDialog({ open: false, user: null });
         return;
       }
       toast.error(msg || "Error al eliminar usuario");
@@ -894,7 +881,7 @@ export default function AdminDashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCannotDeleteDialog({ open: false, user: null, message: "" })}>Cancelar</Button>
-            <Button variant="destructive" onClick={() => handleToggleActive(cannotDeleteDialog.user)} className="bg-amber-600 hover:bg-amber-700">
+            <Button variant="destructive" onClick={() => { setCannotDeleteDialog({ open: false, user: null, message: "" }); handleToggleActive(cannotDeleteDialog.user); }} className="bg-amber-600 hover:bg-amber-700">
               <UserX className="h-4 w-4 mr-1.5" /> Desactivar Usuario
             </Button>
           </DialogFooter>
