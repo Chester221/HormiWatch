@@ -96,7 +96,7 @@ export class Task extends BaseUuidEntity {
 
   //entity relations
   @ManyToOne(() => User, (u) => u.technician_tasks, {
-    nullable: false,
+    nullable: true,
   })
   @JoinColumn({ name: 'technician_id' })
   technician: User;

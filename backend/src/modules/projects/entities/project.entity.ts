@@ -103,7 +103,7 @@ export class Project extends BaseUuidEntity {
 
   //entity relations
   @ManyToOne(() => User, (u) => u.leaderProjects, {
-    nullable: false,
+    nullable: true,
   })
   @JoinColumn({ name: 'project_leader_id' })
   projectLeader: User;

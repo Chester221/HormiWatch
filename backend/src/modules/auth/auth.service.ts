@@ -45,11 +45,34 @@ export class AuthService {
     return { message: 'Sesión cerrada correctamente' };
   }
 
-  async deleteAccount(userId: string): Promise<void> {
+  async deleteAccount(userId: string, force = false): Promise<void> {
     const user = await this.usersService.findOneById(userId);
     if (!user) {
       throw new UnauthorizedException('Usuario no encontrado');
     }
+
+    // ✅ ELIMINACIÓN FORZADA: el usuario decide borrar su cuenta aunque tenga
+    // tareas o proyectos asignados. Sus datos NO se pierden: las tareas quedan
+    // sin técnico asignado y los proyectos sin líder (columnas ahora nullable).
+    if (force) {
+      await this.dataSource.transaction(async (manager) => {
+        await manager.query(
+          `DELETE FROM assigned_technicians WHERE user_id = $1`,
+          [userId],
+        );
+        await manager.query(
+          `UPDATE tasks SET technician_id = NULL WHERE technician_id = $1`,
+          [userId],
+        );
+        await manager.query(
+          `UPDATE projects SET project_leader_id = NULL WHERE project_leader_id = $1`,
+          [userId],
+        );
+        await this.usersService.remove(userId);
+      });
+      return;
+    }
+
     try {
       const [{ count: assignedTasks }] = (await this.dataSource.query(
         'SELECT COUNT(*) AS count FROM tasks WHERE technician_id = $1',

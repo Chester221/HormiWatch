@@ -124,9 +124,10 @@ export const authApi = {
   session: () =>
     apiClient('/auth/session', { method: 'GET' }),
 
-  // ✅ NUEVO: eliminar la propia cuenta (cualquier rol)
-  deleteAccount: () =>
-    apiClient('/auth/account', { method: 'DELETE' }),
+  // ✅ NUEVO: eliminar la propia cuenta (cualquier rol). force=true ignora
+  // tareas/proyectos asociados (quedan sin técnico/líder, no se pierden)
+  deleteAccount: (force = false) =>
+    apiClient(`/auth/account${force ? '?force=true' : ''}`, { method: 'DELETE' }),
 };
 
 // ---------- USERS ----------

@@ -5,6 +5,7 @@ import {
   Patch,
   Delete,
   Body,
+  Query,
   UnauthorizedException,
   UseGuards,
   Request,
@@ -125,9 +126,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Delete('account')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Eliminar la propia cuenta' })
-  async deleteAccount(@Request() req: { user: IActiveUser }) {
-    await this.authService.deleteAccount(req.user.userId);
+  @ApiOperation({ summary: 'Eliminar la propia cuenta (force: ignora tareas/proyectos asociados)' })
+  async deleteAccount(
+    @Request() req: { user: IActiveUser },
+    @Query('force') force?: string,
+  ) {
+    await this.authService.deleteAccount(req.user.userId, force === 'true');
   }
 
   @UseGuards(JwtAuthGuard)

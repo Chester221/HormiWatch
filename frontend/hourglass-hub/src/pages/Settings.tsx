@@ -122,6 +122,7 @@ export default function Settings() {
   const [savingTheme, setSavingTheme] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [forceDeleteMode, setForceDeleteMode] = useState(false);
   const themeTimeoutRef = useRef<number | null>(null);
 
   // Estado del formulario de cambio de contraseña
@@ -198,7 +199,9 @@ export default function Settings() {
   const handleDeleteConfirmed = async () => {
     setDeleting(true);
     try {
-      await authApi.deleteAccount();
+      // ✅ FUERZA BRUTA: el usuario decide eliminar su cuenta aunque tenga
+      // tareas o proyectos asignados (sus registros se conservan sin técnico/líder)
+      await authApi.deleteAccount(forceDeleteMode);
       toast.success("Tu cuenta de HormiWatch fue eliminada");
       setDeleteOpen(false);
       setTimeout(async () => {
@@ -206,9 +209,17 @@ export default function Settings() {
         navigate("/auth", { replace: true });
       }, 400);
     } catch (err: any) {
+      // Si el backend bloquea por tareas/proyectos, ofrecer la eliminación forzada
+      const msg = err?.message || "";
+      if (!forceDeleteMode && (msg.includes("tareas o proyectos") || Number(err?.status) === 409)) {
+        setForceDeleteMode(true);
+        setDeleting(false);
+        return;
+      }
       toast.error(err?.message || "No se pudo eliminar la cuenta");
       setDeleting(false);
       setDeleteOpen(false);
+      setForceDeleteMode(false);
     }
   };
 
@@ -538,7 +549,7 @@ export default function Settings() {
                   variant="outline"
                   size="sm"
                   className="shrink-0 gap-1.5 rounded-lg border-red-300/70 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-800/60 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:text-red-300"
-                  onClick={() => setDeleteOpen(true)}
+                  onClick={() => { setForceDeleteMode(false); setDeleteOpen(true); }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Eliminar
@@ -550,7 +561,7 @@ export default function Settings() {
       </div>
 
       {/* ═══════════ DIÁLOGO DE CONFIRMACIÓN ═══════════ */}
-      <Dialog open={deleteOpen} onOpenChange={(open) => { if (!deleting) setDeleteOpen(open); }}>
+      <Dialog open={deleteOpen} onOpenChange={(open) => { if (!deleting) { setDeleteOpen(open); if (!open) setForceDeleteMode(false); } }}>
         <DialogContent hideCloseButton className="max-w-md gap-0 overflow-hidden rounded-2xl border-border/60 bg-card p-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Eliminar cuenta</DialogTitle>
@@ -564,29 +575,47 @@ export default function Settings() {
             <div>
               <h2 className="text-lg font-bold leading-tight text-foreground">Eliminar tu cuenta</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Esta acción es permanente e irreversible
+                {forceDeleteMode
+                  ? "Tienes registros asociados: eliminación forzada"
+                  : "Esta acción es permanente e irreversible"}
               </p>
             </div>
           </div>
 
-          <div className="px-6 pb-5">
-            <p className="text-sm leading-relaxed text-foreground">
-              ¿Estás seguro que deseas eliminar tu cuenta de HormiWatch?
-            </p>
-            <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200/50 bg-amber-50/70 px-3.5 py-3 dark:border-amber-800/30 dark:bg-amber-950/10">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-              <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-400">
-                Se eliminarán permanentemente tu cuenta y toda la información asociada. No podrás recuperarla.
+          {forceDeleteMode ? (
+            <div className="px-6 pb-5">
+              <p className="text-sm leading-relaxed text-foreground">
+                Tu cuenta tiene tareas o proyectos asignados. Si decides eliminar tu cuenta de todos modos,{" "}
+                <strong>los registros se conservarán</strong> pero las tareas quedarán{" "}
+                <strong>sin técnico</strong> y los proyectos <strong>sin líder</strong> asignado.
               </p>
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200/50 bg-amber-50/70 px-3.5 py-3 dark:border-amber-800/30 dark:bg-amber-950/10">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                  Esta acción es permanente e irreversible. Tu cuenta será eliminada y no podrás recuperarla.
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="px-6 pb-5">
+              <p className="text-sm leading-relaxed text-foreground">
+                ¿Estás seguro que deseas eliminar tu cuenta de HormiWatch?
+              </p>
+              <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-amber-200/50 bg-amber-50/70 px-3.5 py-3 dark:border-amber-800/30 dark:bg-amber-950/10">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+                  Se eliminarán permanentemente tu cuenta y toda la información asociada. No podrás recuperarla.
+                </p>
+              </div>
+            </div>
+          )}
 
           <DialogFooter className="flex items-center justify-end gap-2 border-t border-border/50 bg-muted/20 px-6 py-4">
             <Button
               variant="outline"
               size="sm"
               className="h-9 rounded-lg px-3 text-xs font-medium"
-              onClick={() => setDeleteOpen(false)}
+              onClick={() => { setDeleteOpen(false); setForceDeleteMode(false); }}
               disabled={deleting}
             >
               Cancelar
@@ -600,6 +629,10 @@ export default function Settings() {
               {deleting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" /> Eliminando...
+                </>
+              ) : forceDeleteMode ? (
+                <>
+                  <Trash2 className="h-4 w-4" /> Eliminar de todos modos
                 </>
               ) : (
                 <>
