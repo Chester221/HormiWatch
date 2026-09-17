@@ -53,23 +53,9 @@ export class AuthService {
 
     // ✅ ELIMINACIÓN FORZADA: el usuario decide borrar su cuenta aunque tenga
     // tareas o proyectos asignados. Sus datos NO se pierden: las tareas quedan
-    // sin técnico asignado y los proyectos sin líder (columnas ahora nullable).
+    // sin técnico asignado y los proyectos sin líder. Todo en una sola transacción.
     if (force) {
-      await this.dataSource.transaction(async (manager) => {
-        await manager.query(
-          `DELETE FROM assigned_technicians WHERE user_id = $1`,
-          [userId],
-        );
-        await manager.query(
-          `UPDATE tasks SET technician_id = NULL WHERE technician_id = $1`,
-          [userId],
-        );
-        await manager.query(
-          `UPDATE projects SET project_leader_id = NULL WHERE project_leader_id = $1`,
-          [userId],
-        );
-        await this.usersService.remove(userId);
-      });
+      await this.usersService.forceRemove(userId);
       return;
     }
 

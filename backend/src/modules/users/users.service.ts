@@ -552,7 +552,59 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    if (user.profile.profilePicture) {
+    // ✅ Verificación correcta de referencias: SOLO cuentan registros ACTIVOS
+    // (deleted_at IS NULL). Las tareas/proyectos soft-deleted son datos
+    // invisibles (historial purgado) y NO deben bloquear la eliminación.
+    const counts = await this.userRepository.manager.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM tasks t
+          WHERE t.technician_id = $1 AND t.deleted_at IS NULL
+            AND (t.project_id IS NULL OR EXISTS (
+              SELECT 1 FROM projects p WHERE p.id = t.project_id AND p.deleted_at IS NULL
+            ))) AS tasks,
+        (SELECT COUNT(*)::int FROM projects p
+          WHERE p.project_leader_id = $1 AND p.deleted_at IS NULL) AS led_projects,
+        (SELECT COUNT(*)::int
+           FROM assigned_technicians at
+           JOIN projects p ON p.id = at.project_id
+          WHERE at.user_id = $1 AND p.deleted_at IS NULL) AS assigned_projects`,
+      [id],
+    );
+    const related = counts?.[0];
+    if (related && (related.tasks > 0 || related.led_projects > 0 || related.assigned_projects > 0)) {
+      throw new ConflictException(
+        'No se puede eliminar: el usuario tiene tareas o proyectos asignados. Desactívalo en su lugar.',
+      );
+    }
+
+    await this.removeUserAndProfile(id, user);
+
+    await this.cacheManager.del(`/users/${id}`);
+  }
+
+  // ✅ ELIMINACIÓN FORZADA (el usuario decide borrar su cuenta con todo y datos):
+  // desvincula tareas (quedan sin técnico) y proyectos sin líder, elimina los
+  // vínculos de assigned_technicians, y borra el usuario en UNA sola transacción.
+  async forceRemove(id: string): Promise<void> {
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['profile', 'role'],
+    });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    await this.removeUserAndProfile(id, user, true);
+
+    await this.cacheManager.del(`/users/${id}`);
+  }
+
+  private async removeUserAndProfile(
+    id: string,
+    user: User,
+    detachReferences = false,
+  ): Promise<void> {
+    if (user.profile?.profilePicture) {
       try {
         const fileKey = this.extractFileKey(user.profile.profilePicture);
         if (fileKey) {
@@ -566,27 +618,24 @@ export class UsersService {
       }
     }
 
-    // ✅ Mensaje claro si el usuario tiene registros asociados (FK NO ACTION)
-    const counts = await this.userRepository.manager.query(
-      `SELECT
-        (SELECT COUNT(*)::int FROM tasks t WHERE t.technician_id = $1) AS tasks,
-        (SELECT COUNT(*)::int FROM projects p WHERE p.project_leader_id = $1) AS led_projects,
-        (SELECT COUNT(*)::int FROM assigned_technicians at WHERE at.user_id = $1) AS assigned_projects`,
-      [id],
-    );
-    const related = counts?.[0];
-    if (related && (related.tasks > 0 || related.led_projects > 0 || related.assigned_projects > 0)) {
-      throw new ConflictException(
-        'No se puede eliminar: el usuario tiene tareas o proyectos asignados. Desactívalo en su lugar.',
-      );
-    }
-
     await this.userRepository.manager.transaction(async (manager) => {
+      if (detachReferences) {
+        await manager.query(
+          `DELETE FROM assigned_technicians WHERE user_id = $1`,
+          [id],
+        );
+        await manager.query(
+          `UPDATE tasks SET technician_id = NULL WHERE technician_id = $1`,
+          [id],
+        );
+        await manager.query(
+          `UPDATE projects SET project_leader_id = NULL WHERE project_leader_id = $1`,
+          [id],
+        );
+      }
       await manager.delete(Profile, { id });
       await manager.delete(User, { id });
     });
-
-    await this.cacheManager.del(`/users/${id}`);
   }
 
   async restore(id: string): Promise<UserResponseDto> {
