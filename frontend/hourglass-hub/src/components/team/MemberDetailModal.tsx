@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Dialog, DialogContent, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -102,6 +102,8 @@ export function MemberDetailModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
+        {/* Título accesible: el header usa un <h2> visual; DialogTitle oculto para lectores de pantalla */}
+        <DialogTitle className="sr-only">{fullName}</DialogTitle>
         {/* Header */}
         <div className="relative p-6 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-border/40">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />

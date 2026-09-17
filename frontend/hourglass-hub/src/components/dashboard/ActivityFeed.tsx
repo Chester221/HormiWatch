@@ -24,6 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -344,6 +345,7 @@ export function ActivityFeed() {
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="max-w-4xl w-[90vw] h-[85vh] bg-card border-border flex flex-col p-0 rounded-2xl shadow-2xl overflow-hidden">
+          <DialogTitle className="sr-only">Actividad Reciente</DialogTitle>
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-col h-full">
             <div className="p-5 border-b border-border shrink-0 bg-gradient-to-r from-primary/5 to-transparent">
               <div className="flex items-center justify-between">
