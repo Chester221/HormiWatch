@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
 import { usersApi, authApi, setAccessToken, requestRefresh } from '@/lib/api'
 
+// Marca de sesión en localStorage (NO es el token: la cookie refresh sigue siendo HttpOnly).
+// Evita que en cada arranque se disparen /auth/session + /auth/refresh sin cookie,
+// que solo generaban 401 en consola (session x1 + refresh x2) y ralentizaban la carga.
+const SESSION_MARKER = 'hw_session'
+
 export type UserRole = 'Technician' | 'Manager' | 'Admin' | 'Leader'
 
 export interface UserProfile {
@@ -142,60 +147,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, [])
 
     const initializeAuth = useCallback(async () => {
+        setLoading(true);
+        setAuthError(null);
+
+        // ✅ Sin marca = nunca inició sesión en este navegador (o cerró sesión explícitamente).
+        // Salir YA: cero peticiones, cero 401 inútiles, login al instante.
+        if (localStorage.getItem(SESSION_MARKER) !== '1') {
+            setUser(null);
+            setSession(null);
+            setProfile(null);
+            setLoading(false);
+            return;
+        }
+
         try {
-          setLoading(true);
-          setAuthError(null);
-          
-          // ✅ Usar refresh/session con withCredentials (cookie HttpOnly)
-          // Si hay un refresh token en cookie, se renovará automáticamente
-          try {
             let sessionData = null;
-            try {
-              sessionData = await authApi.session();
-            } catch {
-              // Si el access token no está, el auto-refresh se encarga
-              const refreshed = await requestRefresh();
-              if (refreshed) {
+
+            // ✅ Rotar la cookie de refresco UNA sola vez. Con cookie válida → 200
+            // (sin 401). Sin cookie → sesión expirada, limpiar marca y salir.
+            const token = await requestRefresh();
+            if (token) {
+                setAccessToken(token);
                 sessionData = await authApi.session();
-              }
-            }
-            
-            if (sessionData?.id) {
-              setUser(sessionData);
-              setSession({ user: sessionData });
-              
-              try {
-                const profileData = await fetchProfile(sessionData.id);
-                setProfile(profileData);
-                
-                if (profileData?.dark_mode) {
-                  document.documentElement.classList.add('dark')
-                } else {
-                  document.documentElement.classList.remove('dark')
-                }
-              } catch (profileErr: any) {
-                console.error("Fallo carga de perfil", profileErr);
-                setAuthError(`Error cargando tu perfil: ${profileErr.message || 'Error desconocido'}`);
-                setProfile(null);
-              }
             } else {
-              setUser(null);
-              setSession(null);
-              setProfile(null);
+                localStorage.removeItem(SESSION_MARKER);
             }
-          } catch (err) {
+
+            if (sessionData?.id) {
+                setUser(sessionData);
+                setSession({ user: sessionData });
+
+                try {
+                    const profileData = await fetchProfile(sessionData.id);
+                    setProfile(profileData);
+
+                    if (profileData?.dark_mode) {
+                        document.documentElement.classList.add('dark')
+                    } else {
+                        document.documentElement.classList.remove('dark')
+                    }
+                } catch (profileErr: any) {
+                    console.error("Fallo carga de perfil", profileErr);
+                    setAuthError(`Error cargando tu perfil: ${profileErr.message || 'Error desconocido'}`);
+                    setProfile(null);
+                }
+            } else {
+                setUser(null);
+                setSession(null);
+                setProfile(null);
+            }
+        } catch (err) {
             console.error('Error en session:', err);
             setUser(null);
             setSession(null);
             setProfile(null);
-          }
-        } catch (err: any) {
-          console.error('Error inicializando auth:', err);
-          setAuthError(`Error de conexión: ${err.message}`);
         } finally {
-          setLoading(false);
+            setLoading(false);
         }
-      }, [fetchProfile]);
+    }, [fetchProfile]);
 
     useEffect(() => {
         initializeAuth();
@@ -218,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             if (result?.accessToken) {
                 setAccessToken(result.accessToken);
+                localStorage.setItem(SESSION_MARKER, '1');
             }
             
             if (result?.user) {
@@ -268,6 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const loginResult = await authApi.login(email, password);
             if (loginResult?.accessToken) {
                 setAccessToken(loginResult.accessToken);
+                localStorage.setItem(SESSION_MARKER, '1');
             }
 
             return { error: null };
@@ -284,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err) {
             console.error('Error en logout:', err);
         }
+        localStorage.removeItem(SESSION_MARKER);
         localStorage.removeItem('token');
         setAccessToken(null);
         setProfile(null); 
