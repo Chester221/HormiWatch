@@ -175,7 +175,8 @@ export class TasksService {
     }
 
     // 2. Split Logic (Overnight)
-    const timeZone = Temporal.Now.zonedDateTimeISO().timeZoneId;
+    // Zona horaria de los usuarios (Venezuela por defecto). Configurable con APP_TIMEZONE.
+    const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
     const startZoned = startInstant.toZonedDateTimeISO(timeZone);
     const endZoned = endInstant.toZonedDateTimeISO(timeZone);
 
