@@ -1,24 +1,27 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import TechnicianDashboard from "./pages/TechnicianDashboard";  
-import ManagerDashboard from "./pages/DashboardMG";   
-import Projects from "./pages/Projects";
-import Tasks from "./pages/Tasks";
-import Clients from "./pages/Clients";
-import Team from "./pages/Team";
-import Services from "./pages/Services";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import AdminDashboard from "@/pages/AdminDashboard";
 import { Button } from "@/components/ui/button";
+
+// ⚡ CODE-SPLITTING: cada página se descarga bajo demanda (chunk propio),
+// reduciendo el bundle inicial y acelerando la carga de la app.
+const TechnicianDashboard = lazy(() => import("./pages/TechnicianDashboard"));
+const ManagerDashboard = lazy(() => import("./pages/DashboardMG"));
+const Projects = lazy(() => import("./pages/Projects"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const Clients = lazy(() => import("./pages/Clients"));
+const Team = lazy(() => import("./pages/Team"));
+const Services = lazy(() => import("./pages/Services"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -134,6 +137,13 @@ const AdminDashboardGuard = () => {
   return <AdminDashboard />;
 };
 
+// Fallback de carga mientras se descarga el chunk de la página
+const PageLoader = () => (
+  <div className="flex justify-center items-center h-screen bg-background">
+    <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+  </div>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -143,48 +153,50 @@ const App = () => (
         <HashRouter>
           <ThemeController />
           <AuthErrorBoundary>
-            <Routes>
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<RoleBasedDashboard />} />
-              
-              {/* 🔥 Dashboard técnico - BLOQUEADO para Manager/Leader/Admin */}
-              <Route path="/dashboard" element={
-                <ProtectedRoute><TechnicianDashboardGuard /></ProtectedRoute>
-              } />
-              
-              {/* 🔥 Dashboard gerencial - BLOQUEADO para Admin */}
-              <Route path="/gerencial" element={
-                <ProtectedRoute requiredRole={['Manager', 'Leader']}><ManagerDashboardGuard /></ProtectedRoute>
-              } />
-              
-              {/* 🔥 Panel Admin - BLOQUEADO para no-Admins */}
-              <Route path="/control-usuarios" element={
-                <ProtectedRoute requiredRole={['Admin']}><AdminDashboardGuard /></ProtectedRoute>
-              } />
-              
-              <Route path="/tasks" element={
-                <ProtectedRoute><Tasks /></ProtectedRoute>
-              } />
-              <Route path="/profile" element={
-                <ProtectedRoute><Profile /></ProtectedRoute>
-              } />
-              <Route path="/settings" element={
-                <ProtectedRoute><Settings /></ProtectedRoute>
-              } />
-              <Route path="/projects" element={
-                <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin', 'Technician']}><Projects /></ProtectedRoute>
-              } />
-              <Route path="/clients" element={
-                <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Clients /></ProtectedRoute>
-              } />
-              <Route path="/team" element={
-                <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Team /></ProtectedRoute>
-              } />
-              <Route path="/services" element={
-                <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin', 'Technician']}><Services /></ProtectedRoute>
-              } />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/" element={<RoleBasedDashboard />} />
+                
+                {/* 🔥 Dashboard técnico - BLOQUEADO para Manager/Leader/Admin */}
+                <Route path="/dashboard" element={
+                  <ProtectedRoute><TechnicianDashboardGuard /></ProtectedRoute>
+                } />
+                
+                {/* 🔥 Dashboard gerencial - BLOQUEADO para Admin */}
+                <Route path="/gerencial" element={
+                  <ProtectedRoute requiredRole={['Manager', 'Leader']}><ManagerDashboardGuard /></ProtectedRoute>
+                } />
+                
+                {/* 🔥 Panel Admin - BLOQUEADO para no-Admins */}
+                <Route path="/control-usuarios" element={
+                  <ProtectedRoute requiredRole={['Admin']}><AdminDashboardGuard /></ProtectedRoute>
+                } />
+                
+                <Route path="/tasks" element={
+                  <ProtectedRoute><Tasks /></ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute><Profile /></ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute><Settings /></ProtectedRoute>
+                } />
+                <Route path="/projects" element={
+                  <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin', 'Technician']}><Projects /></ProtectedRoute>
+                } />
+                <Route path="/clients" element={
+                  <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Clients /></ProtectedRoute>
+                } />
+                <Route path="/team" element={
+                  <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Team /></ProtectedRoute>
+                } />
+                <Route path="/services" element={
+                  <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin', 'Technician']}><Services /></ProtectedRoute>
+                } />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </AuthErrorBoundary>
         </HashRouter>
       </TooltipProvider>
