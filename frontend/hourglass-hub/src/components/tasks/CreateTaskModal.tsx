@@ -97,15 +97,15 @@ const convertTo24Hour = (time12h: string): string => {
   return `${hours24.toString().padStart(2, '0')}:${minutes}`;
 };
 
-// Función para obtener el icono según la hora
+// Sol (01:00 a.m. - 06:00 p.m.) · Luna (07:00 p.m. - 12:00 a.m.)
 const getTimeIcon = (time: string) => {
-  const hour = parseInt(time.split(':')[0]);
-  const isPM = time.includes('PM');
-  
-  if ((isPM && hour !== 12) || hour >= 12 && !isPM) {
-    return <Moon className="h-3 w-3" />;
-  }
-  return <Sun className="h-3 w-3" />;
+  const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i.exec(time || "");
+  if (!match) return <Sun className="h-3 w-3" />;
+  let hour = parseInt(match[1], 10);
+  const meridian = (match[3] || "").toUpperCase();
+  if (meridian === "PM" && hour !== 12) hour += 12;
+  if (meridian === "AM" && hour === 12) hour = 0;
+  return hour >= 1 && hour <= 18 ? <Sun className="h-3 w-3" /> : <Moon className="h-3 w-3" />;
 };
 
 // ✅ Horas por defecto en el PASADO: inicio = media hora actual redondeada hacia

@@ -15,8 +15,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useServices } from "@/hooks/useServices";
 import { useHolidays } from "@/hooks/useHolidays";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { calculateTaskBreakdown } from "@/lib/hoursCalculator";
-import { buildTaskSegments } from "@/lib/buildTaskSegments";
+import { toApiStatus } from "@/lib/dashboardUtils";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { TaskEditModal } from "@/components/tasks/TaskEditModal";
 import { TaskFilters } from "@/components/tasks/TaskFilters";
@@ -212,33 +211,28 @@ export default function Tasks() {
     if (!data.serviceId) return toast.error("Selecciona un servicio");
 
     const dateStr = format(data.date, "yyyy-MM-dd");
-    const start_time = new Date(`${dateStr}T${data.startTime}:00`).toISOString();
-    let end_time: string;
+    const startDateTime = new Date(`${dateStr}T${data.startTime}:00`).toISOString();
+
+    let endDateTime: string;
     if (data.endTime <= data.startTime) {
       const nextDay = new Date(data.date);
       nextDay.setDate(nextDay.getDate() + 1);
-      end_time = new Date(`${format(nextDay, "yyyy-MM-dd")}T${data.endTime}:00`).toISOString();
+      endDateTime = new Date(`${format(nextDay, "yyyy-MM-dd")}T${data.endTime}:00`).toISOString();
     } else {
-      end_time = new Date(`${dateStr}T${data.endTime}:00`).toISOString();
+      endDateTime = new Date(`${dateStr}T${data.endTime}:00`).toISOString();
     }
 
-    const selectedService = services?.find((s: any) => s.id === data.serviceId);
-    const hourlyRate = Number(selectedService?.hourlyRate ?? (selectedService?.default_hourly_rate || 0));
-    const holidaysList = (holidays.data || []).filter((h: any) => !h.is_working_day).map((h: any) => h.date);
-    const breakdown = calculateTaskBreakdown(start_time, end_time, hourlyRate, holidaysList);
-
-    const segments = buildTaskSegments(breakdown.days, data.startTime, data.endTime);
-    const tasksToCreate = segments.map((segment, index) => ({
+    const tasksToCreate = [{
       projectId: data.projectId,
       serviceId: data.serviceId,
       technicianId: user.id,
-      startDateTime: segment.startDateTime,
-      endDateTime: segment.endDateTime,
+      startDateTime,
+      endDateTime,
       title: data.title || "",
       description: data.description,
-      status: data.status === "Completed" ? "COMPLETED" : "PENDING",
+      status: toApiStatus(data.status),
       priority: "MEDIUM",
-    }));
+    }];
 
     createTasksMutation.mutate(tasksToCreate, {
       onSuccess: () => {

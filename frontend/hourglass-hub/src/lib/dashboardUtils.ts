@@ -61,6 +61,24 @@ const humanStatus = (status: unknown): string => {
   return key.charAt(0).toUpperCase() + key.slice(1).toLowerCase();
 };
 
+export const toApiStatus = (status: unknown): string => {
+  switch (String(status ?? "").toUpperCase().trim()) {
+    case "PENDING":
+      return "PENDING";
+    case "IN_PROGRESS":
+    case "INPROGRESS":
+    case "IN PROGRESS":
+      return "IN_PROGRESS";
+    case "COMPLETED":
+      return "COMPLETED";
+    case "CANCELLED":
+    case "CANCELED":
+      return "CANCELLED";
+    default:
+      return "PENDING";
+  }
+};
+
 type RawTask = Record<string, unknown> & {
   project?: {
     id?: unknown;
