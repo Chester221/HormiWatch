@@ -170,7 +170,7 @@ export class TasksService {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    if (Temporal.Instant.compare(startInstant, now) > 0) {
+    if (Temporal.Instant.compare(startInstant, now.add({ milliseconds: 5 * 60 * 1000 })) > 0) {
       throw new BadRequestException('No se pueden crear tareas en el futuro');
     }
 
