@@ -33,6 +33,21 @@ import {
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // 🍪 Opciones de cookie según entorno:
+  // PRODUCCIÓN (frontend en Vercel, backend en Railway = dominios distintos):
+  //   sameSite 'none' + secure true → el navegador envía la cookie en peticiones cross-site.
+  // LOCAL (http://localhost): 'lax' + sin Secure → Chrome rechaza SameSite=None sin Secure
+  //   sobre HTTP, así que se degrada automáticamente.
+  private buildRefreshCookieOptions() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    return {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? ('none' as const) : ('lax' as const),
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    };
+  }
+
   @SkipAuth()
   @Post('login')
   @ApiOperation({ summary: 'User login' })
@@ -53,12 +68,7 @@ export class AuthController {
     const loginData = await this.authService.login(user);
 
     // Set Refresh Token in HttpOnly Cookie
-    response.cookie('refresh_token', loginData.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    response.cookie('refresh_token', loginData.refreshToken, this.buildRefreshCookieOptions());
 
     return {
       accessToken: loginData.accessToken,
@@ -105,12 +115,7 @@ export class AuthController {
     const newTokens = await this.authService.refreshToken(refreshToken);
 
     // Update Refresh Token Cookie
-    response.cookie('refresh_token', newTokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    response.cookie('refresh_token', newTokens.refreshToken, this.buildRefreshCookieOptions());
 
     return {
       accessToken: newTokens.accessToken,
