@@ -138,43 +138,35 @@ const TechnicianDashboard = () => {
 
   const metrics = useMemo(() => {
     const { currentWeekStart, currentWeekEnd, lastWeekStart, lastWeekEnd } = getWeekRanges();
-    
+
+    const hoursOf = (task: any) => {
+      if (task.duration_in_minutes) return task.duration_in_minutes / 60;
+      if (task.start_time && task.end_time) {
+        return Math.abs(new Date(task.end_time).getTime() - new Date(task.start_time).getTime()) / 3600000;
+      }
+      return (task.normal_hours || 0) + (task.overtime_hours || 0);
+    };
+    const sumHours = (list: any[]) => list.reduce((acc: number, task: any) => acc + hoursOf(task), 0);
+
+    const completedTasks = tasks.filter((task: any) => task.status === "Completed");
+
     const currentWeekTasks = tasks.filter((task: any) => {
       const taskDate = new Date(task.start_time || task.created_at);
       return isWithinInterval(taskDate, { start: currentWeekStart, end: currentWeekEnd });
     });
-    
+
     const lastWeekTasks = tasks.filter((task: any) => {
       const taskDate = new Date(task.start_time || task.created_at);
       return isWithinInterval(taskDate, { start: lastWeekStart, end: lastWeekEnd });
     });
-    
-    const currentWeekHours = currentWeekTasks.reduce((acc: number, task: any) => {
-      if (task.duration_in_minutes) return acc + (task.duration_in_minutes / 60);
-      if (task.start_time && task.end_time) {
-        return acc + Math.abs(new Date(task.end_time).getTime() - new Date(task.start_time).getTime()) / 3600000;
-      }
-      return acc + ((task.normal_hours || 0) + (task.overtime_hours || 0));
-    }, 0);
-    
-    const lastWeekHours = lastWeekTasks.reduce((acc: number, task: any) => {
-      if (task.duration_in_minutes) return acc + (task.duration_in_minutes / 60);
-      if (task.start_time && task.end_time) {
-        return acc + Math.abs(new Date(task.end_time).getTime() - new Date(task.start_time).getTime()) / 3600000;
-      }
-      return acc + ((task.normal_hours || 0) + (task.overtime_hours || 0));
-    }, 0);
-    
+
+    const currentWeekHours = sumHours(currentWeekTasks.filter((t: any) => t.status === "Completed"));
+    const lastWeekHours = sumHours(lastWeekTasks.filter((t: any) => t.status === "Completed"));
+
     const tareasCount = tasks.length;
-    const tareasCompletadas = tasks.filter((t: any) => t.status === "Completed").length;
+    const tareasCompletadas = completedTasks.length;
     const tareasPendientes = tasks.filter((t: any) => t.status === "Pending").length;
-    const horasTotal = tasks.reduce((acc: number, task: any) => {
-      if (task.duration_in_minutes) return acc + (task.duration_in_minutes / 60);
-      if (task.start_time && task.end_time) {
-        return acc + Math.abs(new Date(task.end_time).getTime() - new Date(task.start_time).getTime()) / 3600000;
-      }
-      return acc + ((task.normal_hours || 0) + (task.overtime_hours || 0));
-    }, 0);
+    const horasTotal = sumHours(completedTasks);
     const completionRate = tareasCount > 0 ? Math.round((tareasCompletadas / tareasCount) * 100) : 0;
     
     const tareasTrendValue = lastWeekTasks.length === 0 ? 0 : Math.round(((currentWeekTasks.length - lastWeekTasks.length) / lastWeekTasks.length) * 100);
@@ -274,7 +266,7 @@ const TechnicianDashboard = () => {
                   icon: Clock, 
                   label: isManager ? "Horas Registradas" : "Mis Horas", 
                   value: `${metrics.horas.total.toFixed(1)}h`,
-                  sub: "Tiempo total invertido",
+                  sub: "Horas de tareas completadas",
                   delay: 0.1
                 },
                 { 
