@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format } from "date-fns";
+import { format, isBefore, startOfToday } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Dialog,
@@ -108,8 +108,40 @@ const getTimeIcon = (time: string) => {
   return <Sun className="h-3 w-3" />;
 };
 
+// ✅ Horas por defecto en el PASADO: inicio = media hora actual redondeada hacia
+// abajo, fin = inicio + 1h. Así "Crear Tarea" nunca falla por el backend que
+// rechaza tareas futuras (antes el default era 09:00 AM, futuro si se probaba temprano).
+const getDefaultTimes = () => {
+  const now = new Date();
+  const start = new Date(now);
+  start.setSeconds(0, 0);
+  if (now.getMinutes() < 30) {
+    start.setMinutes(0);
+  } else {
+    start.setMinutes(30);
+  }
+  // Si justo ahora es :00 o :30 en punto, retroceder media hora para no quedar en futuro
+  if (start.getTime() >= now.getTime()) {
+    start.setMinutes(start.getMinutes() - 30);
+  }
+
+  const to12h = (d: Date): string => {
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  return {
+    startTime: to12h(start),
+    endTime: to12h(new Date(start.getTime() + 3_600_000)),
+  };
+};
+
 export function CreateTaskModal({ open, onOpenChange, projects, services, onSuccess }: CreateTaskModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const defaultTimes = useMemo(getDefaultTimes, []);
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -119,8 +151,7 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
       serviceId: "",
       date: new Date(),
       status: "Pending",
-      startTime: "09:00 AM",
-      endTime: "05:00 PM",
+      ...defaultTimes,
       description: "",
     },
   });
@@ -133,6 +164,15 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
         startTime: convertTo24Hour(data.startTime),
         endTime: convertTo24Hour(data.endTime),
       };
+
+      // ✅ Validación local: no registrar tareas con inicio futuro.
+      // El backend también lo rechaza; aquí se avisa antes y en español.
+      const startDate = new Date(`${format(data.date, "yyyy-MM-dd")}T${submitData.startTime}:00`);
+      if (startDate.getTime() > Date.now() + 5 * 60_000) {
+        toast.error("La hora de inicio no puede estar en el futuro");
+        return;
+      }
+
       await onSuccess(submitData);
       form.reset();
       onOpenChange(false);
@@ -280,7 +320,7 @@ export function CreateTaskModal({ open, onOpenChange, projects, services, onSucc
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
-                            disabled={(date) => date < new Date()}
+                            disabled={(date) => isBefore(date, startOfToday())}
                             initialFocus
                             className="rounded-xl"
                           />

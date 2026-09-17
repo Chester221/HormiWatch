@@ -72,12 +72,13 @@ const apiClient = async (endpoint: string, options: RequestInit = {}, retry = tr
     throw err;
   }
 
-  // ✅ 204 No Content: no hay cuerpo que parsear
-  if (response.status === 204) {
+  const text = await response.text();
+  // ✅ 204 No Content o 200 sin cuerpo (ej. DELETE de tarea): nada que parsear.
+  if (!text) {
     return null;
   }
 
-  const json = await response.json();
+  const json = JSON.parse(text);
 
   // ✅ SOPORTA { records, meta } Preserva meta para que el cliente pueda paginar
   if (json && typeof json === 'object' && 'meta' in json) {
