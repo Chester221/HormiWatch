@@ -56,7 +56,7 @@ async function bootstrap() {
   // 🔥 CORS - orígenes permitidos.
   // En Railway se puede ampliar con la env var: CORS_ORIGINS=https://mi-dominio.com,http://localhost:8080
   const defaultOrigins =
-    'https://hormi-watch2-main.vercel.app,https://www.hormi-watch2.vercel.app,http://localhost:8080';
+    'https://hormi-watch.vercel.app,https://hormi-watch2-main.vercel.app,https://www.hormi-watch2.vercel.app,http://localhost:8080';
   const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins)
     .split(',')
     .map((origin: string) => origin.trim())
