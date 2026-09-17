@@ -119,14 +119,34 @@ export function TaskDetailModal({
     0;
 
   const rate = Number(task.applied_hourly_rate || task.appliedHourlyRate || 0);
+  const rawBreakdown = task.factor_breakdown || task.factorBreakdown;
+  const breakdown =
+    Array.isArray(rawBreakdown) && rawBreakdown.length > 0
+      ? (rawBreakdown as { factor: number; label: string; hours: number }[])
+      : null;
+  const factorRows = breakdown
+    ? breakdown.map((b) => ({
+        ...b,
+        amount:
+          Math.round(rate * Number(b.factor) * Number(b.hours || 0) * 100) /
+          100,
+      }))
+    : [];
+  const hasBreakdown = factorRows.length > 0;
+  const factorTotal = factorRows.reduce((sum, r) => sum + r.amount, 0);
   const normalPay = Math.round(rate * normalHours * 1 * 100) / 100;
   const overtimePay = Math.round(rate * overtimeHours * 1.5 * 100) / 100;
   const totalPay = task.total_pay != null
     ? Number(task.total_pay).toFixed(2)
-    : (normalHours > 0 || overtimeHours > 0
-        ? (normalPay + overtimePay)
-        : rate * hours
+    : (hasBreakdown
+        ? factorTotal
+        : normalHours > 0 || overtimeHours > 0
+          ? (normalPay + overtimePay)
+          : rate * hours
       ).toFixed(2);
+
+  const factorDot = (f: number) =>
+    f >= 2 ? "#ef4444" : f >= 1.5 ? "#f59e0b" : "#0DA2E7";
 
   const startDate = startRaw ? new Date(startRaw as string) : null;
   const endDate = endRaw ? new Date(endRaw as string) : null;
@@ -134,6 +154,14 @@ export function TaskDetailModal({
   const completedDate = completedRaw ? new Date(completedRaw as string) : null;
 
   const factorInfo = (() => {
+    if (hasBreakdown) {
+      const maxFactor = Math.max(...factorRows.map((r) => r.factor));
+      if (maxFactor >= 2)
+        return { label: "×2", title: "Domingo / Feriado (factor ×2)", tone: "red" };
+      if (maxFactor >= 1.5)
+        return { label: "×1.5", title: "Nocturno / Sábado (factor ×1.5)", tone: "amber" };
+      return { label: "×1", title: "Horario regular (factor ×1)", tone: "neutral" };
+    }
     const passed = (task as { factor?: { label: string; title: string; tone: string } }).factor;
     if (passed && typeof passed === "object" && passed.tone) return passed;
     if (!startDate) return { label: "×1", title: "Factor ×1", tone: "neutral" };
@@ -292,30 +320,57 @@ export function TaskDetailModal({
                   </div>
                 </div>
 
-                {(normalHours > 0 || overtimeHours > 0) && (
+                {(hasBreakdown || normalHours > 0 || overtimeHours > 0) && (
                   <div className="mt-5 space-y-3 border-t border-border/40 pt-4">
-                    <Label icon={<Hash className="h-3 w-3" />}>Desglose de horas</Label>
-                    {normalHours > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
-                          Diurnas · factor ×1
-                        </span>
-                        <span className="font-medium text-foreground">
-                          {normalHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${normalPay.toFixed(2)}</span>
-                        </span>
-                      </div>
-                    )}
-                    {overtimeHours > 0 && (
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-muted-foreground">
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                          Nocturnas / extra · factor ×1.5
-                        </span>
-                        <span className="font-medium text-foreground">
-                          {overtimeHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${overtimePay.toFixed(2)}</span>
-                        </span>
-                      </div>
+                    <Label icon={<Hash className="h-3 w-3" />}>
+                      {hasBreakdown ? "Desglose por factores" : "Desglose de horas"}
+                    </Label>
+                    {hasBreakdown ? (
+                      factorRows.map((row, i) => (
+                        <div
+                          key={`${row.label}-${i}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: factorDot(row.factor) }}
+                            />
+                            {row.label} · factor ×{row.factor}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {Number(row.hours).toFixed(1)}h
+                            <span className="ml-2 font-normal text-muted-foreground">
+                              ${Number(row.amount || 0).toFixed(2)}
+                            </span>
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        {normalHours > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
+                              Diurnas · factor ×1
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {normalHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${normalPay.toFixed(2)}</span>
+                            </span>
+                          </div>
+                        )}
+                        {overtimeHours > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              Nocturnas / extra · factor ×1.5
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {overtimeHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${overtimePay.toFixed(2)}</span>
+                            </span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}

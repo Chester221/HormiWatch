@@ -253,7 +253,7 @@ export function HoursByDayChart({ tasks }: HoursByDayChartProps) {
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 12, fill: "#64748b", fontWeight: 600 }}
-                      axisLine={{ stroke: "#111827", opacity: 0.4 }}
+                      axisLine={{ stroke: "#94a3b8", opacity: 0.4 }}
                       tickLine={false}
                       padding={{ left: 10, right: 10 }}
                     />
@@ -273,8 +273,8 @@ export function HoursByDayChart({ tasks }: HoursByDayChartProps) {
                       dataKey="hours"
                       radius={[7, 7, 2, 2]}
                       barSize={38}
-                      stroke="#111827"
-                      strokeWidth={2}
+                      stroke="transparent"
+                      strokeWidth={0}
                       animationDuration={600}
                       animationEasing="ease-out"
                       label={renderBarLabel}

@@ -69,7 +69,7 @@ const ActiveSector = (props: SegmentProps) => (
     endAngle={props.endAngle}
     cornerRadius={7}
     fill={props.fill}
-    style={{ stroke: "#000000", strokeWidth: 2, filter: "drop-shadow(0 0 10px rgba(0,0,0,0.45))" }}
+    style={{ stroke: "rgba(255,255,255,0.8)", strokeWidth: 1.5, filter: "drop-shadow(0 0 10px rgba(13,162,231,0.45))" }}
   />
 );
 
@@ -239,8 +239,8 @@ export function TaskStatus({ tasks }: TaskStatusProps) {
                   <Cell
                     key={entry.name}
                     fill={entry.color}
-                    stroke="#111827"
-                    strokeWidth={2.5}
+                    stroke="transparent"
+                    strokeWidth={0}
                   />
                 ))}
               </Pie>

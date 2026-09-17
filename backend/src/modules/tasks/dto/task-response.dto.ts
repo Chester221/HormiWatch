@@ -67,6 +67,13 @@ export class TaskResponseDto {
   @Expose()
   appliedHourlyRate: number;
 
+  @ApiPropertyOptional({
+    description:
+      'Factor breakdown (x1, x1.5, x2) computed per time range of the task',
+  })
+  @Expose()
+  factorBreakdown: { factor: number; label: string; hours: number }[] | null;
+
   @ApiProperty({ description: 'Creation date' })
   @Expose()
   createdAt: Date;

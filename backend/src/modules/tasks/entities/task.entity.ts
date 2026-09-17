@@ -87,6 +87,13 @@ export class Task extends BaseUuidEntity {
   })
   appliedHourlyRate: number;
 
+  @Column({
+    type: 'jsonb',
+    name: 'factor_breakdown',
+    nullable: true,
+  })
+  factorBreakdown: { factor: number; label: string; hours: number }[] | null;
+
   //entity relations
   @ManyToOne(() => User, (u) => u.technician_tasks, {
     nullable: false,

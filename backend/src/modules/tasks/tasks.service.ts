@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Task } from './entities/task.entity';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -55,27 +55,75 @@ export class TasksService {
     return !!user && String(user.role).toLowerCase() === 'technician';
   }
 
-  private async calculateRateMultiplier(
-    date: Temporal.ZonedDateTime,
-  ): Promise<number> {
-    const dayOfWeek = date.dayOfWeek; // 1 = Monday, 7 = Sunday
+  private async buildFactorBreakdown(
+    start: Temporal.Instant,
+    end: Temporal.Instant,
+    timeZone: string,
+  ): Promise<{ factor: number; label: string; hours: number }[]> {
+    // Fechas locales únicas del rango para consultar feriados una sola vez
+    const dateStrs = new Set<string>();
+    let cursor = start.toZonedDateTimeISO(timeZone);
+    while (Temporal.Instant.compare(cursor.toInstant(), end) < 0) {
+      dateStrs.add(cursor.toPlainDate().toString());
+      cursor = cursor.add({ minutes: 1 });
+    }
 
-    // Check if it is a holiday
-    // Temporal.ZonedDateTime to YYYY-MM-DD string
-    const dateStr = date.toPlainDate().toString();
-    const holiday = await this.holidayRepository.findOne({
-      where: { date: new Date(dateStr) },
+    const holidays = await this.holidayRepository.find({
+      where: { date: In([...dateStrs].map((d) => new Date(d))) },
     });
-    if (holiday) {
-      return 1.5; // Holiday rate
+    const holidaySet = new Set<string>();
+    for (const h of holidays) {
+      const raw = h.date as unknown as Date | string;
+      if (raw instanceof Date) {
+        const y = raw.getFullYear();
+        const m = String(raw.getMonth() + 1).padStart(2, '0');
+        const day = String(raw.getDate()).padStart(2, '0');
+        holidaySet.add(`${y}-${m}-${day}`);
+      } else {
+        holidaySet.add(String(raw).slice(0, 10));
+      }
     }
 
-    // Saturday (6) and Sunday (7)
-    if (dayOfWeek === 6 || dayOfWeek === 7) {
-      return 1.5;
+    const buckets = new Map<
+      string,
+      { factor: number; label: string; minutes: number }
+    >();
+
+    const addMinute = (factor: number, label: string) => {
+      const key = `${factor}|${label}`;
+      const existing = buckets.get(key);
+      if (existing) existing.minutes += 1;
+      else buckets.set(key, { factor, label, minutes: 1 });
+    };
+
+    let m = start;
+    while (Temporal.Instant.compare(m, end) < 0) {
+      const z = m.toZonedDateTimeISO(timeZone);
+      const dateStr = z.toPlainDate().toString();
+      const dayOfWeek = z.dayOfWeek; // 1 = Lunes, 7 = Domingo
+      const hour = z.hour;
+
+      // Domingo ×2 (siempre, incluso si es feriado)
+      if (dayOfWeek === 7) addMinute(2, 'Domingo');
+      // Feriado (lunes a sábado) ×2
+      else if (holidaySet.has(dateStr)) addMinute(2, 'Feriado');
+      // Sábado (no feriado) ×1.5
+      else if (dayOfWeek === 6) addMinute(1.5, 'Sábado');
+      // Lunes a Viernes diurno (6:00–18:59) ×1
+      else if (hour >= 6 && hour < 19) addMinute(1, 'Diurno (L–V)');
+      // Lunes a Viernes nocturno (19:00–05:59) ×1.5
+      else addMinute(1.5, 'Nocturno (L–V)');
+
+      m = m.add({ minutes: 1 });
     }
 
-    return 1.0;
+    return [...buckets.values()]
+      .filter((b) => b.minutes > 0)
+      .map((b) => ({
+        factor: b.factor,
+        label: b.label,
+        hours: Math.round((b.minutes / 60) * 100) / 100,
+      }));
   }
 
   private async checkForOverlaps(
@@ -174,86 +222,65 @@ export class TasksService {
       throw new BadRequestException('No se pueden crear tareas en el futuro');
     }
 
-    // 2. Split Logic (Overnight)
+    // 2. Cálculo de factores (UNA sola tarea por registro)
     // Zona horaria de los usuarios (Venezuela por defecto). Configurable con APP_TIMEZONE.
     const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
-    const startZoned = startInstant.toZonedDateTimeISO(timeZone);
-    const endZoned = endInstant.toZonedDateTimeISO(timeZone);
+    const baseRate = Number(project ? project.hourlyRate : 0);
+    const factorBreakdown = await this.buildFactorBreakdown(
+      startInstant,
+      endInstant,
+      timeZone,
+    );
 
-    const tasksToCreate: { start: Temporal.Instant; end: Temporal.Instant }[] =
-      [];
-
-    if (!startZoned.startOfDay().equals(endZoned.startOfDay())) {
-      const midnightNextDay = startZoned.add({ days: 1 }).startOfDay();
-      tasksToCreate.push({
-        start: startInstant,
-        end: midnightNextDay.toInstant(),
-      });
-      tasksToCreate.push({
-        start: midnightNextDay.toInstant(),
-        end: endInstant,
-      });
-    } else {
-      tasksToCreate.push({ start: startInstant, end: endInstant });
-    }
-
-    // 3. Execution
-    const createdTasks: Task[] = [];
+    // 3. Ejecución
+    let savedTask: Task;
     await this.dataSource.transaction(async (manager) => {
-      for (const segment of tasksToCreate) {
-        // Overlap Check (Segment specific)
-        await this.checkForOverlaps(effectiveTechnicianId, segment.start, segment.end);
+      // Overlap Check (rango completo)
+      await this.checkForOverlaps(effectiveTechnicianId, startInstant, endInstant);
 
-        // Rate Calculation
-        const segmentZoned = segment.start.toZonedDateTimeISO(timeZone);
-        const multiplier = await this.calculateRateMultiplier(segmentZoned);
-        const baseRate = project ? project.hourlyRate : 0;
-        const finalRate = Number(baseRate) * multiplier;
+      const askedCompleted = createTaskDto.status === TaskStatus.COMPLETED;
+      const taskEntity = this.taskRepository.create({
+        ...createTaskDto,
+        startDateTime: startInstant,
+        endDateTime: endInstant,
+        technician: { id: effectiveTechnicianId },
+        project: projectId ? { id: projectId } : undefined,
+        service: { id: serviceId },
+        createdBy: creator.userId,
+        completedAt: askedCompleted ? Temporal.Now.instant() : undefined,
+        appliedHourlyRate: baseRate,
+        factorBreakdown,
+      });
 
-        // Create Task
-        const askedCompleted =
-          createTaskDto.status === TaskStatus.COMPLETED;
-        const taskEntity = this.taskRepository.create({
-          ...createTaskDto,
-          startDateTime: segment.start,
-          endDateTime: segment.end,
-          technician: { id: effectiveTechnicianId },
-          project: projectId ? { id: projectId } : undefined,
-          service: { id: serviceId },
-          createdBy: creator.userId,
-          completedAt: askedCompleted ? Temporal.Now.instant() : undefined,
-          appliedHourlyRate: finalRate,
-        });
+      savedTask = await manager.save(Task, taskEntity);
+      savedTask.technician = technician;
+      if (project) {
+        savedTask.project = project;
+      }
+      savedTask.service = service;
 
-        const savedTask = await manager.save(Task, taskEntity);
-        savedTask.technician = technician;
-        if (project) {
-          savedTask.project = project;
-        }
-        savedTask.service = service;
-        createdTasks.push(savedTask);
-
-        // Update Project Pool Hours (Unconditional Reservation)
-        if (project) {
-          const durationHours = segment.start
-            .until(segment.end)
-            .total({ unit: 'hours' });
-          const currentPool = Number(project.poolHours || 0);
-          const newPool = currentPool - durationHours;
-          project.poolHours = newPool;
-          await manager.save(Project, project);
-        }
+      // Update Project Pool Hours (Unconditional Reservation)
+      if (project) {
+        const durationHours = startInstant
+          .until(endInstant)
+          .total({ unit: 'hours' });
+        const currentPool = Number(project.poolHours || 0);
+        const newPool = currentPool - durationHours;
+        project.poolHours = newPool;
+        await manager.save(Project, project);
       }
     });
 
-    const transformedTasks = createdTasks.map((task) => ({
-      ...task,
-      startDateTime: task.startDateTime.toString(),
-      endDateTime: task.endDateTime.toString(),
-      completedAt: task.completedAt ? task.completedAt.toString() : null,
-    }));
+    const transformedTask = {
+      ...savedTask!,
+      startDateTime: savedTask!.startDateTime.toString(),
+      endDateTime: savedTask!.endDateTime.toString(),
+      completedAt: savedTask!.completedAt
+        ? savedTask!.completedAt.toString()
+        : null,
+    };
 
-    return plainToInstance(TaskResponseDto, transformedTasks);
+    return plainToInstance(TaskResponseDto, [transformedTask]);
   }
 
   getTaskStatuses(): string[] {
@@ -388,6 +415,16 @@ export class TasksService {
       const currentPool = Number(task.project.poolHours || 0);
       task.project.poolHours = currentPool - diff;
       await this.projectRepository.save(task.project);
+    }
+
+    // 6. Recalculate factor breakdown for the new span
+    if (task.project) {
+      const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
+      task.factorBreakdown = await this.buildFactorBreakdown(
+        newStart,
+        newEnd,
+        timeZone,
+      );
     }
 
     // Merge changes
