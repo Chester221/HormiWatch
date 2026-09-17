@@ -2,7 +2,7 @@
 // ============================================================
 // 1. CONFIGURACIÓN BASE
 // ============================================================
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api/v1';
 
 // ============================================================
 // 2. CLIENTE HTTP CON MANEJO DE ERRORES, TOKEN Y REFRESH
@@ -12,6 +12,8 @@ let accessToken: string | null = null;
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
 };
+
+export const getAccessToken = (): string | null => accessToken;
 
 export const requestRefresh = async (): Promise<string | null> => {
   try {

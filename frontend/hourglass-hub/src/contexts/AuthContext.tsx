@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { usersApi, authApi, setAccessToken, requestRefresh } from '@/lib/api'
+import { usersApi, authApi, setAccessToken, requestRefresh, API_URL, getAccessToken } from '@/lib/api'
 
 // Marca de sesión en localStorage (NO es el token: la cookie refresh sigue siendo HttpOnly).
 // Evita que en cada arranque se disparen /auth/session + /auth/refresh sin cookie,
@@ -350,11 +350,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const result = await fetch(`http://localhost:3000/api/v1/storage/upload`, {
+            const result = await fetch(`${API_URL}/storage/upload`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                    'Authorization': `Bearer ${getAccessToken() || ''}`,
                 },
                 body: formData,
             });
