@@ -15,6 +15,7 @@ import { CreateServiceModal } from "@/components/services/CreateServiceModal";
 import { useServices } from "@/hooks/useServices";
 import { useHolidays } from "@/hooks/useHolidays";
 import { calculateTaskBreakdown } from "@/lib/hoursCalculator";
+import { buildTaskSegments } from "@/lib/buildTaskSegments";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -110,12 +111,13 @@ const TechnicianDashboard = () => {
     const holidaysList = (holidays.data || []).filter((h: any) => !h.is_working_day).map((h: any) => h.date);
     const breakdown = calculateTaskBreakdown(start_time, end_time, hourlyRate, holidaysList);
 
-    const tasksToCreate = breakdown.days.map((day: any) => ({
+    const segments = buildTaskSegments(breakdown.days, data.startTime, data.endTime);
+    const tasksToCreate = segments.map((segment, index) => ({
       projectId: data.projectId,
       serviceId: data.serviceId,
       technicianId: user.id,
-      startDateTime: new Date(`${day.date}T${data.startTime}:00`).toISOString(),
-      endDateTime: new Date(`${day.date}T${data.endTime}:00`).toISOString(),
+      startDateTime: segment.startDateTime,
+      endDateTime: segment.endDateTime,
       description: data.motivo ? `[${data.motivo}] ${data.description || ''}` : data.description,
       status: data.completed ? "COMPLETED" : "PENDING",
       priority: "MEDIUM",
