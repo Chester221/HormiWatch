@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -13,6 +18,8 @@ import { PageMeta } from 'src/common/pagination/metadata';
 
 @Injectable()
 export class CustomersService {
+  private readonly logger = new Logger(CustomersService.name);
+
   constructor(
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
@@ -146,23 +153,57 @@ export class CustomersService {
     return this.findCustomerById(id);
   }
 
-  // ✅ HARD DELETE: Eliminación permanente
+  // ✅ HARD DELETE: Eliminación permanente.
+  // Al igual que con los usuarios, solo las referencias ACTIVAS bloquean:
+  // los proyectos soft-deleted que apuntan a los contactos se DESVINCULAN
+  // (customer_contact_id → NULL) para que el DELETE no viole la FK 23503.
   async deleteCustomer(id: string) {
-    // Primero eliminar los contactos asociados
-    await this.customerContactRepository.delete({ customer: { id } });
-
-    // Luego eliminar el cliente
-    const result = await this.customerRepository
-      .createQueryBuilder()
-      .delete()
-      .from(Customer)
-      .where('id = :id', { id })
-      .execute();
-
-    if (result.affected === 0) {
-      throw new NotFoundException(`Customer with ID "${id}" not found`);
+    // 1) Referencias ACTIVAS (proyectos vigentes vinculados por cliente_id,
+    //    customer_id o vía contactos) → bloquean el borrado.
+    const active = await this.customerRepository.manager.query(
+      `SELECT COUNT(*)::int AS count
+         FROM projects p
+        WHERE p.deleted_at IS NULL
+          AND (p.customer_id = $1 OR p.client_id = $1 OR EXISTS (
+            SELECT 1 FROM customers_contacts cc
+             WHERE cc.id = p.customer_contact_id AND cc.customer_id = $1
+          ))`,
+      [id],
+    );
+    const activeCount = Number(active?.[0]?.count ?? 0);
+    if (activeCount > 0) {
+      throw new ConflictException(
+        `No se puede eliminar: el cliente tiene ${activeCount} proyecto(s) activo(s) asociados.`,
+      );
     }
-    return { message: `Customer with ID "${id}" has been permanently deleted.` };
+
+    // 2) Todo en UNA transacción: desvincular proyectos soft-deleted y
+    //    limpiar FKs antes de borrar contactos y cliente.
+    await this.customerRepository.manager.transaction(async (manager) => {
+      await manager.query(
+        `UPDATE projects SET customer_contact_id = NULL
+          WHERE customer_contact_id IN (SELECT id FROM customers_contacts WHERE customer_id = $1)`,
+        [id],
+      );
+      await manager.query(
+        `UPDATE projects SET customer_id = NULL WHERE customer_id = $1`,
+        [id],
+      );
+      await manager.delete(CustomerContact, { customer: { id } });
+      const result = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(Customer)
+        .where('id = :id', { id })
+        .execute();
+      if (result.affected === 0) {
+        throw new NotFoundException(`Customer with ID "${id}" not found`);
+      }
+    });
+
+    return {
+      message: `Customer with ID "${id}" has been permanently deleted.`,
+    };
   }
 
   // 🔥 Mantener softDelete por compatibilidad, pero redirigir a hard delete

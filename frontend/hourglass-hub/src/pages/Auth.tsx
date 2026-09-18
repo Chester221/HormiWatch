@@ -92,15 +92,11 @@ const Auth = () => {
         return;
       }
 
-      if (data?.user) {
-        const profileData = await usersApi.getById(data.user.id);
-        if (!profileData) {
-          toast.error("Error al verificar tu cuenta");
-          await authApi.logout();
-          return;
-        }
-
-        if (profileData.isActive === false) {
+      // 💨 LOGIN INSTANTÁNEO: el perfil ya viene en la respuesta del login
+      // (role + is_active), sin el segundo roundtrip que había antes.
+      const profileData = data?.profile;
+      if (profileData) {
+        if (profileData.is_active === false) {
           await authApi.logout();
           toast.error("Tu cuenta está desactivada. Contacta al administrador.");
           return;
@@ -108,21 +104,8 @@ const Auth = () => {
 
         toast.success("¡Bienvenido de nuevo!");
 
-        const roleName = typeof profileData.role === 'string' 
-          ? profileData.role 
-          : profileData.role?.name || 'Technician';
-        
-        console.log("🔍 Rol del usuario:", roleName);
-
-        if (!roleName) {
-          console.error("❌ El usuario no tiene rol asignado");
-          toast.error("Error: No tienes un rol asignado");
-          await authApi.logout();
-          return;
-        }
-
+        const roleName = profileData.role || 'Technician';
         const normalizedRole = roleName.charAt(0).toUpperCase() + roleName.slice(1).toLowerCase();
-        console.log("🔍 Rol normalizado:", normalizedRole);
 
         if (normalizedRole === 'Admin') {
           navigate('/control-usuarios', { replace: true });
@@ -156,11 +139,23 @@ const Auth = () => {
       return;
     }
 
+    // 💨 REGISTRO INSTANTÁNEO (optimista): toast + redirección inmediata.
+    // La creación avanza en segundo plano; si falla, se muestra el error.
+    signupSuccessRef.current = true;
+
+    toast.success("¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.", {
+      icon: <CheckCircle className="h-5 w-5 text-emerald-500" />,
+      duration: 5000,
+    });
+
+    setSignupName("");
+    setSignupEmail("");
+    setSignupPassword("");
+    setSignupConfirmPassword("");
+    setActiveTab("login");
     setIsSigningUp(true);
-    setIsLoading(true);
 
     try {
-      // ✅ CORREGIDO: Usar usersApi.create en lugar de authApi.register
       const result = await usersApi.create({
         email: signupEmail,
         password: signupPassword,
@@ -171,34 +166,13 @@ const Auth = () => {
 
       if (result?.error) {
         toast.error(result.error.message || "Error al crear la cuenta");
-        setIsSigningUp(false);
-        return;
       }
-
-      signupSuccessRef.current = true;
-
-      toast.success("¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.", {
-        icon: <CheckCircle className="h-5 w-5 text-emerald-500" />,
-        duration: 5000,
-      });
-
-      setSignupName("");
-      setSignupEmail("");
-      setSignupPassword("");
-      setSignupConfirmPassword("");
-      setActiveTab("login");
-
-      setTimeout(() => {
-        signupSuccessRef.current = false;
-        setIsSigningUp(false);
-      }, 500);
-
     } catch (error: any) {
       console.error("Error en registro:", error);
       toast.error(error.message || "Error al crear la cuenta. Intenta de nuevo.");
-      setIsSigningUp(false);
     } finally {
-      setIsLoading(false);
+      signupSuccessRef.current = false;
+      setIsSigningUp(false);
     }
   };
 

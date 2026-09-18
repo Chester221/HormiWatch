@@ -117,10 +117,10 @@ export class Project extends BaseUuidEntity {
   technicians: User[];
 
   @ManyToOne(() => CustomerContact, (cc) => cc.projects, {
-    nullable: false,
+    nullable: true,
   })
   @JoinColumn({ name: 'customer_contact_id' })
-  customerContact: CustomerContact;
+  customerContact: CustomerContact | null;
 
   @OneToMany(() => Task, (t) => t.project)
   tasks: Task[];

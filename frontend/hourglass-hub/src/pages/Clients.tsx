@@ -50,6 +50,7 @@ interface ProjectRef {
   end_date?: string;
   client_id?: string | null;
   customer_id?: string | null;
+  customer_contact_id?: string | null;
 }
 
 type SortOrder = 'az' | 'za' | 'contacts';
@@ -341,6 +342,17 @@ export default function Clients() {
     return clientProjectsMap[clientId] || [];
   }, [clientProjectsMap]);
 
+  // 🔥 También detecta proyectos vinculados VÍA CONTACTO (customer_contact_id):
+  // el backend los bloquea físicamente (FK), por eso deben verse en el diálogo
+  // "No se puede eliminar" aunque el proyecto no tenga client_id/customer_id.
+  const getClientProjectsFull = useCallback((client: any) => {
+    const base = clientProjectsMap[client.id] || [];
+    const contactIds = new Set((client.contacts || []).map((c: any) => c.id));
+    const byContacts = projectsData.filter((p) => contactIds.has(p.customer_contact_id));
+    const seen = new Set(base.map((p) => p.id));
+    return [...base, ...byContacts.filter((p) => !seen.has(p.id))];
+  }, [clientProjectsMap, projectsData]);
+
   const toggleClient = (clientId: string) => {
     setExpandedClients(prev => prev.includes(clientId) ? prev.filter(id => id !== clientId) : [...prev, clientId]);
   };
@@ -350,7 +362,7 @@ export default function Clients() {
   
   const handleDeleteClick = (client: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    const clientProjects = getClientProjects(client.id);
+    const clientProjects = getClientProjectsFull(client);
     const activeProjects = clientProjects.filter(isProjectActive);
 
     if (clientProjects.length > 0) {
@@ -369,8 +381,10 @@ export default function Clients() {
     setIsDeleting(true);
     try {
       const projects = await fetchAllProjects();
+      const client = clients.find((c) => c.id === deleteDialog.clientId);
+      const contactIds = new Set((client?.contacts || []).map((c: any) => c.id));
       const clientProjects = projects.filter((p) =>
-        (p.client_id === deleteDialog.clientId || p.customer_id === deleteDialog.clientId)
+        (p.client_id === deleteDialog.clientId || p.customer_id === deleteDialog.clientId || contactIds.has(p.customer_contact_id))
       );
 
       if (clientProjects.length > 0) {

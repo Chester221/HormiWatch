@@ -34,8 +34,11 @@ export class AuthService {
         id: user.id,
         email: user.email,
         role: user.role.name,
+        is_active: user.isActive,
         name: user.profile?.name,
         lastName: user.profile?.lastName,
+        avatar_url: user.profile?.avatar_url || user.profile?.profilePicture,
+        created_at: user.createdAt,
       },
     };
   }

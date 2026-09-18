@@ -27,6 +27,7 @@ export interface UserProfile {
     email_notifications?: boolean
     task_reminders?: boolean
     weekly_summary?: boolean
+    is_active?: boolean
     created_at?: string
     updated_at?: string
 }
@@ -39,7 +40,7 @@ interface AuthContextType {
     isManager: boolean
     isCreatingUser: boolean
     error: string | null
-    signIn: (email: string, password: string) => Promise<{ error: any | null }>
+    signIn: (email: string, password: string) => Promise<{ error: any | null; profile?: UserProfile | null }>
     signUp: (email: string, password: string, metadata?: { full_name?: string }) => Promise<{ error: any | null }>
     signOut: () => Promise<void>
     updateProfile: (updates: Partial<Pick<UserProfile, 'full_name' | 'avatar_url' | 'dark_mode'>>) => Promise<{ error: Error | null }>
@@ -230,19 +231,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 localStorage.setItem(SESSION_MARKER, '1');
             }
             
-            if (result?.user) {
-                setUser(result.user);
-                setSession({ user: result.user });
-                
-                try {
-                    const profileData = await fetchProfile(result.user.id);
-                    setProfile(profileData);
-                } catch (err) {
-                    console.error('Error cargando perfil después de login:', err);
-                }
+            const u = result?.user;
+            if (u?.id) {
+                setUser(u);
+                setSession({ user: u });
+
+                // 💨 LOGIN INSTANTÁNEO: el backend ya devuelve role, is_active y
+                // avatar en la respuesta del login → construimos el perfil sin
+                // roundtrip extra y navegamos de inmediato.
+                const profileData: UserProfile = {
+                    id: u.id,
+                    full_name: [u.name, u.lastName].filter(Boolean).join(' ') || null,
+                    avatar_url: u.avatar_url ?? null,
+                    email: u.email ?? null,
+                    role: (u.role as UserRole) || 'Technician',
+                    is_active: u.is_active,
+                    dark_mode: false,
+                    preferences: {},
+                    created_at: u.created_at,
+                };
+                setProfile(profileData);
+
+                // Reconciliación en segundo plano (preferencias, dark_mode):
+                // no bloquea la navegación, solo refina el perfil si cambió.
+                fetchProfile(u.id)
+                    .then((p) => { if (p) setProfile(p); })
+                    .catch(() => {});
+
+                return { error: null, profile: profileData };
             }
             
-            return { error: null };
+            return { error: null, profile: null };
         } catch (err: any) {
             return { error: { message: err.message || 'Error de conexión' } };
         }
