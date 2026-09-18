@@ -28,6 +28,11 @@ export default defineConfig(({ mode }) => ({
           if (id.includes("react-router") || id.includes("react-hook-form") || id.includes("@tanstack")) {
             return "react-vendor";
           }
+          // next-themes usa require('react') (CJS): DEBE compartir chunk con React
+          // o se rompe con "Cannot read properties of undefined (reading 'createContext')"
+          if (id.includes("next-themes")) {
+            return "react-vendor";
+          }
           if (id.includes("recharts") || id.includes("d3-") || id.includes("victory")) {
             return "charts";
           }
