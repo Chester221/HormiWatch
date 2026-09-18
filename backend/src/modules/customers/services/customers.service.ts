@@ -160,13 +160,16 @@ export class CustomersService {
   async deleteCustomer(id: string) {
     // 1) Referencias ACTIVAS (proyectos vigentes vinculados por cliente_id,
     //    customer_id o vía contactos) → bloquean el borrado.
+    // IMPORTANTE: se castean a ::text para que PostgreSQL no falle con
+    // "operator does not exist: uuid = text" (mezcla de columnas uuid/varchar
+    // contra el mismo parámetro $1).
     const active = await this.customerRepository.manager.query(
       `SELECT COUNT(*)::int AS count
          FROM projects p
         WHERE p.deleted_at IS NULL
-          AND (p.customer_id = $1 OR p.client_id = $1 OR EXISTS (
+          AND (p.customer_id::text = $1 OR p.client_id::text = $1 OR EXISTS (
             SELECT 1 FROM customers_contacts cc
-             WHERE cc.id = p.customer_contact_id AND cc.customer_id = $1
+             WHERE cc.id::text = p.customer_contact_id::text AND cc.customer_id::text = $1
           ))`,
       [id],
     );
