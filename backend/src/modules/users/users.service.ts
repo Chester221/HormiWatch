@@ -577,7 +577,11 @@ export class UsersService {
       );
     }
 
-    await this.removeUserAndProfile(id, user);
+    // ✅ Como no quedan referencias ACTIVAS, desvinculamos también las filas
+    // soft-deleted (tareas/proyectos con deleted_at) y los created_by de
+    // servicios que aún apuntan físicamente al usuario. Sin este paso, el
+    // DELETE lanza violación de FK (422 "El recurso referenciado no existe").
+    await this.removeUserAndProfile(id, user, true);
 
     await this.cacheManager.del(`/users/${id}`);
   }
@@ -630,6 +634,12 @@ export class UsersService {
         );
         await manager.query(
           `UPDATE projects SET project_leader_id = NULL WHERE project_leader_id = $1`,
+          [id],
+        );
+        // Los servicios también referencian al usuario (created_by): sin esto el
+        // DELETE falla con FK 23503 aunque no haya tareas/proyectos asignados.
+        await manager.query(
+          `UPDATE services SET created_by = NULL WHERE created_by = $1`,
           [id],
         );
       }
