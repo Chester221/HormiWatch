@@ -109,7 +109,8 @@ export const useCreateTasks = () => {
       const realList = (Array.isArray(results) ? results : [results])
         .map((r) => normalizeTask(r));
 
-      // ✅ Reemplazar temporales por reales + refresco en segundo plano
+      // ✅ Reemplazar temporales por reales. NADA de invalidate/refetch:
+      // la tarea real ya quedó en caché y NO debe "recargarse" la lista.
       queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
         if (!Array.isArray(old)) return old;
         let list = old.slice();
@@ -123,7 +124,6 @@ export const useCreateTasks = () => {
         });
         return sortTasksDesc(list);
       });
-      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
       toast.success('Tareas creadas correctamente');
     },
     onError: (error: Error, _vars, context) => {
@@ -183,7 +183,8 @@ export const useUpdateTask = () => {
       return { previous };
     },
     onSuccess: (updated) => {
-      // ✅ Reemplazar con la respuesta real (normalizada) + refresco en segundo plano
+      // ✅ Reemplazar con la respuesta real (normalizada). Sin invalidate:
+      // el cambio (p.ej. a Cancelada) debe verse al instante, sin "recargar".
       if (updated) {
         const real = normalizeTask(updated);
         queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
@@ -191,7 +192,6 @@ export const useUpdateTask = () => {
           return old.map((t) => (String(t.id) === String(real.id) ? real : t));
         });
       }
-      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
       toast.success('Tarea actualizada');
     },
     onError: (error: Error, _vars, context) => {

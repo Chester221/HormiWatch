@@ -32,6 +32,10 @@ const normStatus = (status?: string | null): string =>
 
 const isCompletedStatus = (status?: string | null) => normStatus(status) === "COMPLETED";
 const isInProgressStatus = (status?: string | null) => normStatus(status) === "INPROGRESS";
+const isCancelledStatus = (status?: string | null) => normStatus(status) === "CANCELLED";
+
+// ✅ BLOQUEADA: completada o cancelada → NO se puede editar, solo eliminar
+const isTaskLocked = (status?: string | null) => isCompletedStatus(status) || isCancelledStatus(status);
 
 // Mapea el parámetro de URL (?status=...) a los valores del filtro
 const STATUS_PARAM_MAP: Record<string, string> = {
@@ -404,7 +408,7 @@ export default function Tasks() {
               endTime: getTaskEndRaw(t) ? format(new Date(getTaskEndRaw(t)), "HH:mm") : undefined,
               hours: getTaskHours(t),
               factor: getFactor(t),
-              canEdit: true,
+              canEdit: !isTaskLocked(t.status),
               canDelete: true,
             }))}
             onTaskClick={(task: any) => {

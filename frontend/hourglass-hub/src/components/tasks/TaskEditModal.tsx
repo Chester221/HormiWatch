@@ -72,6 +72,12 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
 
   const isCompleted = task?.completed === true ||
     (task?.status && String(task.status).toUpperCase().replace(/[^A-Z]/g, "") === "COMPLETED") || false;
+  const isCancelled = task?.status &&
+    String(task.status).toUpperCase().replace(/[^A-Z]/g, "") === "CANCELLED" || false;
+
+  // ✅ BLOQUEADA = completada O cancelada (solo se puede eliminar)
+  const isLocked = isCompleted || isCancelled;
+  const lockLabel = isCancelled ? "cancelada" : "completada";
 
   useEffect(() => {
     if (task) {
@@ -85,8 +91,8 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
     e.preventDefault();
     if (!task) return;
 
-    if (isCompleted) {
-      toast.warning("No puedes editar una tarea completada");
+    if (isLocked) {
+      toast.warning(`No puedes editar una tarea ${lockLabel}`);
       return;
     }
 
@@ -124,7 +130,7 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getStatusColor(status) }} />
                 <span className="text-[10px] text-muted-foreground">{getStatusLabel(status)}</span>
               </div>
-              {isCompleted && (
+              {isLocked && (
                 <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[9px] px-1.5 py-0 gap-1">
                   <Lock className="h-2.5 w-2.5" />
                   Bloqueada
@@ -157,7 +163,7 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Título de la tarea..."
-              disabled={isCompleted}
+              disabled={isLocked}
               className="mt-1.5 h-9 text-sm bg-background border-border rounded-lg focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
@@ -174,7 +180,7 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               placeholder="Describe la tarea..."
-              disabled={isCompleted}
+              disabled={isLocked}
               className="mt-1.5 text-sm bg-background border-border rounded-lg resize-none focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             />
           </div>
@@ -189,7 +195,7 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
             <Select
               value={status}
               onValueChange={setStatus}
-              disabled={isCompleted}
+              disabled={isLocked}
             >
               <SelectTrigger className="mt-1.5 h-10 text-sm bg-background border-border rounded-lg focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] disabled:opacity-50 disabled:cursor-not-allowed">
                 <SelectValue />
@@ -205,10 +211,10 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
                 ))}
               </SelectContent>
             </Select>
-            {isCompleted && (
+            {isLocked && (
               <p className="text-[10px] text-muted-foreground/60 mt-1 flex items-center gap-1">
                 <Lock className="h-3 w-3" />
-                Esta tarea está completada y no se puede modificar
+                Esta tarea está {lockLabel} y no se puede modificar
               </p>
             )}
           </div>
@@ -224,17 +230,17 @@ export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditM
               Cancelar            </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || isCompleted}
-              className={`h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isCompleted ? 'bg-gray-400' : 'bg-[#0DA2E7] hover:bg-[#0B8BC7]'}`}
+              disabled={isSubmitting || isLocked}
+              className={`h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isLocked ? 'bg-gray-400' : 'bg-[#0DA2E7] hover:bg-[#0B8BC7]'}`}
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isCompleted ? (
+              ) : isLocked ? (
                 <Lock className="h-4 w-4" />
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              {isSubmitting ? "Guardando..." : isCompleted ? "Bloqueada" : "Guardar Cambios"}
+              {isSubmitting ? "Guardando..." : isLocked ? "Bloqueada" : "Guardar Cambios"}
             </Button>
           </DialogFooter>
         </form>

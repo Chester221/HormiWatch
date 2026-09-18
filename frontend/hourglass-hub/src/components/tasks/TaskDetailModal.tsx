@@ -180,7 +180,8 @@ export function TaskDetailModal({
       ? "bg-amber-50 text-amber-600 border-amber-200"
       : "bg-muted text-muted-foreground/70 border-border/50";
 
-  const canEdit = task.canEdit !== false;
+  const isLocked = norm(task.status) === "COMPLETED" || norm(task.status) === "CANCELLED";
+  const canEdit = task.canEdit !== false && !isLocked;
   const canDelete = task.canDelete !== false;
 
   return (
