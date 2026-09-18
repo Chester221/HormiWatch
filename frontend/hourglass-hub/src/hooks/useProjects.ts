@@ -114,21 +114,33 @@ export const useProjects = () => {
 export const useCreateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (newProject: { 
-      name: string; 
-      description?: string; 
-      status?: string; 
-      client_id?: string;
-      pool_hours?: number;
-      hourly_rate?: number;
-      start_date?: string;
-      end_date?: string;
+    mutationFn: async (newProject: {
+      title?: string;
+      name?: string;
+      description?: string | null;
+      status?: string;
+      hourlyRate?: number;
+      poolHours?: number;
+      startDate?: string;
+      endDate?: string;
+      customerContactId?: string;
+      projectLeaderId?: string;
+      technicianIds?: string[];
     }) => {
+      // ✅ PAYLOAD CAMELCASE (0 snake_case): el DTO usa title, hourlyRate,
+      // poolHours, startDate... Inyectar pool_hours/hourly_rate causaba
+      // 400 "property pool_hours should not exist".
       const project = await projectsApi.create({
-        ...newProject,
-        status: newProject.status || 'In Progress',
-        pool_hours: newProject.pool_hours || 0,
-        hourly_rate: newProject.hourly_rate || 0,
+        title: newProject.title ?? newProject.name,
+        description: newProject.description ?? undefined,
+        status: newProject.status || 'IN_PROGRESS',
+        ...(newProject.hourlyRate !== undefined && { hourlyRate: newProject.hourlyRate }),
+        ...(newProject.poolHours !== undefined && { poolHours: newProject.poolHours }),
+        ...(newProject.startDate && { startDate: newProject.startDate }),
+        ...(newProject.endDate && { endDate: newProject.endDate }),
+        ...(newProject.customerContactId && { customerContactId: newProject.customerContactId }),
+        ...(newProject.projectLeaderId && { projectLeaderId: newProject.projectLeaderId }),
+        ...(newProject.technicianIds && newProject.technicianIds.length > 0 && { technicianIds: newProject.technicianIds }),
       });
       return project;
     },
@@ -140,19 +152,19 @@ export const useCreateProject = () => {
       // ✅ UPDATE OPTIMISTA: el proyecto aparece al instante
       const optimistic = normalizeProject({
         id: tempId,
-        title: newProject.name,
+        title: newProject.name || newProject.title,
         description: newProject.description,
         status: newProject.status || 'IN_PROGRESS',
-        poolHours: newProject.pool_hours || 0,
-        hourlyRate: newProject.hourly_rate || 0,
-        start_date: newProject.start_date,
-        end_date: newProject.end_date,
+        poolHours: newProject.poolHours || 0,
+        hourlyRate: newProject.hourlyRate || 0,
+        start_date: newProject.startDate || (newProject as any).start_date,
+        end_date: newProject.endDate || (newProject as any).end_date,
         created_at: new Date().toISOString(),
         created_by: (newProject as any).created_by,
         project_leader_id: (newProject as any).project_leader_id,
-        customer_id: newProject.client_id,
+        customer_id: (newProject as any).client_id,
         customer_name: (newProject as any).customer_name,
-        clients: newProject.client_id
+        clients: (newProject as any).client_id
           ? { name: (newProject as any).customer_name || 'Sin cliente' }
           : null,
       });

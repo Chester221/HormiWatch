@@ -36,16 +36,42 @@ export interface Client {
 }
 
 // ✅ Llaves ESTABLES: las listas se cachean una sola vez y el buscador filtra en memoria
-// (antes cada tecleo disparaba un refetch). Los updates optimistas usan el prefijo
-// ['clients'] que cubre TANTO 'clients' como 'clients_with_contacts'.
+// (antes cada tecleo disparaba un refetch).
+// IMPORTANTE: la página de Clientes consume CLIENTS_WITH_CONTACTS_KEY, pero otras
+// pantallas usan CLIENTS_KEY. Los updates optimistas DEBEN tocar AMBAS llaves
+// (['clients'] NO hace match con ['clients_with_contacts'] en TanStack Query).
 const CLIENTS_KEY = ['clients'];
 const CLIENTS_WITH_CONTACTS_KEY = ['clients_with_contacts'];
+const CLIENTS_SOURCE_KEYS = [CLIENTS_KEY, CLIENTS_WITH_CONTACTS_KEY];
+
+// Aplica un updater a AMBAS llaves de clientes (optimistic create/edit/delete).
+const runOnClients = (queryClient: ReturnType<typeof useQueryClient>, updater: (old: any) => any) => {
+  for (const key of CLIENTS_SOURCE_KEYS) {
+    queryClient.setQueriesData({ queryKey: key }, updater);
+  }
+};
+
+// Invalida AMBAS llaves para reconciliar con el servidor.
+const invalidateClients = (queryClient: ReturnType<typeof useQueryClient>) => {
+  for (const key of CLIENTS_SOURCE_KEYS) {
+    queryClient.invalidateQueries({ queryKey: key });
+  }
+};
+
+// Snapshot de AMBAS llaves para poder restaurar si la mutación falla.
+const clientsSnapshot = (queryClient: ReturnType<typeof useQueryClient>): [unknown, unknown][] => {
+  const pairs: [unknown, unknown][] = [];
+  for (const key of CLIENTS_SOURCE_KEYS) {
+    pairs.push(...queryClient.getQueriesData({ queryKey: key }));
+  }
+  return pairs;
+};
 
 const restorePrevious = (queryClient: ReturnType<typeof useQueryClient>, previous: [unknown, unknown][]) => {
-    if (!previous) return;
-    for (const [key, data] of previous) {
-        queryClient.setQueryData(key as any, data);
-    }
+  if (!previous) return;
+  for (const [key, data] of previous) {
+    queryClient.setQueryData(key as any, data);
+  }
 };
 
 export const useClientsWithContacts = (searchQuery?: string) => {
@@ -154,7 +180,8 @@ export const useCreateClient = () => {
         },
         onMutate: async (data) => {
             await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
-            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+            await queryClient.cancelQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY });
+            const previous = clientsSnapshot(queryClient);
 
             // ✅ UPDATE OPTIMISTA: el cliente aparece al instante
             const optimistic = {
@@ -166,7 +193,7 @@ export const useCreateClient = () => {
                 created_at: new Date().toISOString(),
             };
 
-            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+            runOnClients(queryClient, (old) => {
                 if (!Array.isArray(old)) return old;
                 return [optimistic, ...old];
             });
@@ -175,7 +202,7 @@ export const useCreateClient = () => {
         },
         onSuccess: (newClient: any, _vars, context) => {
             if (context?.tempId) {
-                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                runOnClients(queryClient, (old) => {
                     if (!Array.isArray(old)) return old;
                     return old.map((c: any) =>
                         c.id === context.tempId
@@ -184,7 +211,7 @@ export const useCreateClient = () => {
                     );
                 });
             }
-            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            invalidateClients(queryClient)
             toast.success('Cliente creado correctamente')
         },
         onError: (error: Error, _vars, context) => {
@@ -203,10 +230,11 @@ export const useUpdateClient = () => {
         },
         onMutate: async ({ id, data }) => {
             await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
-            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+            await queryClient.cancelQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY });
+            const previous = clientsSnapshot(queryClient);
 
             // ✅ UPDATE OPTIMISTA: los campos editados cambian al instante
-            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+            runOnClients(queryClient, (old) => {
                 if (!Array.isArray(old)) return old;
                 return old.map((c: any) => {
                     if (String(c.id) !== String(id)) return c;
@@ -224,12 +252,12 @@ export const useUpdateClient = () => {
         },
         onSuccess: (updated: any, _vars, context) => {
             if (updated) {
-                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                runOnClients(queryClient, (old) => {
                     if (!Array.isArray(old)) return old;
                     return old.map((c: any) => (String(c.id) === String(updated.id) ? { ...c, ...updated } : c));
                 });
             }
-            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            invalidateClients(queryClient)
             toast.success('Cliente actualizado correctamente')
         },
         onError: (error: Error, _vars, context) => {
@@ -248,10 +276,11 @@ export const useDeleteClient = () => {
         },
         onMutate: async (id) => {
             await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
-            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+            await queryClient.cancelQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY });
+            const previous = clientsSnapshot(queryClient);
 
             // ✅ DELETE OPTIMISTA: desaparece al instante
-            queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+            runOnClients(queryClient, (old) => {
                 if (!Array.isArray(old)) return old;
                 return old.filter((c: any) => String(c.id) !== String(id));
             });
@@ -259,7 +288,7 @@ export const useDeleteClient = () => {
             return { previous };
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            invalidateClients(queryClient)
             toast.success('Cliente eliminado correctamente')
         },
         onError: (error: Error, _vars, context) => {
@@ -281,6 +310,7 @@ export const useCreateContact = () => {
         onSuccess: (_, variables) => {
             queryClient.invalidateQueries({ queryKey: ['client_contacts', variables.client_id] })
             queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            queryClient.invalidateQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY })
             toast.success('Contacto agregado correctamente')
         },
         onError: (error: Error) => toast.error(`Error: ${error.message}`),
@@ -296,6 +326,7 @@ export const useDeleteContact = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['client_contacts'] })
             queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            queryClient.invalidateQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY })
         },
     })
 }
@@ -327,12 +358,13 @@ export const useSaveClientWithContacts = () => {
         },
         onMutate: async ({ client, contacts, isEditing }) => {
             await queryClient.cancelQueries({ queryKey: CLIENTS_KEY });
-            const previous = queryClient.getQueriesData({ queryKey: CLIENTS_KEY });
+            await queryClient.cancelQueries({ queryKey: CLIENTS_WITH_CONTACTS_KEY });
+            const previous = clientsSnapshot(queryClient);
             let tempId: string | null = null;
 
             if (isEditing && client.id) {
                 // ✅ UPDATE OPTIMISTA: edición → los datos cambian al instante
-                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                runOnClients(queryClient, (old) => {
                     if (!Array.isArray(old)) return old;
                     return old.map((c: any) => {
                         if (String(c.id) !== String(client.id)) return c;
@@ -359,7 +391,7 @@ export const useSaveClientWithContacts = () => {
                     contacts: contacts,
                     created_at: new Date().toISOString(),
                 };
-                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                runOnClients(queryClient, (old) => {
                     if (!Array.isArray(old)) return old;
                     return [optimistic, ...old];
                 });
@@ -370,14 +402,14 @@ export const useSaveClientWithContacts = () => {
         onSuccess: (result, { isEditing }, context) => {
             if (!isEditing && context?.tempId) {
                 // ✅ Reemplazar temporal por id real (el resto lo reconcilia el invalidate)
-                queryClient.setQueriesData({ queryKey: CLIENTS_KEY }, (old) => {
+                runOnClients(queryClient, (old) => {
                     if (!Array.isArray(old)) return old;
                     return old.map((c: any) =>
                         c.id === context.tempId ? { ...c, id: result.clientId } : c,
                     );
                 });
             }
-            queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+            invalidateClients(queryClient)
             queryClient.invalidateQueries({ queryKey: ['client_contacts'] })
             toast.success('Cliente guardado correctamente')
         },

@@ -378,29 +378,16 @@ export default function Clients() {
   };
 
   const confirmDelete = async () => {
+    const { clientId } = deleteDialog;
+    // ✅ Cierra y borra AL INSTANTE (optimista). El onError del hook restaura
+    // el cliente y muestra el mensaje si el backend lo rechaza (409).
+    setDeleteDialog({ open: false, clientId: '', clientName: '' });
     setIsDeleting(true);
     try {
-      const projects = await fetchAllProjects();
-      const client = clients.find((c) => c.id === deleteDialog.clientId);
-      const contactIds = new Set((client?.contacts || []).map((c: any) => c.id));
-      const clientProjects = projects.filter((p) =>
-        (p.client_id === deleteDialog.clientId || p.customer_id === deleteDialog.clientId || contactIds.has(p.customer_contact_id))
-      );
-
-      if (clientProjects.length > 0) {
-        toast.error(`No se puede eliminar: tiene ${clientProjects.length} proyecto(s) asociados`);
-        setDeleteDialog({ open: false, clientId: '', clientName: '' });
-        setIsDeleting(false);
-        return;
-      }
-
-      // ✅ DELETE OPTIMISTA: desaparece al instante de la lista
-      await deleteClientMutation.mutateAsync(deleteDialog.clientId);
-
-      setDeleteDialog({ open: false, clientId: '', clientName: '' });
+      await deleteClientMutation.mutateAsync(clientId);
       loadProjects();
-    } catch (error: any) { 
-      toast.error(error.message || 'Error al eliminar');
+    } catch (error: any) {
+      console.error('Error al eliminar cliente:', error);
     }
     setIsDeleting(false);
   };
