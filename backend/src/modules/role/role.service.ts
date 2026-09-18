@@ -51,6 +51,34 @@ export class RoleService {
     return role;
   }
 
+  // ✅ RESOLUCIÓN DEFINITIVA del rol "Técnico" para el registro público:
+  // tolerante a mayúsculas/minúsculas y acentos (la BD puede tener 'Technician',
+  // 'technician', 'Técnico', etc.). Si no existe ningún rol de técnico, lo crea.
+  async findTechnicianRole(): Promise<Role> {
+    const norm = (s: string) =>
+      s
+        .toLowerCase()
+        .trim()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+
+    const roles = await this.roleRepository.find();
+    if (!roles.length) {
+      return this.create({ name: 'Technician', description: 'Técnico' });
+    }
+
+    const exact = roles.find((r) => norm(r.name) === 'technician');
+    if (exact) return exact;
+
+    const similar = roles.find(
+      (r) =>
+        norm(r.name).includes('technician') || norm(r.name).includes('tecnic'),
+    );
+    if (similar) return similar;
+
+    return this.create({ name: 'Technician', description: 'Técnico' });
+  }
+
   async update(id: string, updateRoleDto: UpdateRoleDto) {
     if (updateRoleDto.name) {
       const existingRole = await this.roleRepository.findOne({

@@ -53,11 +53,10 @@ export class UsersService {
   // ✅ REGISTRO PÚBLICO (endpoint /auth/register): crea un usuario con rol
   // Technician de forma ANÓNIMA. El rol NO es elegible (fijado por el servidor)
   // para evitar que un atacante se registre como Admin/Manager.
+  // findTechnicianRole() es tolerante a mayúsculas/acentos y crea el rol si
+  // no existe, garantizando que el registro siempre tenga un rol válido.
   async registerPublic(email: string, password: string, name: string) {
-    const role = await this.roleService.findOneByName(Role.technician);
-    if (!role) {
-      throw new ConflictException('Rol de técnico no encontrado');
-    }
+    const role = await this.roleService.findTechnicianRole();
 
     return this.create({
       email,
