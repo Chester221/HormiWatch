@@ -55,6 +55,8 @@ async function bootstrap() {
 
   // 🔥 CORS - orígenes permitidos.
   // En Railway se puede ampliar con la env var: CORS_ORIGINS=https://mi-dominio.com,http://localhost:8080
+  // Los previews de Vercel usan dominios dinámicos (xxx-chester221s-projects.vercel.app),
+  // así que se permite cualquier subdominio de *.vercel.app además de los explícitos.
   const defaultOrigins =
     'https://hormi-watch.vercel.app,https://hormi-watch2-main.vercel.app,https://www.hormi-watch2.vercel.app,http://localhost:8080';
   const allowedOrigins = (process.env.CORS_ORIGINS || defaultOrigins)
@@ -63,7 +65,20 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin(origin, callback) {
+      // Peticiones sin origin (server-to-server, curl) siempre se permiten.
+      if (!origin) {
+        return callback(null, true);
+      }
+      const isExplicit = allowedOrigins.includes(origin);
+      const isVercelPreview = origin.endsWith('.vercel.app');
+      if (isExplicit || isVercelPreview) {
+        return callback(null, true);
+      }
+      return callback(
+        new Error(`Origin ${origin} not allowed by CORS`),
+      );
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
