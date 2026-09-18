@@ -28,6 +28,7 @@ import {
   Mail,
   Moon,
   Palette,
+  PanelLeft,
   Settings as SettingsIcon,
   Shield,
   Sun,
@@ -120,6 +121,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const [darkMode, setDarkMode] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
+  const [collapsibleSidebar, setCollapsibleSidebar] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [forceDeleteMode, setForceDeleteMode] = useState(false);
@@ -141,6 +143,12 @@ export default function Settings() {
       } else {
         document.documentElement.classList.remove("dark");
       }
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile) {
+      setCollapsibleSidebar(!!profile.preferences?.collapsible_sidebar);
     }
   }, [profile]);
 
@@ -170,6 +178,17 @@ export default function Settings() {
       } else {
         document.documentElement.classList.remove("dark");
       }
+      toast.error("No se pudo guardar la preferencia");
+    }
+  };
+
+  // 🔥 Colapso del menú lateral: solo se habilita si el usuario lo activa aquí
+  const handleCollapsibleSidebarToggle = async (checked: boolean) => {
+    setCollapsibleSidebar(checked);
+    try {
+      await updatePreferences({ collapsible_sidebar: checked });
+    } catch {
+      setCollapsibleSidebar(!checked);
       toast.error("No se pudo guardar la preferencia");
     }
   };
@@ -331,6 +350,22 @@ export default function Settings() {
                 </span>
               )}
             </p>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 bg-muted/20 p-4 dark:bg-muted/[0.06]">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10 text-[#0DA2E7] ring-1 ring-inset ring-[#0DA2E7]/25">
+                  <PanelLeft className="h-[18px] w-[18px]" />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Menú lateral colapsable</p>
+                  <p className="text-xs text-muted-foreground">Permite colapsar el menú lateral con un botón</p>
+                </div>
+              </div>
+              <Switch
+                checked={collapsibleSidebar}
+                onCheckedChange={handleCollapsibleSidebarToggle}
+                className="shrink-0 data-[state=checked]:bg-[#0DA2E7]"
+              />
+            </div>
           </Section>
         </motion.div>
 

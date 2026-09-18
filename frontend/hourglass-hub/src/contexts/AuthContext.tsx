@@ -23,6 +23,7 @@ export interface UserProfile {
             status?: string
         }
         dark_mode?: boolean
+        collapsible_sidebar?: boolean
     }
     email_notifications?: boolean
     task_reminders?: boolean

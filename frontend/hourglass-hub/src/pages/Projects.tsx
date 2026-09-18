@@ -7,7 +7,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  Plus, Clock,
+  Plus, Clock, X,
   Loader2, Trash2, Archive, AlertTriangle,
   FolderKanban, CheckCircle, TrendingUp, ChevronLeft, ChevronRight,
   LayoutGrid, LayoutList,
@@ -733,52 +733,68 @@ export default function Projects() {
 
       {/* Diálogo Eliminar */}
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
-        <DialogContent className="sm:max-w-md bg-card border-border rounded-2xl">
+        <DialogContent className="sm:max-w-md bg-card border-border p-0 overflow-hidden rounded-2xl shadow-2xl">
           {(() => {
             const deletingProject = projects.find(p => p.id === deleteDialog.projectId);
             return (
               <>
-                <DialogHeader>
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50 mb-3">
-                    <Trash2 className="h-7 w-7 text-red-500" />
-                  </div>
-                  <DialogTitle className="text-center text-lg font-bold text-foreground">Eliminar Proyecto</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-3 text-center px-2">
-                  <p className="text-sm text-muted-foreground">
-                    ¿Seguro que deseas eliminar <strong className="text-red-500">{deleteDialog.projectName}</strong>?
-                  </p>
-                  <div className="rounded-xl bg-muted/40 border border-border/40 p-3 text-left space-y-1.5">
-                    <p className="text-xs text-muted-foreground flex items-start gap-1.5">
-                      <Archive className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                      La eliminación es <strong>lógica</strong>: el proyecto se archivará y dejará de aparecer en la lista.
-                    </p>
-                    {deletingProject && deletingProject.totalTasks > 0 && (
-                      <p className="text-xs text-amber-600 flex items-start gap-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                        Tiene {deletingProject.totalTasks} tarea(s){deletingProject.isClosed
-                          ? ", pero al estar cerrado/cancelado podrá eliminarse."
-                          : ": solo podrá eliminarse si el proyecto está cerrado o cancelado."}
-                      </p>
-                    )}
+                {/* HEADER */}
+                <div className="relative p-5 pb-4 bg-gradient-to-r from-red-500/15 via-red-500/5 to-transparent border-b border-border">
+                  <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-red-500/5 blur-3xl" />
+                  <div className="flex items-center gap-3 relative">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-500 shadow-lg shadow-red-500/25">
+                      <Trash2 className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold text-foreground">Eliminar Proyecto</DialogTitle>
+                      <p className="text-xs text-muted-foreground mt-0.5">Esta acción no se puede deshacer</p>
+                    </div>
                   </div>
                 </div>
-                <DialogFooter className="sm:justify-center gap-2 pt-2">
+
+                {/* BODY */}
+                <div className="p-5 space-y-4">
+                  <p className="text-sm text-foreground">
+                    ¿Seguro que deseas eliminar <strong className="text-red-500">{deleteDialog.projectName}</strong>?
+                  </p>
+                  <div className="flex items-start gap-3 p-3.5 rounded-xl border border-red-200/60 bg-red-50/50 dark:bg-red-950/10 dark:border-red-900/30">
+                    <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-950/40">
+                      <Archive className="h-4 w-4 text-red-500" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-muted-foreground">
+                        La eliminación es <strong>lógica</strong>: el proyecto se archivará y dejará de aparecer en la lista.
+                      </p>
+                      {deletingProject && deletingProject.totalTasks > 0 && (
+                        <p className="text-xs text-amber-600 dark:text-amber-500 flex items-start gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                          Tiene {deletingProject.totalTasks} tarea(s) asociadas{deletingProject.isClosed
+                            ? ". Al estar cerrado/cancelado, podrá eliminarse."
+                            : ": solo podrá eliminarse si el proyecto está cerrado o cancelado."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* FOOTER */}
+                <DialogFooter className="px-5 pb-5 pt-4 gap-2 border-t border-border/50">
                   <Button
+                    type="button"
                     variant="outline"
                     onClick={() => setDeleteDialog({ open: false, projectId: '', projectName: '' })}
-                    className="rounded-lg border-border/60 hover:bg-muted/50"
+                    className="h-10 px-6 text-sm rounded-xl flex-1 hover:bg-muted/50 transition-all"
                   >
-                    Cancelar
+                    <X className="h-4 w-4 mr-1.5" /> Cancelar
                   </Button>
                   <Button
-                    variant="destructive"
+                    type="button"
                     onClick={confirmDelete}
                     disabled={isDeleting}
-                    className="rounded-lg bg-red-500 hover:bg-red-600 text-white transition-colors"
+                    className="h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
-                    Eliminar
+                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    {isDeleting ? "Eliminando..." : "Eliminar"}
                   </Button>
                 </DialogFooter>
               </>
