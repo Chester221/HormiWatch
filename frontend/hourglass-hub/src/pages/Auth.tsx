@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Clock, Mail, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
+import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { authApi, usersApi } from "@/lib/api";
+import { authApi } from "@/lib/api";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -82,12 +83,15 @@ const Auth = () => {
     try {
       const { data, error } = await signIn(loginEmail, loginPassword);
       if (error) {
-        if (error.message.includes("Invalid login credentials") || error.message.includes("incorrectos")) {
-          toast.error("Credenciales incorrectas.");
-        } else if (error.message.includes("Email not confirmed") || error.message.includes("confirmar")) {
-          toast.error("Por favor confirma tu email antes de iniciar sesión.");
+        const msg = error.message || "";
+        if (msg.includes("La cuenta no existe")) {
+          toast.error("La cuenta no existe.");
+        } else if (msg.includes("Credenciales inválidas")) {
+          toast.error("Credenciales inválidas.");
+        } else if (msg.includes("desactivada")) {
+          toast.error("Tu cuenta está desactivada. Contacta al administrador.");
         } else {
-          toast.error(error.message);
+          toast.error(msg);
         }
         return;
       }
@@ -156,12 +160,10 @@ const Auth = () => {
     setIsSigningUp(true);
 
     try {
-      const result = await usersApi.create({
+      const result = await authApi.register({
         email: signupEmail,
         password: signupPassword,
         name: signupName,
-        lastName: "",
-        roleId: "4be26163-4d7c-48b6-90ef-9ad31da963a7", // Technician role
       });
 
       if (result?.error) {
@@ -237,13 +239,21 @@ const Auth = () => {
                 </TabsList>
               </CardHeader>
 
-              <TabsContent value="login" className="mt-0">
-                <CardHeader className="pt-0 pb-2">
-                  <CardTitle className="text-xl">Bienvenido de nuevo</CardTitle>
-                  <CardDescription>Ingresa tus credenciales para acceder</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleLogin} className="space-y-4">
+              <AnimatePresence mode="wait" initial={false}>
+                {activeTab === "login" ? (
+                  <motion.div
+                    key="login"
+                    initial={{ opacity: 0, x: -16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 16 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                  >
+                    <CardHeader className="pt-0 pb-2">
+                      <CardTitle className="text-xl">Bienvenido de nuevo</CardTitle>
+                      <CardDescription>Ingresa tus credenciales para acceder</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="login-email">Correo Electrónico</Label>
                       <div className="relative">
@@ -287,16 +297,22 @@ const Auth = () => {
                       )}
                     </Button>
                   </form>
-                </CardContent>
-              </TabsContent>
-
-              <TabsContent value="signup" className="mt-0">
-                <CardHeader className="pt-0 pb-2">
-                  <CardTitle className="text-xl">Crear una cuenta</CardTitle>
-                  <CardDescription>Comienza gratis hoy mismo</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSignup} className="space-y-4">
+                  </CardContent>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="signup"
+                    initial={{ opacity: 0, x: 16 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -16 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                  >
+                    <CardHeader className="pt-0 pb-2">
+                      <CardTitle className="text-xl">Crear una cuenta</CardTitle>
+                      <CardDescription>Comienza gratis hoy mismo</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <form onSubmit={handleSignup} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="signup-name">Nombre Completo</Label>
                       <div className="relative">
@@ -370,8 +386,10 @@ const Auth = () => {
                       Al crear una cuenta, aceptas nuestros <button type="button" className="text-primary hover:underline">Términos</button> y <button type="button" className="text-primary hover:underline">Privacidad</button>
                     </p>
                   </form>
-                </CardContent>
-              </TabsContent>
+                  </CardContent>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </Tabs>
           </Card>
         </div>

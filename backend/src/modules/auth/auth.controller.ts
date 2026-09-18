@@ -16,6 +16,7 @@ import {
 import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { IActiveUser } from './interface/payload.interface';
@@ -50,6 +51,18 @@ export class AuthController {
   }
 
   @SkipAuth()
+  @Post('register')
+  @ApiOperation({ summary: 'Public registration (creates a Technician account)' })
+  @ApiOkResponse({ description: 'Account created successfully' })
+  async register(@Body() registerDto: RegisterDto) {
+    const user = await this.authService.register(registerDto);
+    return {
+      message: 'Cuenta creada exitosamente',
+      user: { id: user.id, email: user.email },
+    };
+  }
+
+  @SkipAuth()
   @Post('login')
   @ApiOperation({ summary: 'User login' })
   @ApiOkResponse({
@@ -63,9 +76,6 @@ export class AuthController {
       loginDto.email,
       loginDto.password,
     );
-    if (!user) {
-      throw new UnauthorizedException('Credenciales inválidas');
-    }
     const loginData = await this.authService.login(user);
 
     // Set Refresh Token in HttpOnly Cookie

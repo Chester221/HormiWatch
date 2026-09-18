@@ -7,6 +7,7 @@ import { HashingService } from '../../common/hashing/hashing.service';
 import { User } from '../users/entities/user.entity';
 import { IJwtPayload } from './interface/payload.interface';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +17,15 @@ export class AuthService {
     private readonly hashingService: HashingService,
     @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
+
+  // ✅ REGISTRO PÚBLICO: crea la cuenta (rol Technician) sin requerir sesión.
+  async register(dto: RegisterDto) {
+    return this.usersService.registerPublic(
+      dto.email,
+      dto.password,
+      dto.name,
+    );
+  }
 
   async login(user: User) {
     const payload = { sub: user.id, role: user.role.name };
@@ -146,14 +156,23 @@ export class AuthService {
     }
   }
 
-  async validateUser(email: string, pass: string): Promise<User | null> {
+  async validateUser(email: string, pass: string): Promise<User> {
     const user = await this.usersService.findOneByEmailForAuth(email);
-    if (!user || !(await this.hashingService.compare(pass, user.password))) {
-      return null;
+    if (!user) {
+      throw new UnauthorizedException('La cuenta no existe');
     }
     // 🚫 Usuarios desactivados no pueden iniciar sesión
     if (user.isActive === false) {
-      return null;
+      throw new UnauthorizedException(
+        'Tu cuenta está desactivada. Contacta al administrador.',
+      );
+    }
+    const passwordMatches = await this.hashingService.compare(
+      pass,
+      user.password,
+    );
+    if (!passwordMatches) {
+      throw new UnauthorizedException('Credenciales inválidas');
     }
     return user as User;
   }
