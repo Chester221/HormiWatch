@@ -153,6 +153,24 @@ export const normalizeTask = (task: RawTask | null | undefined): AnyRecord => {
       : 0;
   const hours = toFinite(task.hours, computedHours);
 
+  const rawBreakdown = task.factor_breakdown ?? task.factorBreakdown;
+  const breakdownArr = Array.isArray(rawBreakdown)
+    ? (rawBreakdown as Array<{ factor?: unknown; hours?: unknown }>)
+    : null;
+  const fromBreakdown =
+    breakdownArr && breakdownArr.length > 0
+      ? {
+          normal: breakdownArr.reduce(
+            (sum, b) => (toFinite(b.factor, 1) <= 1 ? sum + toFinite(b.hours) : sum),
+            0,
+          ),
+          overtime: breakdownArr.reduce(
+            (sum, b) => (toFinite(b.factor, 1) > 1 ? sum + toFinite(b.hours) : sum),
+            0,
+          ),
+        }
+      : null;
+
   return {
     ...task,
     status: task.status != null ? humanStatus(task.status) : task.status,
@@ -167,8 +185,8 @@ export const normalizeTask = (task: RawTask | null | undefined): AnyRecord => {
     created_at: createdRaw,
     updated_at: updatedRaw,
     hours,
-    normal_hours: toFinite(task.normal_hours, hours),
-    overtime_hours: toFinite(task.overtime_hours),
+    normal_hours: toFinite(task.normal_hours, fromBreakdown ? fromBreakdown.normal : hours),
+    overtime_hours: toFinite(task.overtime_hours, fromBreakdown ? fromBreakdown.overtime : 0),
     duration_in_minutes: toFinite(task.duration_in_minutes, hours * 60),
   };
 };
