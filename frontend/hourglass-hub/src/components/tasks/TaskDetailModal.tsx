@@ -235,7 +235,7 @@ export function TaskDetailModal({
             </div>
 
             {/* BODY */}
-            <div className="flex-1 overflow-y-auto px-6 py-5">
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
               {/* CREADO POR */}
               <div className="flex items-center gap-3">
                 <Avatar className="h-9 w-9 ring-2 ring-[#0DA2E7]/20">
@@ -269,9 +269,15 @@ export function TaskDetailModal({
                     <Value>{getClientName(projectId)}</Value>
                   </div>
                   <div>
+                    <Label icon={<CalendarClock className="h-3 w-3" />}>Fecha de trabajo</Label>
+                    <Value className="capitalize">
+                      {startDate ? format(startDate, "EEEE dd MMM yyyy", { locale: es }) : "Sin fecha"}
+                    </Value>
+                  </div>
+                  <div>
                     <Label icon={<CalendarClock className="h-3 w-3" />}>Fecha de creación de la tarea</Label>
                     <Value>
-                      {createdAtDate ? format(createdAtDate, "dd MMM yyyy", { locale: es }) : "Sin fecha"}
+                      {createdAtDate ? format(createdAtDate, "dd MMM yyyy · HH:mm", { locale: es }) : "Sin fecha"}
                     </Value>
                   </div>
                   {norm(task.status) === "COMPLETED" && (
@@ -303,7 +309,7 @@ export function TaskDetailModal({
                     <Label icon={<Clock className="h-3 w-3" />}>Horario</Label>
                     <Value>
                       {startDate && endDate
-                        ? `${format(startDate, "HH:mm", { locale: es })} – ${format(endDate, "HH:mm", { locale: es })}`
+                        ? `${format(startDate, "dd MMM · HH:mm", { locale: es })} – ${format(endDate, "dd MMM · HH:mm", { locale: es })}`
                         : "Sin horario"}
                     </Value>
                   </div>
