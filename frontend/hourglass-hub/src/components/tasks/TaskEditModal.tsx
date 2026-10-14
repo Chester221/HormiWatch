@@ -1,250 +1,440 @@
-import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  X,
+  Building2,
+  FolderKanban,
+  Clock,
+  DollarSign,
+  FileText,
+  Pencil,
+  Trash2,
+  CheckCircle,
+  Activity,
+  AlertCircle,
+  Wrench,
+  Timer,
+  Briefcase,
+  Hash,
+  Tag,
+  CalendarClock,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Loader2, Pencil, Clock, FileText, Save, X, Lock, ClipboardList, SlidersHorizontal } from "lucide-react";
-import { toast } from "sonner";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
-const HORMI_BLUE = '#0DA2E7';
-
-interface TaskEditModalProps {
+interface TaskDetailModalProps {
   task: any;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess: (updatedData: any) => void;
+  getProjectName?: (id: string) => string;
+  getClientName?: (id: string) => string;
+  getServiceName?: (id: string) => string;
+  getTechInitials?: (id: string) => string;
+  getCreatorName?: (id: string) => string;
+  getCreatorRole?: (id: string) => string;
+  onEditTask?: () => void;
+  onDeleteTask?: () => void;
 }
 
-const STATUS_OPTS = [
-  { value: 'Pending', label: 'Pendiente', color: '#f59e0b' },
-  { value: 'In Progress', label: 'En progreso', color: '#0DA2E7' },
-  { value: 'Completed', label: 'Completada', color: '#10b981' },
-  { value: 'Cancelled', label: 'Cancelada', color: '#ef4444' },
-];
+const norm = (status: string) => String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
 
-const getStatusColor = (status: string) => {
-  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
-  switch (norm) {
-    case 'CANCELLED': return '#ef4444';
-    case 'COMPLETED': return '#10b981';
-    case 'INPROGRESS': return '#0DA2E7';
-    case 'PENDING': return '#f59e0b';
-    default: return '#6b7280';
+const getStatusInfo = (status: string) => {
+  switch (norm(status)) {
+    case "COMPLETED":
+      return { label: "Completada", icon: CheckCircle, color: "#10b981", bg: "#10b98110", border: "#10b98130" };
+    case "INPROGRESS":
+      return { label: "En Progreso", icon: Activity, color: "#0DA2E7", bg: "#0DA2E710", border: "#0DA2E730" };
+    case "PENDING":
+      return { label: "Pendiente", icon: AlertCircle, color: "#f59e0b", bg: "#f59e0b10", border: "#f59e0b30" };
+    case "CANCELLED":
+      return { label: "Cancelada", icon: AlertCircle, color: "#ef4444", bg: "#ef444410", border: "#ef444430" };
+    default:
+      return { label: "Desconocido", icon: AlertCircle, color: "#6b7280", bg: "#6b728010", border: "#6b728030" };
   }
 };
 
-const getStatusLabel = (status: string) => {
-  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
-  switch (norm) {
-    case 'CANCELLED': return 'Cancelada';
-    case 'COMPLETED': return 'Completada';
-    case 'INPROGRESS': return 'En progreso';
-    case 'PENDING': return 'Pendiente';
-    default: return status;
-  }
+const HORMI_BLUE = '#0DA2E7';
+
+const ROLE_LABELS: Record<string, string> = {
+  Admin: "Admin",
+  Manager: "Manager",
+  Technician: "Técnico",
+  Leader: "Líder",
 };
 
-const toOptionStatus = (status?: string) => {
-  const norm = String(status || "").toUpperCase().replace(/[^A-Z]/g, "");
-  if (norm === 'COMPLETED') return 'Completed';
-  if (norm === 'CANCELLED') return 'Cancelled';
-  if (norm === 'INPROGRESS') return 'In Progress';
-  return 'Pending';
-};
+const getRoleLabel = (role?: string) => (role ? ROLE_LABELS[role] || role : "");
 
-export function TaskEditModal({ task, open, onOpenChange, onSuccess }: TaskEditModalProps) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [status, setStatus] = useState("Pending");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+const Label = ({ icon, children, right = false }: { icon: React.ReactNode; children: React.ReactNode; right?: boolean }) => (
+  <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-muted-foreground ${right ? "justify-end" : ""}`}>
+    <span className="text-[#0DA2E7]">{icon}</span>
+    {children}
+  </div>
+);
 
-  const isCompleted = task?.completed === true ||
-    (task?.status && String(task.status).toUpperCase().replace(/[^A-Z]/g, "") === "COMPLETED") || false;
-  const isCancelled = task?.status &&
-    String(task.status).toUpperCase().replace(/[^A-Z]/g, "") === "CANCELLED" || false;
+const Value = ({ right = false, className = "", children }: { right?: boolean; className?: string; children: React.ReactNode }) => (
+  <div className={`mt-2 text-sm font-medium text-foreground ${right ? "text-right" : ""} ${className}`}>{children}</div>
+);
 
-  // ✅ BLOQUEADA = completada O cancelada (solo se puede eliminar)
-  const isLocked = isCompleted || isCancelled;
-  const lockLabel = isCancelled ? "cancelada" : "completada";
-
-  useEffect(() => {
-    if (task) {
-      setTitle(task.title || "");
-      setDescription(task.description || "");
-      setStatus(toOptionStatus(task.status));
-    }
-  }, [task]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!task) return;
-
-    if (isLocked) {
-      toast.warning(`No puedes editar una tarea ${lockLabel}`);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const updatedData = { title, description, status };
-      await onSuccess(updatedData);
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+export function TaskDetailModal({
+  task,
+  open,
+  onOpenChange,
+  getProjectName = () => "Sin proyecto",
+  getClientName = () => "Sin cliente",
+  getServiceName = () => "Sin servicio",
+  getTechInitials = () => "??",
+  getCreatorName = () => "",
+  getCreatorRole = () => "",
+  onEditTask,
+  onDeleteTask,
+}: TaskDetailModalProps) {
   if (!task) return null;
 
+  const statusInfo = getStatusInfo(task.status);
+  const StatusIcon = statusInfo.icon;
+
+  const startRaw = task.startDateTime || task.start_time;
+  const endRaw = task.endDateTime || task.end_time;
+  const createdRaw = task.createdAt || task.created_at;
+  const completedRaw = task.completedAt || task.completed_at;
+  const creatorId = task.createdBy || task.created_by || (typeof task.creator === "string" ? task.creator : "");
+  const projectId = task.project_id || task.projectId || task.project?.id;
+  const serviceId = task.service_id || task.serviceId || task.service?.id;
+
+  const durationFromRange = (() => {
+    if (!startRaw || !endRaw) return 0;
+    const s = new Date(startRaw as string).getTime();
+    const e = new Date(endRaw as string).getTime();
+    return e > s ? (e - s) / 3_600_000 : 0;
+  })();
+
+  const normalHours = Number(task.normal_hours || 0);
+  const overtimeHours = Number(task.overtime_hours || 0);
+  const hours = (normalHours + overtimeHours) ||
+    Number(task.durationInHours || 0) ||
+    (task.duration_in_minutes ? task.duration_in_minutes / 60 : 0) ||
+    durationFromRange ||
+    0;
+
+  const rate = Number(task.applied_hourly_rate || task.appliedHourlyRate || 0);
+  const rawBreakdown = task.factor_breakdown || task.factorBreakdown;
+  const breakdown =
+    Array.isArray(rawBreakdown) && rawBreakdown.length > 0
+      ? (rawBreakdown as { factor: number; label: string; hours: number }[])
+      : null;
+  const factorRows = breakdown
+    ? breakdown.map((b) => ({
+        ...b,
+        amount:
+          Math.round(rate * Number(b.factor) * Number(b.hours || 0) * 100) /
+          100,
+      }))
+    : [];
+  const hasBreakdown = factorRows.length > 0;
+  const factorTotal = factorRows.reduce((sum, r) => sum + r.amount, 0);
+  const normalPay = Math.round(rate * normalHours * 1 * 100) / 100;
+  const overtimePay = Math.round(rate * overtimeHours * 1.5 * 100) / 100;
+  const totalPay = task.total_pay != null
+    ? Number(task.total_pay).toFixed(2)
+    : (hasBreakdown
+        ? factorTotal
+        : normalHours > 0 || overtimeHours > 0
+          ? (normalPay + overtimePay)
+          : rate * hours
+      ).toFixed(2);
+
+  const factorDot = (f: number) =>
+    f >= 2 ? "#ef4444" : f >= 1.5 ? "#f59e0b" : "#0DA2E7";
+
+  const startDate = startRaw ? new Date(startRaw as string) : null;
+  const endDate = endRaw ? new Date(endRaw as string) : null;
+  const createdAtDate = createdRaw ? new Date(createdRaw as string) : null;
+  const completedDate = completedRaw ? new Date(completedRaw as string) : null;
+
+  const factorInfo = (() => {
+    if (hasBreakdown) {
+      const maxFactor = Math.max(...factorRows.map((r) => r.factor));
+      if (maxFactor >= 2)
+        return { label: "×2", title: "Domingo / Feriado (factor ×2)", tone: "red" };
+      if (maxFactor >= 1.5)
+        return { label: "×1.5", title: "Nocturno / Sábado (factor ×1.5)", tone: "amber" };
+      return { label: "×1", title: "Horario regular (factor ×1)", tone: "neutral" };
+    }
+    const passed = (task as { factor?: { label: string; title: string; tone: string } }).factor;
+    if (passed && typeof passed === "object" && passed.tone) return passed;
+    if (!startDate) return { label: "×1", title: "Factor ×1", tone: "neutral" };
+    const dow = startDate.getDay();
+    const hour = startDate.getHours();
+    const endHour = endDate ? endDate.getHours() : -1;
+    const isNight = hour >= 19 || (endHour >= 0 && endHour <= 6);
+    if (dow === 0) return { label: "×2", title: "Domingo (factor ×2)", tone: "red" };
+    if (dow === 6) return { label: "×1.5", title: "Sábado (factor ×1.5)", tone: "amber" };
+    if (overtimeHours > 0 || isNight) return { label: "×1.5", title: "Horario nocturno (factor ×1.5)", tone: "amber" };
+    return { label: "×1", title: "Horario regular (factor ×1)", tone: "neutral" };
+  })();
+  const factorCls = factorInfo.tone === "red"
+    ? "bg-red-50 text-red-500 border-red-200"
+    : factorInfo.tone === "amber"
+      ? "bg-amber-50 text-amber-600 border-amber-200"
+      : "bg-muted text-muted-foreground/70 border-border/50";
+
+  const isLocked = norm(task.status) === "COMPLETED" || norm(task.status) === "CANCELLED";
+  const canEdit = task.canEdit !== false && !isLocked;
+  const canDelete = task.canDelete !== false;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
-        {/* HEADER */}
-        <div className="flex items-center gap-3 p-5 pb-4 bg-muted/5 border-b border-border">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-muted/40">
-            <Pencil className="h-5 w-5 text-muted-foreground/70" />
-          </div>
-          <div>
-            <DialogTitle className="text-lg font-bold text-foreground">
-              Editar Tarea
-            </DialogTitle>
-            <div className="flex items-center gap-2 mt-0.5">
-              <Badge variant="outline" className="text-[10px] px-2 py-0 bg-muted/30">
-                {task.title || "Sin título"}
-              </Badge>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: getStatusColor(status) }} />
-                <span className="text-[10px] text-muted-foreground">{getStatusLabel(status)}</span>
-              </div>
-              {isLocked && (
-                <Badge className="bg-red-500/10 text-red-600 border-red-200 text-[9px] px-1.5 py-0 gap-1">
-                  <Lock className="h-2.5 w-2.5" />
-                  Bloqueada
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[2px]"
+            onClick={() => onOpenChange(false)}
+          />
 
-        {/* BODY */}
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-[#0DA2E7]" />
-            </div>
-            <div>
-              <p className="text-[11px] font-bold text-foreground uppercase tracking-widest">Detalles</p>
-            </div>
-          </div>
-          <Separator className="bg-border/60" />
-
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
-                <ClipboardList className="h-3.5 w-3.5 text-[#0DA2E7]" />
-              </div>
-              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Título</Label>
-            </div>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Título de la tarea..."
-              disabled={isLocked}
-              className="mt-1.5 h-9 text-sm bg-background border-border rounded-lg focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
-                <FileText className="h-3.5 w-3.5 text-[#0DA2E7]" />
-              </div>
-              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Descripción</Label>
-            </div>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              placeholder="Describe la tarea..."
-              disabled={isLocked}
-              className="mt-1.5 text-sm bg-background border-border rounded-lg resize-none focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
-                <Clock className="h-3.5 w-3.5 text-[#0DA2E7]" />
-              </div>
-              <Label className="text-[11px] font-bold text-foreground uppercase tracking-widest">Estado</Label>
-            </div>
-            <Select
-              value={status}
-              onValueChange={setStatus}
-              disabled={isLocked}
-            >
-              <SelectTrigger className="mt-1.5 h-10 text-sm bg-background border-border rounded-lg focus:ring-2 focus:ring-[#0DA2E7]/20 focus:border-[#0DA2E7] disabled:opacity-50 disabled:cursor-not-allowed">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                {STATUS_OPTS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <span className="flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: option.color }} />
-                      {option.label}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-4 sm:inset-[10%] lg:inset-[12%] z-50 overflow-hidden rounded-2xl bg-card shadow-2xl border border-border/30 flex flex-col max-w-2xl mx-auto"
+          >
+            {/* HEADER */}
+            <div className="relative flex-shrink-0 overflow-hidden border-b border-border/40 bg-gradient-to-br from-[#0DA2E7]/15 via-[#0DA2E7]/6 to-transparent px-6 pt-5 pb-4">
+              <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#0DA2E7]/15 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-8 right-16 h-16 w-16 rounded-full bg-[#0DA2E7]/10 blur-xl" />
+              <div className="relative flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3.5">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] text-white shadow-lg shadow-[#0DA2E7]/25">
+                    <StatusIcon className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-lg font-bold leading-snug text-foreground">
+                      {task.title || task.description || "Sin título"}
+                    </h2>
+                    <span
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                      style={{ backgroundColor: statusInfo.bg, color: statusInfo.color }}
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: statusInfo.color }} />
+                      {statusInfo.label}
                     </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {isLocked && (
-              <p className="text-[10px] text-muted-foreground/60 mt-1 flex items-center gap-1">
-                <Lock className="h-3 w-3" />
-                Esta tarea está {lockLabel} y no se puede modificar
-              </p>
-            )}
-          </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onOpenChange(false)}
+                  className="rounded-lg p-1.5 transition-colors hover:bg-muted/40"
+                >
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+            </div>
 
-          <DialogFooter className="gap-2 pt-2 border-t border-border/50">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="h-10 px-6 text-sm rounded-xl flex-1 hover:bg-muted/50 transition-all"
-            >
-              <X className="h-4 w-4 mr-1.5" />
-              Cancelar            </Button>
-            <Button
-              type="submit"
-              disabled={isSubmitting || isLocked}
-              className={`h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isLocked ? 'bg-gray-400' : 'bg-[#0DA2E7] hover:bg-[#0B8BC7]'}`}
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isLocked ? (
-                <Lock className="h-4 w-4" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              {isSubmitting ? "Guardando..." : isLocked ? "Bloqueada" : "Guardar Cambios"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+            {/* BODY */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
+              {/* CREADO POR */}
+              <div className="flex items-center gap-3">
+                <Avatar className="h-9 w-9 ring-2 ring-[#0DA2E7]/20">
+                  <AvatarFallback className="bg-[#0DA2E7]/10 text-xs font-medium text-[#0DA2E7]">
+                    {getTechInitials(creatorId)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {getCreatorName(creatorId) || "Creador desconocido"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground/70">
+                    {getRoleLabel(getCreatorRole(creatorId)) || "–"}
+                  </p>
+                </div>
+              </div>
+
+              {/* IDENTIFICACIÓN */}
+              <div className="mt-4 border-t border-border/50 pt-5">
+                <div className="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+                  <div>
+                    <Label icon={<FolderKanban className="h-3 w-3" />}>Proyecto</Label>
+                    <Value>{getProjectName(projectId)}</Value>
+                  </div>
+                  <div>
+                    <Label icon={<Briefcase className="h-3 w-3" />}>Servicio</Label>
+                    <Value>{getServiceName(serviceId)}</Value>
+                  </div>
+                  <div>
+                    <Label icon={<Building2 className="h-3 w-3" />}>Cliente</Label>
+                    <Value>{getClientName(projectId)}</Value>
+                  </div>
+                  <div>
+                    <Label icon={<CalendarClock className="h-3 w-3" />}>Fecha de trabajo</Label>
+                    <Value className="capitalize">
+                      {startDate ? format(startDate, "EEEE dd MMM yyyy", { locale: es }) : "Sin fecha"}
+                    </Value>
+                  </div>
+                  <div>
+                    <Label icon={<CalendarClock className="h-3 w-3" />}>Fecha de creación de la tarea</Label>
+                    <Value>
+                      {createdAtDate ? format(createdAtDate, "dd MMM yyyy · HH:mm", { locale: es }) : "Sin fecha"}
+                    </Value>
+                  </div>
+                  {norm(task.status) === "COMPLETED" && (
+                    <div>
+                      <Label icon={<CheckCircle className="h-3 w-3" />}>Fecha de culminación</Label>
+                      <Value>{completedDate ? format(completedDate, "dd MMM yyyy", { locale: es }) : "—"}</Value>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* DESCRIPCIÓN */}
+              <div className="mt-6 border-t border-border/50 pt-5">
+                <Label icon={<FileText className="h-3 w-3" />}>Descripción / Notas</Label>
+                {task.description ? (
+                  <p className="mt-2.5 text-sm leading-relaxed text-foreground/90">{task.description}</p>
+                ) : (
+                  <div className="mt-2.5 flex items-center gap-2 text-xs text-muted-foreground/50">
+                    <Wrench className="h-3.5 w-3.5" />
+                    Sin descripción registrada
+                  </div>
+                )}
+              </div>
+
+              {/* HORARIO Y HORAS */}
+              <div className="mt-6 border-t border-border/50 pt-5">
+                <div className="grid grid-cols-2 gap-8">
+                  <div>
+                    <Label icon={<Clock className="h-3 w-3" />}>Horario</Label>
+                    <Value>
+                      {startDate && endDate
+                        ? `${format(startDate, "dd MMM · HH:mm", { locale: es })} – ${format(endDate, "dd MMM · HH:mm", { locale: es })}`
+                        : "Sin horario"}
+                    </Value>
+                  </div>
+                  <div className="text-right">
+                    <Label icon={<Timer className="h-3 w-3" />} right>Horas</Label>
+                    <div className="mt-2 flex items-center justify-end gap-2">
+                      <span className="text-lg font-bold tracking-tight text-foreground">{hours.toFixed(1)}h</span>
+                      <Badge
+                        className={`${factorCls} rounded-full border px-2 py-0 text-[10px] font-semibold`}
+                        title={factorInfo.title}
+                      >
+                        {factorInfo.label}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {(hasBreakdown || normalHours > 0 || overtimeHours > 0) && (
+                  <div className="mt-5 space-y-3 border-t border-border/40 pt-4">
+                    <Label icon={<Hash className="h-3 w-3" />}>
+                      {hasBreakdown ? "Desglose por factores" : "Desglose de horas"}
+                    </Label>
+                    {hasBreakdown ? (
+                      factorRows.map((row, i) => (
+                        <div
+                          key={`${row.label}-${i}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <span
+                              className="h-1.5 w-1.5 rounded-full"
+                              style={{ backgroundColor: factorDot(row.factor) }}
+                            />
+                            {row.label} · factor ×{row.factor}
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {Number(row.hours).toFixed(1)}h
+                            <span className="ml-2 font-normal text-muted-foreground">
+                              ${Number(row.amount || 0).toFixed(2)}
+                            </span>
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        {normalHours > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
+                              Diurnas · factor ×1
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {normalHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${normalPay.toFixed(2)}</span>
+                            </span>
+                          </div>
+                        )}
+                        {overtimeHours > 0 && (
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="flex items-center gap-2 text-muted-foreground">
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                              Nocturnas / extra · factor ×1.5
+                            </span>
+                            <span className="font-medium text-foreground">
+                              {overtimeHours.toFixed(1)}h<span className="ml-2 font-normal text-muted-foreground">${overtimePay.toFixed(2)}</span>
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* TARIFA Y TOTAL */}
+              <div className="mt-6 border-t border-border/50 pt-5">
+                <div className="grid grid-cols-2 gap-8 rounded-xl border border-[#0DA2E7]/15 bg-[#0DA2E7]/5 p-4">
+                  <div>
+                    <Label icon={<DollarSign className="h-3 w-3" />}>Tarifa por hora</Label>
+                    <Value>${rate.toFixed(2)}/h</Value>
+                  </div>
+                  <div className="text-right">
+                    <Label icon={<Tag className="h-3 w-3" />} right>Total</Label>
+                    <div className="mt-2 text-lg font-bold text-[#0DA2E7]">${totalPay}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* FOOTER */}
+            <div className="flex flex-shrink-0 items-center justify-between gap-2 border-t border-border/30 bg-muted/5 px-6 py-3">
+              <div className="flex items-center gap-2">
+                {onEditTask && canEdit && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onEditTask}
+                    className="h-8 rounded-lg border-border/60 px-3 text-xs hover:border-[#0DA2E7]/40 hover:bg-[#0DA2E7]/5 hover:text-[#0DA2E7] transition-all"
+                  >
+                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                    Editar
+                  </Button>
+                )}
+                {onDeleteTask && canDelete && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={onDeleteTask}
+                    className="h-8 rounded-lg border-border/60 px-3 text-xs hover:border-red-300 hover:bg-red-50 hover:text-red-500 transition-all"
+                  >
+                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                    Eliminar
+                  </Button>
+                )}
+              </div>
+              <Button
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                className="h-8 rounded-lg bg-[#0DA2E7] px-5 text-xs font-medium text-white transition-colors hover:bg-[#0B8BC7]"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
