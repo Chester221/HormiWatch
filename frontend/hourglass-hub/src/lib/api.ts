@@ -416,20 +416,28 @@ export const auditApi = {
 
 // ---------- NOTIFICATIONS ----------
 export const notificationsApi = {
-  getAll: (params?: any) =>
+  // Listado propio del usuario autenticado (?unread=true&take=20&skip=0)
+  getMine: (params?: any) =>
     apiClient(`/notifications${params ? `?${new URLSearchParams(params)}` : ''}`),
 
-  getById: (id: string) =>
-    apiClient(`/notifications/${id}`),
+  // Contador de no leídas para el badge
+  getUnreadCount: () =>
+    apiClient('/notifications/unread-count'),
 
-  create: (data: any) =>
-    apiClient('/notifications', { method: 'POST', body: JSON.stringify(data) }),
+  // Marcar una notificación como leída
+  markRead: (id: string) =>
+    apiClient(`/notifications/${id}/read`, { method: 'PATCH' }),
 
-  update: (id: string, data: any) =>
-    apiClient(`/notifications/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  // Marcar todas como leídas
+  markAllRead: () =>
+    apiClient('/notifications/read-all', { method: 'PATCH' }),
 
-  delete: (id: string) =>
-    apiClient(`/notifications/${id}`, { method: 'DELETE' }),
+  // Configuración global (solo admin puede editar)
+  getSettings: () =>
+    apiClient('/notifications/settings'),
+
+  updateSettings: (data: any) =>
+    apiClient('/notifications/settings', { method: 'PUT', body: JSON.stringify(data) }),
 };
 
 // ============================================================

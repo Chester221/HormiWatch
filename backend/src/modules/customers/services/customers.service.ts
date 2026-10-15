@@ -15,6 +15,9 @@ import { UpdateCustomerDto } from '../dto/update-customer.dto';
 import { FindAllCustomersQueryDto } from '../dto/find-all-customers-query.dto';
 import { PageDto } from 'src/common/pagination/pagination.dto';
 import { PageMeta } from 'src/common/pagination/metadata';
+import { NotificationEmitterService } from '../../notifications/services/notification-emitter.service';
+import { NotificationCategory } from '../../notifications/enums/notification-category.enum';
+import { NotificationLevel } from '../../notifications/enums/notification-level.enum';
 
 @Injectable()
 export class CustomersService {
@@ -25,6 +28,7 @@ export class CustomersService {
     private readonly customerRepository: Repository<Customer>,
     @InjectRepository(CustomerContact)
     private readonly customerContactRepository: Repository<CustomerContact>,
+    private readonly notifications: NotificationEmitterService,
   ) {}
 
   async getDashboardData() {
@@ -60,6 +64,16 @@ export class CustomersService {
       );
       await this.customerContactRepository.save(contactEntities);
     }
+
+    // Notificación multicanal: cliente creado
+    this.notifications.toAdmins(
+      'customer.created',
+      NotificationCategory.CUSTOMERS,
+      NotificationLevel.INFO,
+      'Cliente creado',
+      `Se registró el cliente "${customerData.name || ''}" en el sistema.`,
+      { customerId: id, name: customerData.name },
+    );
 
     return this.findCustomerById(id);
   }
@@ -203,6 +217,16 @@ export class CustomersService {
         throw new NotFoundException(`Customer with ID "${id}" not found`);
       }
     });
+
+    // Notificación multicanal: cliente eliminado
+    this.notifications.toAdmins(
+      'customer.deleted',
+      NotificationCategory.CUSTOMERS,
+      NotificationLevel.WARNING,
+      'Cliente eliminado',
+      `El cliente con ID ${id} fue eliminado permanentemente del sistema.`,
+      { customerId: id },
+    );
 
     return {
       message: `Customer with ID "${id}" has been permanently deleted.`,

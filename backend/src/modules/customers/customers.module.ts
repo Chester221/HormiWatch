@@ -6,9 +6,13 @@ import { CustomerContactService } from './services/customer_contact.service';
 import { CustomerContactController } from './controllers/customer_contact.controller';
 import { Customer } from './entities/customer.entity';
 import { CustomerContact } from './entities/customer_contact.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Customer, CustomerContact])],
+  imports: [
+    TypeOrmModule.forFeature([Customer, CustomerContact]),
+    NotificationsModule,
+  ],
   controllers: [CustomersController, CustomerContactController],
   providers: [CustomersService, CustomerContactService],
   exports: [CustomersService, CustomerContactService], // Exporta el servicio si otros módulos lo necesitan

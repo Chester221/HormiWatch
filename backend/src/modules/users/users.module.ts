@@ -8,6 +8,7 @@ import { Role } from '../role/entities/role.entity';
 import { RoleModule } from '../role/role.module';
 import { Profile } from './entities/profile.entity';
 import { StorageModule } from '../storage/storage.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { StorageModule } from '../storage/storage.module';
     RoleModule,
     StorageModule,
     HashingModule,
+    NotificationsModule,
   ],
   controllers: [UsersController],
   providers: [UsersService],

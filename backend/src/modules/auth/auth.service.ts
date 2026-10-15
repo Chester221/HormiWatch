@@ -8,6 +8,10 @@ import { User } from '../users/entities/user.entity';
 import { IJwtPayload } from './interface/payload.interface';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { RegisterDto } from './dto/register.dto';
+import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationLevel } from '../notifications/enums/notification-level.enum';
+import { NotificationEvent } from '../notifications/events/notification.event';
 
 @Injectable()
 export class AuthService {
@@ -16,6 +20,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly hashingService: HashingService,
     @InjectDataSource() private readonly dataSource: DataSource,
+    private readonly notifications: NotificationEmitterService,
   ) {}
 
   // ✅ REGISTRO PÚBLICO: crea la cuenta (rol Technician) sin requerir sesión.
@@ -118,6 +123,7 @@ export class AuthService {
         avatar_url: user.profile.avatar_url,
         phone: user.profile.phone,
         position: user.profile.position,
+        whatsappPhone: user.profile.whatsappPhone,
       } : null,
       created_at: user.createdAt,
       updated_at: user.updatedAt,
@@ -172,6 +178,17 @@ export class AuthService {
       user.password,
     );
     if (!passwordMatches) {
+      // Notificación multicanal: intento de login fallido (crítico de seguridad)
+      const hourBucket = new Date().toISOString().slice(0, 13);
+      this.notifications.toAdmins(
+        'auth.login.failed',
+        NotificationCategory.SYSTEM,
+        NotificationLevel.CRITICAL,
+        'Intento de login fallido',
+        `Se registró un intento de inicio de sesión fallido para ${user.email}.`,
+        { email: user.email, userId: user.id },
+        `auth.login.failed:${user.id}:${hourBucket}`,
+      );
       throw new UnauthorizedException('Credenciales inválidas');
     }
     return user as User;
@@ -193,6 +210,20 @@ export class AuthService {
 
     const hashedPassword = await this.hashingService.hash(dto.newPassword);
     await this.usersService.updatePassword(userId, hashedPassword);
+
+    // Notificación multicanal: contraseña cambiada (in-app al usuario)
+    this.notifications.emit(
+      new NotificationEvent(
+        'auth.password.changed',
+        NotificationCategory.USERS,
+        NotificationLevel.INFO,
+        'Contraseña actualizada',
+        'Tu contraseña fue actualizada correctamente. Si no fuiste tú, contacta al administrador.',
+        { type: 'users', userIds: [userId] },
+        { userId },
+        null,
+      ),
+    );
 
     return { message: 'Contraseña actualizada correctamente' };
   }

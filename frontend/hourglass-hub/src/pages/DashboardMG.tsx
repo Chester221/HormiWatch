@@ -31,6 +31,7 @@ import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
 import { CreateServiceModal } from "@/components/services/CreateServiceModal";
 import { taskDate, taskHours } from "@/lib/dashboardUtils";
+import { AlertsPanel } from "@/components/notifications/AlertsPanel";
 
 // ============================================
 // HELPERS
@@ -288,6 +289,11 @@ const DashboardMG = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ProjectsAtRisk projects={projects} tasks={tasks} />
         <TaskStatus tasks={tasks} />
+      </div>
+
+      {/* ═══════ ALERTAS RECIENTES ═══════ */}
+      <div className="mt-6">
+        <AlertsPanel limit={5} />
       </div>
 
       {/* ═══════ MODALES ═══════ */}

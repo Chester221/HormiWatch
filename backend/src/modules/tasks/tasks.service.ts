@@ -20,6 +20,9 @@ import { UsersService } from '../users/users.service';
 import { ServicesService } from '../services/services/services.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
+import { ContractThresholdsService } from '../notifications/services/contract-thresholds.service';
+import { NotificationLevel } from '../notifications/enums/notification-level.enum';
 import { isUUID } from 'class-validator';
 import { ProjectStatus } from '../projects/enums/project-status.enum';
 import { TaskResponseDto } from './dto/task-response.dto';
@@ -42,6 +45,8 @@ export class TasksService {
     private readonly servicesService: ServicesService,
     private readonly auditService: AuditService,
     private readonly notificationsService: NotificationsService,
+    private readonly notifications: NotificationEmitterService,
+    private readonly contractThresholds: ContractThresholdsService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -280,6 +285,22 @@ export class TasksService {
         : null,
     };
 
+    // Notificación multicanal: tarea creada + evaluación de umbrales de contrato
+    this.notifications.taskEvent(
+      'task.created',
+      NotificationLevel.INFO,
+      'Tarea creada',
+      `Se creó la tarea "${savedTask!.title || ''}" para el técnico ${
+        technician.profile?.name || technician.email
+      }.`,
+      projectId ?? null,
+      effectiveTechnicianId,
+      { taskId: savedTask!.id, projectId: projectId ?? null, technicianId: effectiveTechnicianId },
+    );
+    if (projectId) {
+      void this.contractThresholds.checkAndNotify(projectId);
+    }
+
     return plainToInstance(TaskResponseDto, [transformedTask]);
   }
 
@@ -434,7 +455,40 @@ export class TasksService {
       endDateTime: newEnd,
     });
 
-    return await this.taskRepository.save(updatedTask);
+    const saved = await this.taskRepository.save(updatedTask);
+
+    // Notificaciones multicanal por cambios de estado de la tarea
+    const finalStatus = saved.status as unknown as TaskStatus;
+    const projId = task.project?.id ?? null;
+    const techId = task.technician?.id ?? null;
+    if (newStatus && oldStatus !== newStatus) {
+      if (finalStatus === TaskStatus.COMPLETED) {
+        this.notifications.taskEvent(
+          'task.completed',
+          NotificationLevel.INFO,
+          'Tarea completada',
+          `La tarea "${saved.title || ''}" fue marcada como completada.`,
+          projId,
+          techId,
+          { taskId: saved.id, projectId: projId },
+        );
+      } else if (finalStatus === TaskStatus.CANCELLED) {
+        this.notifications.taskEvent(
+          'task.cancelled',
+          NotificationLevel.WARNING,
+          'Tarea cancelada',
+          `La tarea "${saved.title || ''}" fue cancelada.`,
+          projId,
+          techId,
+          { taskId: saved.id, projectId: projId },
+        );
+      }
+    }
+    if (projId) {
+      void this.contractThresholds.checkAndNotify(projId);
+    }
+
+    return saved;
   }
 
   async remove(id: string, user?: IActiveUser): Promise<void> {
@@ -461,6 +515,20 @@ export class TasksService {
       const currentPool = Number(task.project.poolHours || 0);
       task.project.poolHours = currentPool + duration;
       await this.projectRepository.save(task.project);
+    }
+
+    // Notificación multicanal: tarea eliminada
+    this.notifications.taskEvent(
+      'task.deleted',
+      NotificationLevel.WARNING,
+      'Tarea eliminada',
+      `La tarea "${task.title || ''}" fue eliminada del sistema.`,
+      task.project?.id ?? null,
+      task.technician?.id ?? null,
+      { taskId: id },
+    );
+    if (task.project?.id) {
+      void this.contractThresholds.checkAndNotify(task.project.id);
     }
 
     await this.taskRepository.softRemove(task);

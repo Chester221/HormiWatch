@@ -24,6 +24,9 @@ import { plainToInstance } from 'class-transformer';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ProjectAssignedEvent } from 'src/mails/events/project-assigned.event';
 import { ProjectUnassignedEvent } from 'src/mails/events/project-unassigned.event';
+import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
+import { ContractThresholdsService } from '../notifications/services/contract-thresholds.service';
+import { NotificationLevel } from '../notifications/enums/notification-level.enum';
 
 @Injectable()
 export class ProjectsService {
@@ -38,7 +41,56 @@ export class ProjectsService {
     private readonly customerContactRepository: Repository<CustomerContact>,
     private readonly usersService: UsersService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly notifications: NotificationEmitterService,
+    private readonly contractThresholds: ContractThresholdsService,
   ) {}
+
+  private emitProjectCreated(project: Project): void {
+    this.notifications.projectChanged(
+      'project.created',
+      NotificationLevel.INFO,
+      'Proyecto creado',
+      `El proyecto "${project.title}" ha sido creado y está en espera de ejecución.`,
+      project.id,
+      { projectId: project.id, title: project.title },
+    );
+  }
+
+  private emitProjectStatusChanged(
+    project: Project,
+    oldStatus: string,
+    newStatus: string,
+  ): void {
+    if (!newStatus || oldStatus === newStatus) return;
+    const map: Record<string, { title: string; level: NotificationLevel }> = {
+      COMPLETED: { title: 'Contrato cerrado', level: NotificationLevel.INFO },
+      IN_PROGRESS: { title: 'Proyecto iniciado', level: NotificationLevel.INFO },
+      CANCELLED: { title: 'Proyecto cancelado', level: NotificationLevel.WARNING },
+      PENDING: { title: 'Proyecto pausado', level: NotificationLevel.WARNING },
+    };
+    const msg = map[newStatus] || { title: 'Proyecto actualizado', level: NotificationLevel.INFO };
+    const eventKey = newStatus === 'COMPLETED' ? 'contract.closed' : 'contract.paused';
+    this.notifications.projectChanged(
+      eventKey,
+      msg.level,
+      msg.title,
+      `El estado del proyecto "${project.title}" cambió de ${oldStatus} a ${newStatus}.`,
+      project.id,
+      { projectId: project.id, oldStatus, newStatus },
+    );
+  }
+
+  private emitPoolRenewed(project: Project, oldPool: number, newPool: number): void {
+    if (!(newPool > oldPool)) return;
+    this.notifications.projectChanged(
+      'contract.renewed',
+      NotificationLevel.INFO,
+      'Contrato renovado',
+      `El proyecto "${project.title}" recibió más horas de pool: ${oldPool}h → ${newPool}h.`,
+      project.id,
+      { projectId: project.id, oldPool, newPool },
+    );
+  }
 
   async create(
     createProjectDto: CreateProjectDto,
@@ -137,6 +189,10 @@ export class ProjectsService {
         }
       }
     }
+
+    // Notificación multicanal: proyecto creado + evaluación de umbrales
+    this.emitProjectCreated(savedProject);
+    void this.contractThresholds.checkAndNotify(savedProject.id);
 
     return this.mapToResponseDto(savedProject);
   }
@@ -278,6 +334,10 @@ export class ProjectsService {
     const { projectLeaderId, technicianIds, customerContactId, ...updateData } =
       updateProjectDto;
 
+    // Capturar estado previo para eventos de dominio
+    const oldStatus = project.status;
+    const oldPool = project.poolHours;
+
     // Update Scalar fields
     Object.assign(project, updateData);
 
@@ -378,16 +438,32 @@ export class ProjectsService {
 
     const savedProject = await this.projectRepository.save(project);
 
+    // Notificaciones multicanal por cambios de dominio
+    this.emitPoolRenewed(savedProject, oldPool, savedProject.poolHours);
+    this.emitProjectStatusChanged(savedProject, oldStatus, savedProject.status);
+    void this.contractThresholds.checkAndNotify(savedProject.id);
+
     // Refresh to get full relations for DTO mapping
     return this.findOne(savedProject.id);
   }
 
   async remove(id: string): Promise<void> {
     this.logger.log(`Soft deleting project with ID: ${id}`);
+    const project = await this.projectRepository.findOne({ where: { id } });
     const deleteResult = await this.projectRepository.softDelete({ id });
     if (deleteResult.affected === 0) {
       this.logger.warn(`Project with ID ${id} not found for deletion`);
       throw new NotFoundException(`Project with ID ${id} not found`);
+    }
+    if (project) {
+      this.notifications.projectChanged(
+        'project.deleted',
+        NotificationLevel.WARNING,
+        'Proyecto eliminado',
+        `El proyecto "${project.title}" fue eliminado del sistema.`,
+        id,
+        { projectId: id, title: project.title },
+      );
     }
   }
 

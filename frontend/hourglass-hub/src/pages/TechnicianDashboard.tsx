@@ -21,6 +21,8 @@ import { HoursByDayChart } from "@/components/DashboardMG/HoursByDayChart";
 import { UpcomingTasks } from "@/components/TechnicianDashboard/UpcomingTasks";
 import { MyProjects } from "@/components/TechnicianDashboard/MyProjects";
 import { Performance } from "@/components/TechnicianDashboard/Performance";
+import { AlertsPanel } from "@/components/notifications/AlertsPanel";
+import { useNotifications, useCriticalNotificationToasts } from "@/hooks/useNotifications";
 
 const HORMI_BLUE = "#0DA2E7";
 
@@ -62,6 +64,10 @@ const TechnicianDashboard = () => {
   const { data: allProjects = [], isLoading: isLoadingProjects, error: projectsError, refetch: refetchProjects } = useProjects();
   const { data: services = [] } = useServices();
   const createTasksMutation = useCreateTasks();
+
+  // Notificaciones: polling + toast persistente para alertas críticas de tareas
+  const { data: notifications = [] } = useNotifications();
+  useCriticalNotificationToasts(notifications);
 
   const tasks = useMemo(() => {
     if (isManager) {
@@ -301,6 +307,9 @@ const TechnicianDashboard = () => {
                 </motion.div>
               ))}
             </div>
+
+            {/* ═══════════ ALERTAS RECIENTES ═══════════ */}
+            <AlertsPanel limit={4} />
 
             {/* ═══════════ MI RENDIMIENTO + HORAS POR DÍA ═══════════ */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">

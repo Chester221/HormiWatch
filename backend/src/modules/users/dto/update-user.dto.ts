@@ -95,4 +95,14 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   full_name?: string;
+
+  @ApiPropertyOptional({ description: 'WhatsApp phone number' })
+  @IsOptional()
+  @IsString()
+  whatsappPhone?: string;
+
+  @ApiPropertyOptional({ description: 'WhatsApp phone number (alias)' })
+  @IsOptional()
+  @IsString()
+  whatsapp_phone?: string;
 }

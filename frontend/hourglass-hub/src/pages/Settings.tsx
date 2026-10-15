@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { authApi } from "@/lib/api";
+import { SettingsNotifications } from "@/components/settings/SettingsNotifications";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -424,11 +425,7 @@ export default function Settings() {
             title="Notificaciones"
             description="Controla qué avisos recibes"
           >
-            <div className="py-2 text-center">
-              <p className="text-sm text-muted-foreground">
-                La configuración de notificaciones estará disponible pronto
-              </p>
-            </div>
+            <SettingsNotifications />
           </Section>
         </motion.div>
 

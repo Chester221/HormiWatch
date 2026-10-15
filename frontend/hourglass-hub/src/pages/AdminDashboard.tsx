@@ -19,6 +19,7 @@ import {
 import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
 import { AddUserModal } from "@/components/team/AddUserModal";
 import { UserFilters, DEFAULT_ROLE_OPTIONS } from "@/components/admin/UserFilters";
+import { AlertsPanel } from "@/components/notifications/AlertsPanel";
 import { motion, AnimatePresence } from "framer-motion";
 
 const HORMI_BLUE = "#0DA2E7";
@@ -620,6 +621,11 @@ const handleDeleteUser = async (user: any) => {
             </div>
           )}
         </motion.div>
+      </div>
+
+      {/* ═══════════ ALERTAS RECIENTES ═══════════ */}
+      <div className="mt-6">
+        <AlertsPanel limit={6} />
       </div>
 
       {/* ═══════════ MODALES ═══════════ */}

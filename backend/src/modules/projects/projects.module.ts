@@ -6,11 +6,13 @@ import { Project } from './entities/project.entity';
 import { User } from '../users/entities/user.entity';
 import { CustomerContact } from '../customers/entities/customer_contact.entity';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Project, User, CustomerContact]),
     UsersModule,
+    NotificationsModule,
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

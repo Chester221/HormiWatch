@@ -5,6 +5,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { TrimPipe } from './pipes/trim.pipe';
 import { QueryFailedFilter } from './common/filters/query-failed.filter';
+import { SystemErrorFilter } from './common/filters/system-error.filter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 import cookieParser from 'cookie-parser';
 
@@ -13,6 +15,7 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log', 'verbose'],
   });
 
+  const eventEmitter = app.get(EventEmitter2);
   app.set('trust proxy', true);
   app.use(cookieParser());
 
@@ -37,7 +40,7 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  app.useGlobalFilters(new QueryFailedFilter());
+  app.useGlobalFilters(new QueryFailedFilter(), new SystemErrorFilter(eventEmitter));
   app.useGlobalPipes(new TrimPipe());
   app.useGlobalPipes(
     new ValidationPipe({

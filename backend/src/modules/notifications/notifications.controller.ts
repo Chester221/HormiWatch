@@ -1,64 +1,68 @@
 import {
   Controller,
   Get,
-  Post,
   Body,
-  Patch,
   Param,
-  Delete,
+  Patch,
+  Put,
+  Query,
+  UseGuards,
+  HttpCode,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
-import { NotificationsService } from './notifications.service';
-import { CreateNotificationDto } from './dto/create-notification.dto';
-import { UpdateNotificationDto } from './dto/update-notification.dto';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { NotificationsService } from './services/notifications.service';
+import { NotificationSettingsService } from './services/notification-settings.service';
+import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { CurrentUser } from '../auth/decorator/current-user.decorator';
+import type { IActiveUser } from '../auth/interface/payload.interface';
+import { Roles } from '../auth/decorator/roles.decorator';
+import { Role } from '../auth/enums/roles.enum';
+import { RolesGuard } from '../auth/guard/authorization.guard';
 
 @ApiBearerAuth()
 @ApiTags('Notifications')
 @Controller('notifications')
 export class NotificationsController {
-  constructor(private readonly notificationsService: NotificationsService) {}
-
-  @Post()
-  @ApiOperation({ summary: 'Create a notification preference' })
-  @ApiResponse({ status: 201, description: 'Created successfully.' })
-  create(@Body() createNotificationDto: CreateNotificationDto) {
-    return this.notificationsService.create(createNotificationDto);
-  }
+  constructor(
+    private readonly notifications: NotificationsService,
+    private readonly settings: NotificationSettingsService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Get all notification preferences' })
-  @ApiResponse({ status: 200, description: 'List of preferences.' })
-  findAll() {
-    return this.notificationsService.findAll();
+  async mine(@CurrentUser() user: IActiveUser, @Query('unread') unread?: string) {
+    return this.notifications.getMine(user, unread === 'true');
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get preference by ID' })
-  @ApiResponse({ status: 200, description: 'The preference.' })
-  @ApiResponse({ status: 404, description: 'Not found.' })
-  findOne(@Param('id') id: string) {
-    return this.notificationsService.findOne(+id);
+  @Get('unread-count')
+  async count(@CurrentUser() user: IActiveUser) {
+    return { count: await this.notifications.getUnreadCount(user) };
   }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update preference' })
-  @ApiResponse({ status: 200, description: 'Updated successfully.' })
-  update(
-    @Param('id') id: string,
-    @Body() updateNotificationDto: UpdateNotificationDto,
-  ) {
-    return this.notificationsService.update(+id, updateNotificationDto);
+  @Patch(':id/read')
+  @HttpCode(200)
+  async markRead(@Param('id') id: string, @CurrentUser() user: IActiveUser) {
+    await this.notifications.markRead(id, user);
+    return { ok: true };
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete preference' })
-  @ApiResponse({ status: 200, description: 'Deleted successfully.' })
-  remove(@Param('id') id: string) {
-    return this.notificationsService.remove(+id);
+  @Patch('read-all')
+  @HttpCode(200)
+  async markAllRead(@CurrentUser() user: IActiveUser) {
+    await this.notifications.markAllRead(user);
+    return { ok: true };
+  }
+
+  @Get('settings')
+  @Roles(Role.admin)
+  @UseGuards(RolesGuard)
+  async getSettings() {
+    return this.settings.get();
+  }
+
+  @Put('settings')
+  @Roles(Role.admin)
+  @UseGuards(RolesGuard)
+  async updateSettings(@Body() dto: UpdateNotificationSettingsDto) {
+    return this.settings.update(dto);
   }
 }

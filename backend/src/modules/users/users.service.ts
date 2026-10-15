@@ -23,6 +23,9 @@ import type { Cache } from 'cache-manager';
 import { Inject } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { WelcomeMailEvent } from 'src/mails/events/welcome-mail.event';
+import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
+import { NotificationCategory } from '../notifications/enums/notification-category.enum';
+import { NotificationLevel } from '../notifications/enums/notification-level.enum';
 
 @Injectable()
 export class UsersService {
@@ -39,6 +42,7 @@ export class UsersService {
     private readonly hashingService: HashingService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly eventEmitter: EventEmitter2,
+    private readonly notifications: NotificationEmitterService,
   ) {}
 
   async findOneByEmailForAuth(email: string): Promise<User | null> {
@@ -240,6 +244,16 @@ export class UsersService {
               new Date().getFullYear().toString(),
             ),
           );
+
+          // Notificación multicanal: usuario creado
+          this.notifications.toAdmins(
+            'user.created',
+            NotificationCategory.USERS,
+            NotificationLevel.INFO,
+            'Usuario creado',
+            `Se creó el usuario ${savedUser.email} con rol ${role.name}.`,
+            { userId: savedUser.id, email: savedUser.email, role: role.name },
+          );
         }
 
         return savedUser;
@@ -436,6 +450,10 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
+    // Capturar estado previo para eventos de dominio
+    const oldRoleName = user.role?.name;
+    const oldIsActive = user.isActive;
+
     let role = user.role;
     if (roleId) {
       const foundRole = await this.roleService.findOne(roleId);
@@ -528,6 +546,8 @@ export class UsersService {
         // ✅ AGREGAR avatar_url y full_name al perfil
         user.profile.avatar_url = userData.avatar_url ?? user.profile.avatar_url;
         user.profile.full_name = userData.full_name ?? user.profile.full_name;
+        if (userData.whatsappPhone !== undefined) user.profile.whatsappPhone = userData.whatsappPhone;
+        if (userData.whatsapp_phone !== undefined) user.profile.whatsappPhone = userData.whatsapp_phone;
 
         await manager.save(Profile, user.profile);
       });
@@ -557,6 +577,29 @@ export class UsersService {
     }
 
     await this.cacheManager.del(`/users/${id}`);
+
+    // Notificaciones multicanal por cambios de dominio de usuario
+    if (oldRoleName && role?.name && oldRoleName !== role.name) {
+      this.notifications.toAdmins(
+        'user.role.changed',
+        NotificationCategory.USERS,
+        NotificationLevel.INFO,
+        'Rol de usuario actualizado',
+        `El rol de ${user.email} cambió de ${oldRoleName} a ${role.name}.`,
+        { userId: user.id, email: user.email, oldRole: oldRoleName, newRole: role.name },
+      );
+    }
+    if (oldIsActive !== user.isActive) {
+      this.notifications.toAdmins(
+        user.isActive ? 'user.activated' : 'user.deactivated',
+        NotificationCategory.USERS,
+        NotificationLevel.INFO,
+        user.isActive ? 'Usuario activado' : 'Usuario desactivado',
+        `El usuario ${user.email} fue ${user.isActive ? 'activado' : 'desactivado'}.`,
+        { userId: user.id, email: user.email, isActive: user.isActive },
+      );
+    }
+
     return plainToInstance(UserResponseDto, user);
   }
 
@@ -599,6 +642,16 @@ export class UsersService {
     // servicios que aún apuntan físicamente al usuario. Sin este paso, el
     // DELETE lanza violación de FK (422 "El recurso referenciado no existe").
     await this.removeUserAndProfile(id, user, true);
+
+    // Notificación multicanal: usuario eliminado
+    this.notifications.toAdmins(
+      'user.deleted',
+      NotificationCategory.USERS,
+      NotificationLevel.WARNING,
+      'Usuario eliminado',
+      `El usuario ${user.email} fue eliminado del sistema.`,
+      { userId: user.id, email: user.email },
+    );
 
     await this.cacheManager.del(`/users/${id}`);
   }

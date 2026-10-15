@@ -28,6 +28,7 @@ export interface UserProfile {
     email_notifications?: boolean
     task_reminders?: boolean
     weekly_summary?: boolean
+    whatsappPhone?: string | null
     is_active?: boolean
     created_at?: string
     updated_at?: string
@@ -139,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role,
                 dark_mode: preferences.dark_mode ?? false,
                 preferences,
+                whatsappPhone: p.whatsappPhone ?? null,
                 created_at: data.created_at ?? data.createdAt ?? p.createdAt,
                 updated_at: data.updated_at ?? data.updatedAt ?? p.updatedAt,
             } as UserProfile;

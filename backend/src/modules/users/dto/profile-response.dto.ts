@@ -42,4 +42,7 @@ export class ProfileResponseDto {
 
   @Expose()
   avatar_url: string;
+
+  @Expose()
+  whatsappPhone: string;
 }

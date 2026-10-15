@@ -14,6 +14,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useTeamMembers } from "@/hooks/useTeamMembers";
 import { useClientsWithContacts } from "@/hooks/useClientes";
 import { useServices } from "@/hooks/useServices";
+import { NotificationsBell } from "@/components/notifications/NotificationsBell";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Dialog,
@@ -304,6 +305,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       </Dialog>
 
       <div className="flex items-center gap-4">
+        <NotificationsBell />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-3 hover:bg-accent">

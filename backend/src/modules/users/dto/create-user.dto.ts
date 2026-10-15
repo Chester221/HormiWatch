@@ -55,6 +55,25 @@ export class CreateUserDto {
   phone?: string;
 
   @ApiProperty({
+    description: 'WhatsApp phone number',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  @IsMobilePhone(undefined, { strictMode: true })
+  whatsappPhone?: string;
+
+  @ApiProperty({
+    description: 'WhatsApp phone number (alias)',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(20)
+  whatsapp_phone?: string;
+
+  @ApiProperty({
     description: 'The ID card number or identifier',
     example: '123456789',
     required: false,
