@@ -19,7 +19,6 @@ import { Project } from '../projects/entities/project.entity';
 import { UsersService } from '../users/users.service';
 import { ServicesService } from '../services/services/services.service';
 import { AuditService } from '../audit/audit.service';
-import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
 import { ContractThresholdsService } from '../notifications/services/contract-thresholds.service';
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
@@ -44,7 +43,6 @@ export class TasksService {
     private readonly usersService: UsersService,
     private readonly servicesService: ServicesService,
     private readonly auditService: AuditService,
-    private readonly notificationsService: NotificationsService,
     private readonly notifications: NotificationEmitterService,
     private readonly contractThresholds: ContractThresholdsService,
     private readonly dataSource: DataSource,
