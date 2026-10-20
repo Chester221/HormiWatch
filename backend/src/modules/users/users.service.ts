@@ -137,13 +137,32 @@ export class UsersService {
     createUserDto: CreateUserDto,
     profilePicture?: Express.Multer.File,
   ) {
-    const { roleId, ...userData } = createUserDto;
+    const { roleId, roleName, ...userData } = createUserDto as any;
     let uploadedFileKey: string | null = null;
     let profilePictureUrl: string | undefined = undefined;
 
     this.logger.verbose('Starting user creation: Parallelizing tasks...');
 
-    const rolePromise = this.roleService.findOne(roleId);
+    let rolePromise: Promise<any>;
+    if (roleId) {
+      rolePromise = this.roleService.findOne(roleId);
+    } else if (roleName) {
+      rolePromise = (async () => {
+        const found = await this.roleService.findOneByName(roleName);
+        if (found) return found;
+        // try tolerant
+        const roles = await (this.roleService as any).roleRepository?.find?.();
+        if (roles && roles.length) {
+          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const n = norm(roleName);
+          const similar = roles.find((r: any) => norm(r.name).includes(n) || n.includes(norm(r.name)));
+          if (similar) return similar;
+        }
+        throw new NotFoundException(`Role with name '${roleName}' not found`);
+      })();
+    } else {
+      rolePromise = this.roleService.findTechnicianRole();
+    }
     const hashPromise = this.hashingService.hash(userData.password);
 
     let uploadPromise: Promise<{ url: string; key: string }> | null = null;
@@ -179,7 +198,7 @@ export class UsersService {
       }
       const role = roleResult.value;
       if (!role) {
-        throw new Error(`Role with ID '${roleId}' not found`);
+        throw new Error(`Role not found`);
       }
 
       if (hashResult.status === 'rejected') {
