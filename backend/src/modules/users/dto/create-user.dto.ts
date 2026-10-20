@@ -129,9 +129,19 @@ export class CreateUserDto {
   @ApiProperty({
     description: 'The UUID of the role assigned to the user',
     example: 'e069156e-3467-4229-875f-25c275988220',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   @IsUUID('all')
-  roleId: string;
+  roleId?: string;
+
+  @ApiProperty({
+    description: 'Role name (alternative to roleId)',
+    example: 'Technician',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  roleName?: string;
 }
