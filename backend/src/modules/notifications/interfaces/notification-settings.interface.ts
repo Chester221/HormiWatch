@@ -50,5 +50,5 @@ export const DEFAULT_THRESHOLDS: NotificationThresholds = {
   red: 100,
   expiringDays: 15,
   inactivityDays: 3,
-  taskStaleDays: 5,
+  taskStaleDays: 3,
 };
