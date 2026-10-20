@@ -88,12 +88,12 @@ export class NotificationDispatcherService {
       }
     }
 
-    // Discord: los críticos se envían en tiempo real; el resto (resumen) lo
-    // agrupa el scheduler a las 8:00 AM.
-    if (s.channels?.discord === true && event.isCritical) {
+    // Discord: enviar todos los eventos en tiempo real cuando está habilitado
+    if (s.channels?.discord === true) {
       const channel = this.discordChannelFor(event.category);
+      const prefix = event.isCritical ? '🚨 ' : '';
       await this.discord.sendToChannel(s.discord || {}, channel, {
-        content: `🚨 **${event.title}**\n${event.message}`,
+        content: `${prefix}**${event.title}**\n${event.message}`,
       });
     }
   }
