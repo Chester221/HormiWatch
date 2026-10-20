@@ -57,13 +57,6 @@ export function NotificationsBell() {
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    if (!next) return;
-    // Al abrir, marcar como leídas las que se muestran (las no leídas)
-    if (unreadList.length > 0) {
-      for (const n of unreadList) {
-        markRead.mutate(n.id);
-      }
-    }
   };
 
   const handleMarkAll = () => {
