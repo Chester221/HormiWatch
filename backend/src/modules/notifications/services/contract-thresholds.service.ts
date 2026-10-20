@@ -52,12 +52,14 @@ export class ContractThresholdsService {
             NotificationCategory.CONTRACTS,
             item.level,
             title,
-            `El proyecto "${ctx.projectTitle}" del cliente "${ctx.customerName}" ha alcanzado el ${ctx.percent}% de consumo (${ctx.hoursConsumed.toFixed(1)}h de ${ctx.hoursContracted.toFixed(1)}h).`,
+            `El proyecto "${ctx.projectTitle}" del cliente "${ctx.customerName}" ha alcanzado el ${ctx.percent}% de consumo (${ctx.hoursConsumed.toFixed(1)}h de ${ctx.hoursContracted.toFixed(1)}h).${(ctx as any).customerPhone ? ` Contacto: ${(ctx as any).customerPhone}${(ctx as any).customerEmail ? ` / ${(ctx as any).customerEmail}` : ''}` : (ctx as any).customerEmail ? ` Contacto: ${(ctx as any).customerEmail}` : ''}`,
             [{ type: 'project', projectId, includeLeader: true, includeAdmins: true }],
             {
               projectId,
               projectTitle: ctx.projectTitle,
               customerName: ctx.customerName,
+              customerPhone: (ctx as any).customerPhone,
+              customerEmail: (ctx as any).customerEmail,
               hoursContracted: ctx.hoursContracted,
               hoursConsumed: ctx.hoursConsumed,
               hoursRemaining: ctx.hoursRemaining,
@@ -71,18 +73,18 @@ export class ContractThresholdsService {
     }
 
     if (ctx.endDate && this.getExpirationWarning(ctx.endDate, t.expiringDays)) {
-      this.emitter.emit(
-        new NotificationEvent(
-          'contract.expiring',
-          NotificationCategory.CONTRACTS,
-          NotificationLevel.WARNING,
-          'Alerta: Contrato por vencer',
-          `El proyecto "${ctx.projectTitle}" vence el ${ctx.endDate}.`,
-          [{ type: 'project', projectId, includeLeader: true, includeAdmins: true }],
-          { projectId, endDate: ctx.endDate },
-          `contract:${projectId}:expiring:${ctx.endDate}`,
-        ),
-      );
+        this.emitter.emit(
+          new NotificationEvent(
+            'contract.expiring',
+            NotificationCategory.CONTRACTS,
+            NotificationLevel.WARNING,
+            'Alerta: Contrato por vencer',
+            `El proyecto "${ctx.projectTitle}" vence el ${ctx.endDate}.${(ctx as any).customerPhone ? ` Contacto: ${(ctx as any).customerPhone}${(ctx as any).customerEmail ? ` / ${(ctx as any).customerEmail}` : ''}` : (ctx as any).customerEmail ? ` Contacto: ${(ctx as any).customerEmail}` : ''}`,
+            [{ type: 'project', projectId, includeLeader: true, includeAdmins: true }],
+            { projectId, endDate: ctx.endDate, customerPhone: (ctx as any).customerPhone, customerEmail: (ctx as any).customerEmail },
+            `contract:${projectId}:expiring:${ctx.endDate}`,
+          ),
+        );
     }
   }
 
@@ -106,14 +108,16 @@ export class ContractThresholdsService {
     const context: ContractThresholdContext = {
       projectId: project.id,
       projectTitle: project.title,
-      customerName: project.customerContact?.customer?.name || 'Sin cliente',
+      customerName: project.customerContact?.customer?.name || project.customerContact?.name || 'Sin cliente',
+      customerPhone: project.customerContact?.phone || null,
+      customerEmail: project.customerContact?.email || null,
       poolHours: pool,
       hoursConsumed: consumed,
       hoursContracted: contracted,
       hoursRemaining: pool,
       percent,
       endDate: project.endDate?.toString() || null,
-    };
+    } as any;
 
     project.hoursConsumed = consumed;
     await this.projectRepo.save(project).catch(() => undefined);
