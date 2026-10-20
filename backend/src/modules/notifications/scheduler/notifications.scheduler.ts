@@ -38,27 +38,8 @@ export class NotificationsScheduler {
     });
     if (!pending.length) return;
 
-    // ── 1. Discorde: agrupar por categoría y publicar una sola vez ──
-    if (s.channels?.discord === true) {
-      const byCategory = new Map<NotificationCategory, Notification[]>();
-      const seen = new Set<string>();
-      for (const n of pending) {
-        const key = `${n.category}|${n.title}|${n.message}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        if (!byCategory.has(n.category)) byCategory.set(n.category, []);
-        byCategory.get(n.category)!.push(n);
-      }
-      for (const [category, items] of byCategory) {
-        const channel = this.discordChannelFor(category);
-        const content = items
-          .map((n) => `• **${n.title}** — ${n.message}`)
-          .join('\n');
-        await this.discord.sendToChannel(s.discord || {}, channel, {
-          content: `📋 **Resumen diario**\n${content}`,
-        });
-      }
-    }
+    // ── 1. Discord: ya se envía en tiempo real para todos los eventos; evitar duplicados ──
+    // Se omite el envío de resumen a Discord para prevenir duplicados.
 
     // ── 2. Email: agrupar por usuario y enviar el resumen ──
     if (s.channels?.email !== false) {
