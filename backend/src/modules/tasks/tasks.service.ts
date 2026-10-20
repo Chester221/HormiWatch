@@ -411,39 +411,59 @@ export class TasksService {
     const newDuration = newStart.until(newEnd).total({ unit: 'hours' });
     const diff = newDuration - oldDuration;
 
-    // 4. Track completion date when status changes
-    const oldStatus = task.status;
-    const newStatus = updateTaskDto.status;
-    if (newStatus) {
-      const targetStatus = newStatus as unknown as TaskStatus;
-      if (
-        targetStatus === TaskStatus.COMPLETED &&
-        oldStatus !== TaskStatus.COMPLETED
-      ) {
-        task.completedAt = Temporal.Now.instant();
-      } else if (
-        targetStatus !== TaskStatus.COMPLETED &&
-        oldStatus === TaskStatus.COMPLETED
-      ) {
-        task.completedAt = null as unknown as Temporal.Instant;
-      }
+  // 4. Track completion date when status changes
+  const oldStatus = task.status;
+  const newStatus = updateTaskDto.status;
+  if (newStatus) {
+    const targetStatus = newStatus as unknown as TaskStatus;
+    if (
+      targetStatus === TaskStatus.COMPLETED &&
+      oldStatus !== TaskStatus.COMPLETED
+    ) {
+      task.completedAt = Temporal.Now.instant();
+    } else if (
+      targetStatus !== TaskStatus.COMPLETED &&
+      oldStatus === TaskStatus.COMPLETED
+    ) {
+      task.completedAt = null as unknown as Temporal.Instant;
     }
+  }
 
-    // 5. Update Project Pool if changed
-    if (Math.abs(diff) > 0 && task.project) {
-      const currentPool = Number(task.project.poolHours || 0);
-      task.project.poolHours = currentPool - diff;
-      await this.projectRepository.save(task.project);
-    }
+  // Validar rango de fechas
+  if (Temporal.Instant.compare(newStart, newEnd) >= 0) {
+    throw new BadRequestException('Start time must be before end time');
+  }
+
+  // 5. Update Project Pool if changed
+  if (Math.abs(diff) > 0 && task.project) {
+    const currentPool = Number(task.project.poolHours || 0);
+    task.project.poolHours = currentPool - diff;
+    await this.projectRepository.save(task.project);
+  }
 
     // 6. Recalculate factor breakdown for the new span
-    if (task.project) {
-      const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
-      task.factorBreakdown = await this.buildFactorBreakdown(
-        newStart,
-        newEnd,
-        timeZone,
-      );
+    const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
+    task.factorBreakdown = await this.buildFactorBreakdown(
+      newStart,
+      newEnd,
+      timeZone,
+    );
+
+    // Validar solapes si cambian fechas
+    const datesChanged = updateTaskDto.startDateTime || updateTaskDto.endDateTime;
+    if (datesChanged) {
+      const overlap = await this.taskRepository
+        .createQueryBuilder('task')
+        .where('task.technician.id = :technicianId', { technicianId: task.technician?.id })
+        .andWhere('task.id != :id', { id })
+        .andWhere('task.startDateTime < :end', { end: newEnd.toString() })
+        .andWhere('task.endDateTime > :start', { start: newStart.toString() })
+        .getOne();
+      if (overlap) {
+        throw new ConflictException(
+          `Task overlaps with an existing task for technician ${task.technician?.id} (${overlap.startDateTime.toString()} - ${overlap.endDateTime.toString()})`,
+        );
+      }
     }
 
     // Merge changes
