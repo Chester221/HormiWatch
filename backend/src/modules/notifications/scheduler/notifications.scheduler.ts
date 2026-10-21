@@ -46,6 +46,16 @@ export class NotificationsScheduler {
     const s = await this.settings.get();
     if (!s.digestEnabled) return;
 
+    // El resumen diario se entrega por correo. Mientras el canal de email
+    // este deshabilitado ("Muy pronto") no se envia nada; la hora y los
+    // umbrales quedan guardados y aplican al habilitarse el correo.
+    if (s.channels?.email !== true) {
+      this.logger.log(
+        'Resumen diario omitido: el canal de correo esta deshabilitado',
+      );
+      return;
+    }
+
     // ── 1. Deteccion diaria: tareas estancadas y tecnicos inactivos ──
     let detection: {
       staleTasks: DigestStaleTaskRow[];
@@ -115,41 +125,39 @@ export class NotificationsScheduler {
 
     // ── 5. Email: reporte completo para admins, lista personal para el resto ──
     const sentIds: string[] = [];
-    if (s.channels?.email !== false) {
-      for (const [userId, r] of recipients) {
-        const items = personal.get(userId) ?? [];
-        if (!items.length && !(r.isAdmin && flags && !flags.isEmpty)) continue;
+    for (const [userId, r] of recipients) {
+      const items = personal.get(userId) ?? [];
+      if (!items.length && !(r.isAdmin && flags && !flags.isEmpty)) continue;
 
-        try {
-          await this.mail.sendMail({
-            to: r.email,
-            subject: r.isAdmin
-              ? '[HormiWatch] Resumen diario de la plataforma'
-              : '[HormiWatch] Resumen diario de notificaciones',
-            template: 'digest-daily',
-            context: {
-              name: r.name,
-              count: items.length,
-              items: items.map((n) => ({
-                title: n.title,
-                message: n.message,
-                category: n.category,
-                level: n.level,
-              })),
-              isAdmin: r.isAdmin,
-              report: r.isAdmin ? report : null,
-              flags: r.isAdmin ? flags : null,
-              thresholds: s.thresholds,
-              date: report?.generatedAt || '',
-              year: new Date().getFullYear(),
-            },
-          });
-          sentIds.push(...items.map((i) => i.id));
-        } catch (e) {
-          this.logger.warn(
-            `Digest email fallo para ${r.email}: ${e instanceof Error ? e.message : String(e)}`,
-          );
-        }
+      try {
+        await this.mail.sendMail({
+          to: r.email,
+          subject: r.isAdmin
+            ? '[HormiWatch] Resumen diario de la plataforma'
+            : '[HormiWatch] Resumen diario de notificaciones',
+          template: 'digest-daily',
+          context: {
+            name: r.name,
+            count: items.length,
+            items: items.map((n) => ({
+              title: n.title,
+              message: n.message,
+              category: n.category,
+              level: n.level,
+            })),
+            isAdmin: r.isAdmin,
+            report: r.isAdmin ? report : null,
+            flags: r.isAdmin ? flags : null,
+            thresholds: s.thresholds,
+            date: report?.generatedAt || '',
+            year: new Date().getFullYear(),
+          },
+        });
+        sentIds.push(...items.map((i) => i.id));
+      } catch (e) {
+        this.logger.warn(
+          `Digest email fallo para ${r.email}: ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
     }
 

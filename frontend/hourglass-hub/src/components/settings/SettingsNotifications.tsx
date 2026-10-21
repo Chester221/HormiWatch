@@ -24,19 +24,36 @@ function ToggleRow({
   description,
   checked,
   onChange,
+  disabled,
+  badge,
 }: {
   label: string;
   description: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
+  badge?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 bg-muted/20 p-3.5 dark:bg-muted/[0.06]">
+    <div
+      className={`flex items-center justify-between gap-4 rounded-xl border border-border/50 bg-muted/20 p-3.5 dark:bg-muted/[0.06]${disabled ? " opacity-60" : ""}`}
+    >
       <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{label}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium text-foreground">{label}</p>
+          {badge && (
+            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              {badge}
+            </span>
+          )}
+        </div>
         <p className="truncate text-xs text-muted-foreground">{description}</p>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -264,6 +281,10 @@ export function SettingsNotifications() {
                 <p className="text-[11px] font-medium text-muted-foreground">
                   Resumen diario
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  El resumen diario se envía por correo. La hora queda
+                  configurada pero no se enviará nada hasta habilitar el correo.
+                </p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <ToggleRow
                     label="Resumen 8:00 AM"
@@ -272,6 +293,8 @@ export function SettingsNotifications() {
                     onChange={(v) =>
                       setDraft((d: any) => ({ ...d, digestEnabled: v }))
                     }
+                    disabled
+                    badge="Muy pronto"
                   />
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label className="text-xs font-medium text-foreground">
@@ -281,6 +304,7 @@ export function SettingsNotifications() {
                       type="number"
                       min={0}
                       max={23}
+                      disabled
                       value={draft.digestHour}
                       onChange={(e) =>
                         setDraft((d: any) => ({
