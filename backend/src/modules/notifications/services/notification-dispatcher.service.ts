@@ -1,18 +1,18 @@
-import {
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { NotificationEvent, NOTIFICATION_DISPATCH_EVENT } from '../events/notification.event';
+import {
+  NotificationEvent,
+  NOTIFICATION_DISPATCH_EVENT,
+} from '../events/notification.event';
 import { NotificationsService } from './notifications.service';
 import { NotificationSettingsService } from './notification-settings.service';
 import { NotificationRecipientsResolver } from './recipients.resolver.service';
 import { DiscordService } from './discord.service';
+import { DiscordChannelKey } from './discord-embed.builder';
 import { WhatsAppService } from './whatsapp.service';
 import { NotificationCategory } from '../enums/notification-category.enum';
-import { NotificationLevel } from '../enums/notification-level.enum';
 import { User } from 'src/modules/users/entities/user.entity';
 import { MailService } from 'src/mails/mails.service';
 
@@ -37,6 +37,18 @@ export class NotificationDispatcherService {
     const s = await this.settings.get();
     if (s.eventToggles?.[event.key] === false) return;
 
+    // Las alertas de sistema (errores 500, fallas de integracion) son solo
+    // para administradores y no deben llegar a la campanita/panel in-app.
+    const isSystem = event.category === NotificationCategory.SYSTEM;
+
+    // Discord: enviar todos los eventos en tiempo real cuando esta habilitado.
+    // Se envia antes de resolver usuarios para que las alertas de sistema
+    // lleguen aunque no haya administradores configurados.
+    if (s.channels?.discord === true) {
+      const channel = this.discordChannelFor(event.category);
+      await this.discord.sendEvent(s.discord || {}, channel, event);
+    }
+
     const userIds = await this.resolver.resolve(event.audiences);
     if (!userIds.length) return;
 
@@ -47,7 +59,7 @@ export class NotificationDispatcherService {
 
     for (const u of users) {
       const dedupe = event.dedupeKey || event.key;
-      const inApp = s.channels?.inApp !== false;
+      const inApp = s.channels?.inApp !== false && !isSystem;
       if (inApp) {
         await this.notifications.createInApp({
           userId: u.id,
@@ -61,9 +73,10 @@ export class NotificationDispatcherService {
         });
       }
 
-      // Email inmediato solo para críticos (el resto va en el resumen 8AM)
+      // Email inmediato para criticos (el resto va en el resumen 8AM).
+      // Las alertas de sistema se envian siempre por email.
       const email = s.channels?.email === true && u.email;
-      if (email && event.isCritical) {
+      if (email && (event.isCritical || isSystem)) {
         await this.mail.sendMail({
           to: u.email,
           subject: `[HormiWatch] ${event.title}`,
@@ -78,29 +91,19 @@ export class NotificationDispatcherService {
         });
       }
 
-      // WhatsApp inmediato solo para críticos y si el usuario tiene número
+      // WhatsApp inmediato solo para criticos, si el usuario tiene numero.
+      // Las alertas de sistema se excluyen (solo Discord + email).
       const waEnabled = s.channels?.whatsapp === true;
       const phone = u.profile?.whatsappPhone;
-      if (waEnabled && event.isCritical && phone) {
+      if (waEnabled && event.isCritical && phone && !isSystem) {
         await this.whatsapp
           .sendCriticalAlert(phone, event.title, event.message)
           .catch(() => undefined);
       }
     }
-
-    // Discord: enviar todos los eventos en tiempo real cuando está habilitado
-    if (s.channels?.discord === true) {
-      const channel = this.discordChannelFor(event.category);
-      const prefix = event.isCritical ? '🚨 ' : '';
-      await this.discord.sendToChannel(s.discord || {}, channel, {
-        content: `${prefix}**${event.title}**\n${event.message}`,
-      });
-    }
   }
 
-  private discordChannelFor(
-    category: NotificationCategory,
-  ): 'alertas' | 'usuarios' | 'contratos' | 'proyectos' | 'tareas' {
+  private discordChannelFor(category: NotificationCategory): DiscordChannelKey {
     switch (category) {
       case NotificationCategory.CONTRACTS:
         return 'contratos';

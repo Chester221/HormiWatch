@@ -32,6 +32,8 @@ export class SystemErrorFilter implements ExceptionFilter {
       this.logger.error(`System error: ${exception}`, exception instanceof Error ? exception.stack : undefined);
       try {
         const hourBucket = new Date().toISOString().slice(0, 13);
+        const errorMessage =
+          exception instanceof Error ? exception.message : String(exception);
         this.emitter.emit(
           NOTIFICATION_DISPATCH_EVENT,
           new NotificationEvent(
@@ -41,7 +43,17 @@ export class SystemErrorFilter implements ExceptionFilter {
             'Error del sistema',
             'Se ha producido un error interno en el sistema',
             { type: 'roles', roles: ['admin'] },
-            { path: request.url, method: request.method },
+            {
+              path: request.url,
+              method: request.method,
+              status,
+              error: errorMessage,
+              description: errorMessage,
+              stack:
+                exception instanceof Error
+                  ? (exception.stack || '').slice(0, 1000)
+                  : undefined,
+            },
             `system.error:${request.method}:${request.url}:${hourBucket}`,
           ),
         );

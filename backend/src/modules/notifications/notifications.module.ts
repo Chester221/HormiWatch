@@ -12,6 +12,7 @@ import { ContractThresholdsService } from './services/contract-thresholds.servic
 import { StaleDetectionService } from './services/stale-detection.service';
 import { DailyDigestService } from './services/daily-digest.service';
 import { DiscordService } from './services/discord.service';
+import { DiscordEmbedBuilder } from './services/discord-embed.builder';
 import { WhatsAppService } from './services/whatsapp.service';
 import { MockWhatsAppProvider } from './providers/mock-whatsapp.provider';
 import { MetaWhatsAppProvider } from './providers/meta-whatsapp.provider';
@@ -50,6 +51,7 @@ import { ConfigModule } from '@nestjs/config';
     StaleDetectionService,
     DailyDigestService,
     DiscordService,
+    DiscordEmbedBuilder,
     WhatsAppService,
     {
       provide: WHATSAPP_PROVIDER,
