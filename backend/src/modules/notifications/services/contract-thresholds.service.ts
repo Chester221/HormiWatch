@@ -2,12 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Project } from 'src/modules/projects/entities/project.entity';
+import { ProjectStatus } from 'src/modules/projects/enums/project-status.enum';
 import { Task } from 'src/modules/tasks/entities/task.entity';
+import { TaskStatus } from 'src/modules/tasks/enums/task-status.enum';
 import { ContractThresholdContext } from '../interfaces/threshold-context.interface';
 import { Temporal } from 'temporal-polyfill';
 import { NotificationEmitterService } from './notification-emitter.service';
 import { NotificationSettingsService } from './notification-settings.service';
-import { NotificationEvent, NOTIFICATION_DISPATCH_EVENT } from '../events/notification.event';
+import { NotificationEvent } from '../events/notification.event';
 import { NotificationCategory } from '../enums/notification-category.enum';
 import { NotificationLevel } from '../enums/notification-level.enum';
 
@@ -24,6 +26,10 @@ export class ContractThresholdsService {
     private readonly settings: NotificationSettingsService,
   ) {}
 
+  private get timeZone(): string {
+    return process.env.APP_TIMEZONE || 'America/Caracas';
+  }
+
   /**
    * Evalúa umbrales de consumo (80/95/100) y vencimiento (15 días) de un
    * proyecto/contrato y emite las alertas que correspondan (con dedupe).
@@ -34,7 +40,11 @@ export class ContractThresholdsService {
     const s = await this.settings.get();
     const t = s.thresholds;
 
-    const levels: Array<{ pct: number; level: NotificationLevel; color: string }> = [
+    const levels: Array<{
+      pct: number;
+      level: NotificationLevel;
+      color: string;
+    }> = [
       { pct: t.yellow, level: NotificationLevel.WARNING, color: 'amarillo' },
       { pct: t.orange, level: NotificationLevel.WARNING, color: 'naranja' },
       { pct: t.red, level: NotificationLevel.CRITICAL, color: 'rojo' },
@@ -52,14 +62,21 @@ export class ContractThresholdsService {
             NotificationCategory.CONTRACTS,
             item.level,
             title,
-            `El proyecto "${ctx.projectTitle}" del cliente "${ctx.customerName}" ha alcanzado el ${ctx.percent}% de consumo (${ctx.hoursConsumed.toFixed(1)}h de ${ctx.hoursContracted.toFixed(1)}h).${(ctx as any).customerPhone ? ` Contacto: ${(ctx as any).customerPhone}${(ctx as any).customerEmail ? ` / ${(ctx as any).customerEmail}` : ''}` : (ctx as any).customerEmail ? ` Contacto: ${(ctx as any).customerEmail}` : ''}`,
-            [{ type: 'project', projectId, includeLeader: true, includeAdmins: true }],
+            `El proyecto "${ctx.projectTitle}" del cliente "${ctx.customerName}" ha alcanzado el ${ctx.percent}% de consumo (${ctx.hoursConsumed.toFixed(1)}h de ${ctx.hoursContracted.toFixed(1)}h).${this.contactSuffix(ctx)}`,
+            [
+              {
+                type: 'project',
+                projectId,
+                includeLeader: true,
+                includeAdmins: true,
+              },
+            ],
             {
               projectId,
               projectTitle: ctx.projectTitle,
               customerName: ctx.customerName,
-              customerPhone: (ctx as any).customerPhone,
-              customerEmail: (ctx as any).customerEmail,
+              customerPhone: ctx.customerPhone,
+              customerEmail: ctx.customerEmail,
               hoursContracted: ctx.hoursContracted,
               hoursConsumed: ctx.hoursConsumed,
               hoursRemaining: ctx.hoursRemaining,
@@ -73,19 +90,41 @@ export class ContractThresholdsService {
     }
 
     if (ctx.endDate && this.getExpirationWarning(ctx.endDate, t.expiringDays)) {
-        this.emitter.emit(
-          new NotificationEvent(
-            'contract.expiring',
-            NotificationCategory.CONTRACTS,
-            NotificationLevel.WARNING,
-            'Alerta: Contrato por vencer',
-            `El proyecto "${ctx.projectTitle}" vence el ${ctx.endDate}.${(ctx as any).customerPhone ? ` Contacto: ${(ctx as any).customerPhone}${(ctx as any).customerEmail ? ` / ${(ctx as any).customerEmail}` : ''}` : (ctx as any).customerEmail ? ` Contacto: ${(ctx as any).customerEmail}` : ''}`,
-            [{ type: 'project', projectId, includeLeader: true, includeAdmins: true }],
-            { projectId, endDate: ctx.endDate, customerPhone: (ctx as any).customerPhone, customerEmail: (ctx as any).customerEmail },
-            `contract:${projectId}:expiring:${ctx.endDate}`,
-          ),
-        );
+      this.emitter.emit(
+        new NotificationEvent(
+          'contract.expiring',
+          NotificationCategory.CONTRACTS,
+          NotificationLevel.WARNING,
+          'Alerta: Contrato por vencer',
+          `El proyecto "${ctx.projectTitle}" vence el ${ctx.endDate}.${this.contactSuffix(ctx)}`,
+          [
+            {
+              type: 'project',
+              projectId,
+              includeLeader: true,
+              includeAdmins: true,
+            },
+          ],
+          {
+            projectId,
+            endDate: ctx.endDate,
+            customerPhone: ctx.customerPhone,
+            customerEmail: ctx.customerEmail,
+          },
+          `contract:${projectId}:expiring:${ctx.endDate}`,
+        ),
+      );
     }
+  }
+
+  /** Texto de contacto del cliente (telefono / correo) para los mensajes */
+  private contactSuffix(ctx: ContractThresholdContext): string {
+    const phone = ctx.customerPhone || null;
+    const email = ctx.customerEmail || null;
+    if (phone && email) return ` Contacto: ${phone} / ${email}`;
+    if (phone) return ` Contacto: ${phone}`;
+    if (email) return ` Contacto: ${email}`;
+    return '';
   }
 
   async evaluate(projectId: string): Promise<ContractThresholdContext | null> {
@@ -95,9 +134,41 @@ export class ContractThresholdsService {
     });
     if (!project) return null;
 
+    const context = this.buildContext(project);
+    if (!context) return null;
+
+    project.hoursConsumed = context.hoursConsumed;
+    await this.projectRepo.save(project).catch(() => undefined);
+
+    return context;
+  }
+
+  /**
+   * Contextos de consumo de todos los contratos/proyectos activos
+   * (sin completar ni cancelados). No escribe en la base de datos.
+   */
+  async listActiveContexts(): Promise<ContractThresholdContext[]> {
+    const projects = await this.projectRepo
+      .createQueryBuilder('project')
+      .leftJoinAndSelect('project.tasks', 'task')
+      .leftJoinAndSelect('project.customerContact', 'customerContact')
+      .leftJoinAndSelect('customerContact.customer', 'customer')
+      .where(
+        '(project.status IS NULL OR project.status NOT IN (:...statuses))',
+        { statuses: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED] },
+      )
+      .getMany();
+
+    return projects
+      .map((project) => this.buildContext(project))
+      .filter((ctx): ctx is ContractThresholdContext => ctx !== null);
+  }
+
+  /** Calcula el consumo de un proyecto ya cargado con sus tareas */
+  private buildContext(project: Project): ContractThresholdContext | null {
     const allTasks = project.tasks || [];
     const consumed = allTasks
-      .filter((t) => t.status === 'COMPLETED')
+      .filter((t) => t.status === TaskStatus.COMPLETED)
       .reduce((sum, t) => sum + (t.durationInHours || 0), 0);
 
     const pool = Number(project.poolHours || 0);
@@ -105,10 +176,13 @@ export class ContractThresholdsService {
     if (contracted <= 0) return null;
     const percent = Math.round((consumed / contracted) * 100);
 
-    const context: ContractThresholdContext = {
+    return {
       projectId: project.id,
       projectTitle: project.title,
-      customerName: project.customerContact?.customer?.name || project.customerContact?.name || 'Sin cliente',
+      customerName:
+        project.customerContact?.customer?.name ||
+        project.customerContact?.name ||
+        'Sin cliente',
       customerPhone: project.customerContact?.phone || null,
       customerEmail: project.customerContact?.email || null,
       poolHours: pool,
@@ -117,19 +191,14 @@ export class ContractThresholdsService {
       hoursRemaining: pool,
       percent,
       endDate: project.endDate?.toString() || null,
-    } as any;
-
-    project.hoursConsumed = consumed;
-    await this.projectRepo.save(project).catch(() => undefined);
-
-    return context;
+    };
   }
 
   getExpirationWarning(endDateStr: string | null, days: number): boolean {
     if (!endDateStr) return false;
     try {
       const end = Temporal.PlainDate.from(endDateStr);
-      const now = Temporal.Now.plainDateISO();
+      const now = Temporal.Now.plainDateISO(this.timeZone);
       const diff = now.until(end).days;
       return diff <= days && diff >= 0;
     } catch {

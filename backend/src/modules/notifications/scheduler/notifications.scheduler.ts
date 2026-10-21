@@ -5,10 +5,19 @@ import { In, Not, Repository } from 'typeorm';
 import { Notification } from '../entities/notification.entity';
 import { User } from 'src/modules/users/entities/user.entity';
 import { MailService } from 'src/mails/mails.service';
-import { DiscordService } from '../services/discord.service';
 import { NotificationSettingsService } from '../services/notification-settings.service';
 import { NotificationLevel } from '../enums/notification-level.enum';
-import { NotificationCategory } from '../enums/notification-category.enum';
+import {
+  REPORT_EVENT_KEY_PREFIXES,
+  StaleDetectionService,
+} from '../services/stale-detection.service';
+import { DailyDigestService } from '../services/daily-digest.service';
+import {
+  DailyDigestReport,
+  DailyDigestReportFlags,
+  DigestInactiveTechnicianRow,
+  DigestStaleTaskRow,
+} from '../interfaces/daily-digest.interface';
 
 @Injectable()
 export class NotificationsScheduler {
@@ -18,10 +27,18 @@ export class NotificationsScheduler {
     @InjectRepository(Notification) private nRepo: Repository<Notification>,
     @InjectRepository(User) private uRepo: Repository<User>,
     private readonly settings: NotificationSettingsService,
+    private readonly staleDetection: StaleDetectionService,
+    private readonly digest: DailyDigestService,
     private mail: MailService,
-    private discord: DiscordService,
   ) {}
 
+  /**
+   * Resumen diario (8:00 AM, hora de la app):
+   * - Detecta tareas estancadas y tecnicos sin registrar horas (in-app + Discord).
+   * - Envia por email a los administradores el reporte con 4 tablas mas su
+   *   lista personal de pendientes.
+   * - Envia por email a los demas usuarios su lista personal de pendientes.
+   */
   @Cron('0 8 * * *', {
     timeZone: process.env.APP_TIMEZONE || 'America/Caracas',
   })
@@ -29,40 +46,89 @@ export class NotificationsScheduler {
     const s = await this.settings.get();
     if (!s.digestEnabled) return;
 
-    // Notificaciones no críticas pendientes de incluir en el resumen
+    // ── 1. Deteccion diaria: tareas estancadas y tecnicos inactivos ──
+    let detection: {
+      staleTasks: DigestStaleTaskRow[];
+      inactiveTechnicians: DigestInactiveTechnicianRow[];
+    } = { staleTasks: [], inactiveTechnicians: [] };
+    try {
+      detection = await this.staleDetection.detectAndNotify();
+    } catch (e) {
+      this.logger.warn(
+        `Deteccion de tareas/tecnicos fallo: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+
+    // ── 2. Notificaciones no criticas pendientes de incluir en el resumen ──
     const pending = await this.nRepo.find({
       where: {
         digestSent: false,
         level: Not(NotificationLevel.CRITICAL),
       },
+      order: { createdAt: 'DESC' },
     });
-    if (!pending.length) return;
 
-    // ── 1. Discord: ya se envía en tiempo real para todos los eventos; evitar duplicados ──
-    // Se omite el envío de resumen a Discord para prevenir duplicados.
-
-    // ── 2. Email: agrupar por usuario y enviar el resumen ──
-    if (s.channels?.email !== false) {
-      const byUser = new Map<string, Notification[]>();
-      for (const n of pending) {
-        if (!byUser.has(n.userId)) byUser.set(n.userId, []);
-        byUser.get(n.userId)!.push(n);
+    const personal = new Map<string, Notification[]>();
+    for (const n of pending) {
+      // Las que ya aparecen en las tablas del reporte no se repiten en la
+      // lista personal del administrador.
+      if (
+        n.eventKey &&
+        REPORT_EVENT_KEY_PREFIXES.some((p) => n.eventKey!.startsWith(p))
+      ) {
+        continue;
       }
+      if (!personal.has(n.userId)) personal.set(n.userId, []);
+      personal.get(n.userId)!.push(n);
+    }
 
-      for (const [userId, items] of byUser) {
-        const u = await this.uRepo.findOne({
-          where: { id: userId, isActive: true },
-          relations: ['profile'],
-        });
-        if (!u?.email) continue;
+    // ── 3. Reporte (solo administradores) ──
+    const admins = await this.digest.getAdmins();
+    let report: DailyDigestReport | null = null;
+    let flags: DailyDigestReportFlags | null = null;
+    if (admins.length) {
+      report = await this.digest.buildReport(s.thresholds, detection);
+      flags = this.digest.buildFlags(report);
+    }
+
+    // ── 4. Destinatarios: administradores + usuarios con pendientes ──
+    const recipients = new Map<
+      string,
+      { email: string; name: string; isAdmin: boolean }
+    >();
+    for (const a of admins) {
+      recipients.set(a.id, { email: a.email, name: a.name, isAdmin: true });
+    }
+    for (const userId of personal.keys()) {
+      if (recipients.has(userId)) continue;
+      const u = await this.uRepo.findOne({
+        where: { id: userId, isActive: true },
+        relations: ['profile'],
+      });
+      if (!u?.email) continue;
+      recipients.set(userId, {
+        email: u.email,
+        name: u.profile?.name || u.email,
+        isAdmin: false,
+      });
+    }
+
+    // ── 5. Email: reporte completo para admins, lista personal para el resto ──
+    const sentIds: string[] = [];
+    if (s.channels?.email !== false) {
+      for (const [userId, r] of recipients) {
+        const items = personal.get(userId) ?? [];
+        if (!items.length && !(r.isAdmin && flags && !flags.isEmpty)) continue;
 
         try {
           await this.mail.sendMail({
-            to: u.email,
-            subject: '[HormiWatch] Resumen diario de notificaciones',
+            to: r.email,
+            subject: r.isAdmin
+              ? '[HormiWatch] Resumen diario de la plataforma'
+              : '[HormiWatch] Resumen diario de notificaciones',
             template: 'digest-daily',
             context: {
-              name: u.profile?.name || u.email,
+              name: r.name,
               count: items.length,
               items: items.map((n) => ({
                 title: n.title,
@@ -70,37 +136,29 @@ export class NotificationsScheduler {
                 category: n.category,
                 level: n.level,
               })),
+              isAdmin: r.isAdmin,
+              report: r.isAdmin ? report : null,
+              flags: r.isAdmin ? flags : null,
+              thresholds: s.thresholds,
+              date: report?.generatedAt || '',
               year: new Date().getFullYear(),
             },
           });
-        } catch (e: any) {
-          this.logger.warn(`Digest email falló para ${u.email}: ${e?.message}`);
+          sentIds.push(...items.map((i) => i.id));
+        } catch (e) {
+          this.logger.warn(
+            `Digest email fallo para ${r.email}: ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
     }
 
-    // ── 3. Marcar como enviadas para no repetir ──
-    const ids = pending.map((n) => n.id);
-    if (ids.length) {
-      await this.nRepo.update({ id: In(ids) }, { digestSent: true });
+    // ── 6. Marcar como enviadas para no repetir ──
+    if (sentIds.length) {
+      await this.nRepo.update({ id: In(sentIds) }, { digestSent: true });
     }
-    this.logger.log(`Resumen diario procesado: ${ids.length} notificaciones`);
-  }
-
-  private discordChannelFor(
-    category: NotificationCategory,
-  ): 'alertas' | 'usuarios' | 'contratos' | 'proyectos' | 'tareas' {
-    switch (category) {
-      case NotificationCategory.CONTRACTS:
-        return 'contratos';
-      case NotificationCategory.PROJECTS:
-        return 'proyectos';
-      case NotificationCategory.TASKS:
-        return 'tareas';
-      case NotificationCategory.USERS:
-        return 'usuarios';
-      default:
-        return 'alertas';
-    }
+    this.logger.log(
+      `Resumen diario procesado: ${sentIds.length} notificaciones, ${recipients.size} destinatario(s)`,
+    );
   }
 }

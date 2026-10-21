@@ -4,29 +4,180 @@
   <meta charset="utf-8">
   <title>Resumen diario HormiWatch</title>
 </head>
-<body style="font-family: Arial, Helvetica, sans-serif; color: #1f2933; background: #f5f7fa; padding: 24px;">
-  <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e4e7eb;">
+<body style="font-family: Arial, Helvetica, sans-serif; color: #1f2933; background: #f5f7fa; padding: 24px; margin: 0;">
+  <div style="max-width: 720px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e4e7eb;">
     <div style="background: #0DA2E7; padding: 20px 24px;">
-      <h2 style="margin: 0; color: #ffffff; font-size: 18px;">[HormiWatch] Resumen diario</h2>
+      <h2 style="margin: 0 0 4px; color: #ffffff; font-size: 18px;">[HormiWatch] Resumen diario</h2>
+      <p style="margin: 0; color: #d9f2fd; font-size: 13px;">{{date}}</p>
     </div>
     <div style="padding: 24px;">
       <p style="margin: 0 0 12px;">Hola {{name}},</p>
-      <p style="margin: 0 0 16px; color: #7b8794; font-size: 14px;">
-        Tienes {{count}} novedades que requieren tu atención:
-      </p>
 
-      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+      {{#if isAdmin}}
+        <p style="margin: 0 0 20px; color: #7b8794; font-size: 14px;">
+          Reporte de la plataforma con los {{count}} pendiente(s) que tienes asignados.
+        </p>
+      {{else}}
+        <p style="margin: 0 0 20px; color: #7b8794; font-size: 14px;">
+          Tienes {{count}} novedad(es) que requieren tu atención.
+        </p>
+      {{/if}}
+
+      {{#if count}}
+      <h3 style="font-size: 15px; margin: 0 0 10px; color: #1f2933;">Tus pendientes</h3>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 24px;">
         {{#each items}}
         <tr>
-          <td style="padding: 12px 0; border-bottom: 1px solid #eef1f4;">
+          <td style="padding: 10px 0; border-bottom: 1px solid #eef1f4;">
             <p style="margin: 0 0 4px; font-weight: 600;">{{this.title}}</p>
             <p style="margin: 0; color: #7b8794; line-height: 1.5;">{{this.message}}</p>
           </td>
         </tr>
         {{/each}}
       </table>
+      {{/if}}
 
-      <p style="margin: 20px 0 4px;">
+      {{#if isAdmin}}
+
+        {{#if flags.hasExpiring}}
+        <h3 style="font-size: 15px; margin: 24px 0 10px; color: #1f2933; border-left: 4px solid #f0b429; padding-left: 8px;">
+          1. Contratos por vencer (próximos {{thresholds.expiringDays}} días)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px;">
+          <thead>
+            <tr style="background: #f5f7fa; text-align: left;">
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Contrato</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Cliente</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Contacto</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Vence</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Días</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Consumo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each report.expiringContracts}}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.projectTitle}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.customerName}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.customerPhone}}{{#if this.customerEmail}}<br>{{this.customerEmail}}{{/if}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.endDate}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4; color: #b45309; font-weight: 600;">{{this.daysLeft}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.percent}}%</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+
+        {{#if flags.hasThresholds}}
+        <h3 style="font-size: 15px; margin: 24px 0 10px; color: #1f2933; border-left: 4px solid #f97316; padding-left: 8px;">
+          2. Contratos por umbral de consumo ({{thresholds.yellow}}% / {{thresholds.orange}}% / {{thresholds.red}}%)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px;">
+          <thead>
+            <tr style="background: #f5f7fa; text-align: left;">
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Contrato</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Cliente</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Nivel</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Horas</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">%</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Contacto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each report.thresholdContracts}}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.projectTitle}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.customerName}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">
+                <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; color: #ffffff; background: {{this.levelColor}}; font-size: 11px; font-weight: 600;">{{this.levelLabel}}</span>
+              </td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.hoursConsumed}} / {{this.hoursContracted}} h</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4; font-weight: 600;">{{this.percent}}%</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.customerPhone}}{{#if this.customerEmail}}<br>{{this.customerEmail}}{{/if}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+
+        {{#if flags.hasNewUsers}}
+        <h3 style="font-size: 15px; margin: 24px 0 10px; color: #1f2933; border-left: 4px solid #0DA2E7; padding-left: 8px;">
+          3. Usuarios creados (últimas 24 horas)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px;">
+          <thead>
+            <tr style="background: #f5f7fa; text-align: left;">
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Usuario</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Correo</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Rol</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each report.newUsers}}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.name}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.email}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.role}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+
+        {{#if flags.hasStaleTasks}}
+        <h3 style="font-size: 15px; margin: 24px 0 10px; color: #1f2933; border-left: 4px solid #dc2626; padding-left: 8px;">
+          4. Tareas estancadas (más de {{thresholds.taskStaleDays}} días sin cambios)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px;">
+          <thead>
+            <tr style="background: #f5f7fa; text-align: left;">
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Tarea</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Técnico</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Proyecto</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Días</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each report.staleTasks}}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.title}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.technicianName}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.projectTitle}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4; font-weight: 600;">{{this.daysIdle}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+
+        {{#if flags.hasInactiveTechnicians}}
+        <h3 style="font-size: 15px; margin: 24px 0 10px; color: #1f2933; border-left: 4px solid #6b7280; padding-left: 8px;">
+          Técnicos sin registrar horas (más de {{thresholds.inactivityDays}} días hábiles)
+        </h3>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 8px;">
+          <thead>
+            <tr style="background: #f5f7fa; text-align: left;">
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Técnico</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Correo</th>
+              <th style="padding: 8px; border-bottom: 2px solid #e4e7eb;">Días hábiles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{#each report.inactiveTechnicians}}
+            <tr>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.name}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4;">{{this.email}}</td>
+              <td style="padding: 8px; border-bottom: 1px solid #eef1f4; font-weight: 600;">{{this.daysIdle}}</td>
+            </tr>
+            {{/each}}
+          </tbody>
+        </table>
+        {{/if}}
+
+      {{/if}}
+
+      <p style="margin: 24px 0 4px;">
         <a href="https://hormi-watch.vercel.app" style="color: #0DA2E7; font-weight: 600;">Abrir HormiWatch</a>
       </p>
     </div>
