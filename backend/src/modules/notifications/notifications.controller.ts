@@ -54,7 +54,10 @@ export class NotificationsController {
 
   @Get('settings')
   async getSettings() {
-    return this.settings.get();
+    console.log('[NOTIF][CTRL] GET /notifications/settings called');
+    const res = await this.settings.get();
+    console.log('[NOTIF][CTRL] GET /notifications/settings OK');
+    return res;
   }
 
   @Put('settings')
