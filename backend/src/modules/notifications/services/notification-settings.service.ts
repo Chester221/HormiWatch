@@ -32,10 +32,8 @@ export class NotificationSettingsService {
   ) {}
 
   async get(): Promise<NotificationSetting> {
-    console.log('[NOTIF][SVC] NotificationSettingsService.get() called');
     let s = await this.repo.findOne({ where: {} });
     if (!s) {
-      console.log('[NOTIF][SVC] No settings found, creating defaults');
       s = this.repo.create({
         channels: DEFAULT_CHANNELS,
         thresholds: DEFAULT_THRESHOLDS,
@@ -48,8 +46,6 @@ export class NotificationSettingsService {
         notifyProjectStarted: true,
       });
       s = await this.repo.save(s);
-    } else {
-      console.log('[NOTIF][SVC] Settings found');
     }
     // Mezcla los defaults con lo guardado para que las claves nuevas o
     // ausentes (y los valores viejos como taskStaleDays) no queden obsoletas.
@@ -69,7 +65,6 @@ export class NotificationSettingsService {
     if (s.discordWebhookUrl === undefined) {
       s.discordWebhookUrl = null;
     }
-    console.log('[NOTIF][SVC] Returning settings');
     return s;
   }
 

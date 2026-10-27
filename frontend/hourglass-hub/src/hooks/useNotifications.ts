@@ -108,12 +108,7 @@ export const useMarkAllNotificationsRead = () => {
 export const useGlobalNotificationSettings = (enabled = true) => {
   return useQuery({
     queryKey: SETTINGS_KEY,
-    queryFn: async () => {
-      console.log('[NOTIF][HOOK] Fetching settings...');
-      const res = await notificationsApi.getSettings();
-      console.log('[NOTIF][HOOK] Settings received:', res);
-      return res as NotificationSettings;
-    },
+    queryFn: async () => (await notificationsApi.getSettings()) as NotificationSettings,
     enabled,
     staleTime: 300_000,
     gcTime: 600_000,
