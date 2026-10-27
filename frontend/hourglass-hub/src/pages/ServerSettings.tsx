@@ -99,7 +99,7 @@ export default function ServerSettings() {
   }, [isAdmin, navigate]);
 
   useEffect(() => {
-    if (settings) {
+    if (settings && !draft) {
       setDraft({
         channels: {
           inApp: true,
@@ -160,7 +160,7 @@ export default function ServerSettings() {
         notifyProjectStarted: (settings as any).notifyProjectStarted ?? true,
       });
     }
-  }, [settings]);
+  }, [settings, draft]);
 
   const setChannel = (k: string, v: boolean) => setDraft((d: any) => ({ ...d, channels: { ...d.channels, [k]: v } }));
   const setThreshold = (k: string, v: number | "") => setDraft((d: any) => ({ ...d, thresholds: { ...d.thresholds, [k]: v } }));
@@ -208,7 +208,6 @@ export default function ServerSettings() {
           </span>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Configuración del Servidor</h1>
-            <p className="text-sm text-muted-foreground">Configuración global que afecta a todo el sistema HormiWatch</p>
           </div>
         </motion.div>
 
@@ -216,7 +215,7 @@ export default function ServerSettings() {
           <div className="flex items-start gap-3 px-6 py-4">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
             <p className="text-sm text-red-700 dark:text-red-400">
-              Advertencia: Todo lo que se configure aquí afectará a TODO el sistema HormiWatch (notificaciones, umbrales, webhooks, etc.).
+              Advertencia: Todo lo que se configure aquí afectará a TODO el sistema de HormiWatch.
             </p>
           </div>
         </Card>

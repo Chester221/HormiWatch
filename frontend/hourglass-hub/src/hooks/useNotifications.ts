@@ -110,8 +110,11 @@ export const useGlobalNotificationSettings = (enabled = true) => {
     queryKey: SETTINGS_KEY,
     queryFn: async () => (await notificationsApi.getSettings()) as NotificationSettings,
     enabled,
-    staleTime: 60_000,
-    retry: 1,
+    staleTime: 300_000,
+    gcTime: 600_000,
+    retry: 0,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 };
 

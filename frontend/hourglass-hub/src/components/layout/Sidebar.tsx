@@ -44,7 +44,7 @@ const navigation: NavItem[] = [
 const bottomNavigation: NavItem[] = [
   { name: "Mi Perfil", href: "/profile", icon: User, roles: ["Manager", "Admin", "Technician"] },
   { name: "Configuración", href: "/settings", icon: Settings, roles: ["Manager", "Admin", "Technician"] },
-  { name: "Configuración del Servidor", href: "/server-settings", icon: Server, roles: ["Admin"], danger: true },
+  { name: "Config. Servidor", href: "/server-settings", icon: Server, roles: ["Admin"], danger: true },
 ];
 
 const ACTIVE_CLASSES =
