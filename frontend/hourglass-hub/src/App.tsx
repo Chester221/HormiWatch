@@ -19,6 +19,7 @@ const Team = lazy(() => import("./pages/Team"));
 const Services = lazy(() => import("./pages/Services"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
+const ServerSettings = lazy(() => import("./pages/ServerSettings"));
 const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
@@ -181,6 +182,9 @@ const App = () => (
                 } />
                 <Route path="/settings" element={
                   <ProtectedRoute><Settings /></ProtectedRoute>
+                } />
+                <Route path="/server-settings" element={
+                  <ProtectedRoute requiredRole={['Admin']}><ServerSettings /></ProtectedRoute>
                 } />
                 <Route path="/projects" element={
                   <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin', 'Technician']}><Projects /></ProtectedRoute>

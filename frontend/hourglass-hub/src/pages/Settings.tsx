@@ -423,7 +423,7 @@ export default function Settings() {
             icon={Bell}
             iconClass="bg-slate-100 text-slate-500 dark:bg-slate-800/60 dark:text-slate-400"
             title="Notificaciones"
-            description="Controla qué avisos recibes"
+            description="Preferencias personales de avisos"
           >
             <SettingsNotifications />
           </Section>

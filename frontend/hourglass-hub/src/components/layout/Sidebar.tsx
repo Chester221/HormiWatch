@@ -16,6 +16,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   X,
+  Server,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +26,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   roles?: string[];
+  danger?: boolean;
 }
 
 const navigation: NavItem[] = [
@@ -42,6 +44,7 @@ const navigation: NavItem[] = [
 const bottomNavigation: NavItem[] = [
   { name: "Mi Perfil", href: "/profile", icon: User, roles: ["Manager", "Admin", "Technician"] },
   { name: "Configuración", href: "/settings", icon: Settings, roles: ["Manager", "Admin", "Technician"] },
+  { name: "Configuración del Servidor", href: "/server-settings", icon: Server, roles: ["Admin"], danger: true },
 ];
 
 const ACTIVE_CLASSES =
@@ -226,11 +229,24 @@ export function Sidebar({
                 key={item.name}
                 to={item.href}
                 onClick={onCloseMobile}
-                className={itemClasses}
-                activeClassName={ACTIVE_CLASSES}
+                className={cn(
+                  itemClasses,
+                  (item as NavItem).danger &&
+                    "text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/20 dark:hover:text-red-300",
+                )}
+                activeClassName={
+                  (item as NavItem).danger
+                    ? "bg-red-500/10 text-red-700 font-semibold hover:bg-red-500/10 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300 shadow-[inset_2.5px_0_0_0_#ef4444]"
+                    : ACTIVE_CLASSES
+                }
                 style={{ animationDelay: `${(filteredNavigation.length + index) * 50}ms` }}
               >
-                <item.icon className="h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110" />
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                    (item as NavItem).danger && "text-red-500",
+                  )}
+                />
                 <span className={cn("truncate", collapsed && "lg:hidden")}>{item.name}</span>
               </NavLink>
             ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban, Users, Briefcase, Wrench, Menu, X, ArrowRight } from "lucide-react";
+import { Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban, Users, Briefcase, Wrench, Menu, X, ArrowRight, Server } from "lucide-react";
 import { projectStatusInfo } from "@/lib/dashboardUtils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -19,8 +19,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,  // ✅ AGREGADO
-  DialogTitle,   // ✅ AGREGADO
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 
 export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
@@ -318,7 +318,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
             <DropdownMenuLabel className="font-normal"><div className="flex flex-col space-y-1"><p className="text-sm font-medium">{userName}</p><p className="text-xs text-muted-foreground">{userEmail}</p></div></DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")}><User className="h-4 w-4 mr-2" />Mi Perfil</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuración</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuraci�n</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive"><LogOut className="h-4 w-4 mr-2" />Cerrar Sesión</DropdownMenuItem>
           </DropdownMenuContent>

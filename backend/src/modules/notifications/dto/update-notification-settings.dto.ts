@@ -1,4 +1,4 @@
-import { IsBoolean, IsNumber, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
 
 export class UpdateNotificationSettingsDto {
   @IsOptional()
@@ -36,10 +36,27 @@ export class UpdateNotificationSettingsDto {
   };
 
   @IsOptional()
+  @IsString()
+  discordWebhookUrl?: string | null;
+
+  @IsOptional()
   @IsNumber()
   digestHour?: number;
 
   @IsOptional()
   @IsBoolean()
   digestEnabled?: boolean;
+
+  @IsOptional()
+  @IsObject()
+  dailySummary?: {
+    enabled?: boolean;
+    startHour?: number;
+    endHour?: number;
+    include?: Record<string, boolean>;
+  };
+
+  @IsOptional()
+  @IsBoolean()
+  notifyProjectStarted?: boolean;
 }

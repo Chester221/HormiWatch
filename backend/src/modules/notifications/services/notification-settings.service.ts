@@ -7,6 +7,23 @@ import {
   DEFAULT_THRESHOLDS,
 } from '../interfaces/notification-settings.interface';
 
+const DEFAULT_DAILY_SUMMARY = {
+  enabled: true,
+  startHour: 8,
+  endHour: 17,
+  include: {
+    created: true,
+    deleted: true,
+    expired: true,
+    expiring: true,
+    inactive: true,
+    started: true,
+    paused: true,
+    completed: true,
+    updated: true,
+  },
+};
+
 @Injectable()
 export class NotificationSettingsService {
   constructor(
@@ -22,8 +39,11 @@ export class NotificationSettingsService {
         thresholds: DEFAULT_THRESHOLDS,
         eventToggles: {},
         discord: {},
+        discordWebhookUrl: null,
         digestHour: 8,
         digestEnabled: true,
+        dailySummary: DEFAULT_DAILY_SUMMARY,
+        notifyProjectStarted: true,
       });
       s = await this.repo.save(s);
     }
@@ -31,11 +51,35 @@ export class NotificationSettingsService {
     // ausentes (y los valores viejos como taskStaleDays) no queden obsoletas.
     s.thresholds = { ...DEFAULT_THRESHOLDS, ...(s.thresholds || {}) };
     s.channels = { ...DEFAULT_CHANNELS, ...(s.channels || {}) };
+    s.dailySummary = {
+      ...DEFAULT_DAILY_SUMMARY,
+      ...(s.dailySummary || {}),
+      include: {
+        ...DEFAULT_DAILY_SUMMARY.include,
+        ...((s.dailySummary as any)?.include || {}),
+      },
+    };
+    if (typeof s.notifyProjectStarted !== 'boolean') {
+      s.notifyProjectStarted = true;
+    }
+    if (s.discordWebhookUrl === undefined) {
+      s.discordWebhookUrl = null;
+    }
     return s;
   }
 
   async update(dto: any): Promise<NotificationSetting> {
     const s = await this.get();
+    if (dto?.dailySummary) {
+      dto.dailySummary = {
+        ...(s.dailySummary || {}),
+        ...dto.dailySummary,
+        include: {
+          ...((s.dailySummary as any)?.include || {}),
+          ...(dto.dailySummary.include || {}),
+        },
+      };
+    }
     Object.assign(s, dto);
     return this.repo.save(s);
   }
