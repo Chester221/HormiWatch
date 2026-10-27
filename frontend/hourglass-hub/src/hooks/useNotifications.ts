@@ -104,7 +104,18 @@ export const useMarkAllNotificationsRead = () => {
   });
 };
 
-/** Configuración global de notificaciones (solo admin). */
+/** Configuración global de notificaciones (lectura para cualquier usuario autenticado). */
+export const useGlobalNotificationSettings = (enabled = true) => {
+  return useQuery({
+    queryKey: SETTINGS_KEY,
+    queryFn: async () => (await notificationsApi.getSettings()) as NotificationSettings,
+    enabled,
+    staleTime: 60_000,
+    retry: 1,
+  });
+};
+
+/** @deprecated Usar useGlobalNotificationSettings */
 export const useNotificationSettings = (enabled = true) => {
   return useQuery({
     queryKey: SETTINGS_KEY,

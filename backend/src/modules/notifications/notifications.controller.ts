@@ -53,8 +53,6 @@ export class NotificationsController {
   }
 
   @Get('settings')
-  @Roles(Role.admin)
-  @UseGuards(RolesGuard)
   async getSettings() {
     return this.settings.get();
   }

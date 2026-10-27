@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, BellOff, Check, CheckCheck, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +14,10 @@ import {
   useUnreadCount,
   useMarkNotificationRead,
   useMarkAllNotificationsRead,
+  useGlobalNotificationSettings,
   type AppNotification,
 } from '@/hooks/useNotifications';
+import { useAuth } from '@/contexts/AuthContext';
 
 const levelStyles: Record<string, string> = {
   CRITICAL: 'bg-red-500/10 text-red-600 border-red-500/30',
@@ -46,14 +49,50 @@ function formatRelative(iso?: string | null): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function getNotificationRoute(n: AppNotification): string | null {
+  const data = (n.data || {}) as Record<string, any>;
+  const taskId = data.taskId || data.task_id;
+  const projectId = data.projectId || data.project_id;
+  const clientId = data.clientId || data.client_id || data.customerId || data.customer_id;
+  const userId = data.userId || data.user_id || data.memberId || data.member_id || data.technicianId || data.technician_id;
+  const serviceId = data.serviceId || data.service_id;
+  const contractId = data.contractId || data.contract_id;
+
+  if (n.category === 'tasks' && taskId) return `/tasks?task=${taskId}`;
+  if (n.category === 'projects' && projectId) return `/projects?project=${projectId}`;
+  if (n.category === 'contracts') {
+    if (contractId && clientId) return `/clients?client=${clientId}&contract=${contractId}`;
+    if (clientId) return `/clients?client=${clientId}`;
+    if (contractId) return `/clients?contract=${contractId}`;
+  }
+  if ((n.category === 'customers' || n.category === 'clients') && clientId) {
+    return `/clients?client=${clientId}`;
+  }
+  if (n.category === 'users' && userId) return `/team?member=${userId}`;
+  if (n.category === 'system' && serviceId) return `/services?service=${serviceId}`;
+  if (taskId && !String(n.category || '').includes('project')) return `/tasks?task=${taskId}`;
+  if (projectId) return `/projects?project=${projectId}`;
+  if (userId) return `/team?member=${userId}`;
+  if (clientId) return `/clients?client=${clientId}`;
+  if (serviceId) return `/services?service=${serviceId}`;
+  return null;
+}
+
 export function NotificationsBell() {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { data: globalSettings } = useGlobalNotificationSettings();
   const { data: notifications = [] } = useNotifications();
   const { data: unread = 0 } = useUnreadCount();
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
 
-  const unreadList = notifications.filter((n) => !n.readAt);
+  const personalInApp = profile?.preferences?.notifications?.inApp ?? true;
+  const globalInApp = globalSettings?.channels?.inApp ?? true;
+  if (globalInApp === false || personalInApp === false) {
+    return null;
+  }
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
@@ -61,6 +100,17 @@ export function NotificationsBell() {
 
   const handleMarkAll = () => {
     markAllRead.mutate();
+  };
+
+  const handleNotificationClick = (n: AppNotification) => {
+    if (!n.readAt) {
+      markRead.mutate(n.id);
+    }
+    const route = getNotificationRoute(n);
+    if (route) {
+      setOpen(false);
+      navigate(route);
+    }
   };
 
   return (
@@ -111,9 +161,18 @@ export function NotificationsBell() {
               {notifications.slice(0, 30).map((n: AppNotification) => (
                 <div
                   key={n.id}
-                  className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 ${
+                  role="button"
+                  tabIndex={0}
+                  className={`flex items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 cursor-pointer ${
                     !n.readAt ? 'bg-muted/30' : ''
                   }`}
+                  onClick={() => handleNotificationClick(n)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleNotificationClick(n);
+                    }
+                  }}
                 >
                   <span
                     className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
@@ -149,7 +208,10 @@ export function NotificationsBell() {
                       size="icon"
                       className="h-6 w-6 shrink-0 text-muted-foreground"
                       aria-label="Marcar como leída"
-                      onClick={() => markRead.mutate(n.id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        markRead.mutate(n.id);
+                      }}
                     >
                       <Check className="h-3.5 w-3.5" />
                     </Button>
