@@ -69,7 +69,7 @@ describe('StaleDetectionService', () => {
     taskRepo = { createQueryBuilder: jest.fn() };
     userRepo = { createQueryBuilder: jest.fn() };
     holidayRepo = { find: jest.fn(async () => []) };
-    emitter = { toAdmins: jest.fn() };
+    emitter = { toAdmins: jest.fn(), toUsers: jest.fn(), emit: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -151,5 +151,67 @@ describe('StaleDetectionService', () => {
     expect(result).toHaveLength(1);
     expect(result[0].id).toBe('user-2');
     expect(result[0].name).toBe('Tecnico Dos');
+  });
+
+  it('agrupa tareas estancadas por proyecto e incluye al lider', async () => {
+    const updatedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    const staleQb = qbMock([
+      {
+        id: 'task-1',
+        title: 'Tarea A',
+        status: TaskStatus.IN_PROGRESS,
+        updatedAt,
+        technician: { profile: { name: 'Tecnico Uno' } },
+        project: { id: 'project-1', title: 'Proyecto A' },
+      },
+      {
+        id: 'task-2',
+        title: 'Tarea B',
+        status: TaskStatus.IN_PROGRESS,
+        updatedAt,
+        technician: { profile: { name: 'Tecnico Dos' } },
+        project: { id: 'project-1', title: 'Proyecto A' },
+      },
+    ]);
+    const activityQb = qbMock([]);
+    taskRepo.createQueryBuilder
+      .mockReturnValueOnce(staleQb)
+      .mockReturnValueOnce(activityQb);
+    userRepo.createQueryBuilder.mockReturnValue(
+      qbMock([
+        {
+          id: 'user-1',
+          email: 'uno@test.com',
+          profile: { name: 'Tecnico Uno' },
+        },
+      ]),
+    );
+
+    await service.detectAndNotify();
+
+    const staleEvent = emitter.emit.mock.calls
+      .map((call: any[]) => call[0])
+      .find((event: any) => event.key === 'tasks.stale');
+    expect(staleEvent).toBeDefined();
+    expect(staleEvent.message).toContain('Tarea A');
+    expect(staleEvent.message).toContain('Tarea B');
+    expect(staleEvent.audiences[0]).toMatchObject({
+      type: 'project',
+      projectId: 'project-1',
+      includeLeader: true,
+      includeTechnicians: false,
+      includeAdmins: true,
+    });
+
+    expect(emitter.toUsers).toHaveBeenCalledWith(
+      'users.inactiveTechnician',
+      expect.anything(),
+      expect.anything(),
+      expect.any(String),
+      expect.stringContaining('No has registrado horas'),
+      ['user-1'],
+      expect.anything(),
+      expect.stringContaining('inactive:user:user-1:'),
+    );
   });
 });

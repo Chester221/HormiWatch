@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
 import { ContractThresholdsService } from '../notifications/services/contract-thresholds.service';
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
+import { describeActor } from '../notifications/utils/actor-label.util';
 import { isUUID } from 'class-validator';
 import { ProjectStatus } from '../projects/enums/project-status.enum';
 import { TaskResponseDto } from './dto/task-response.dto';
@@ -173,9 +174,10 @@ export class TasksService {
     this.validateId(serviceId);
 
     // Only technicians can be the task owner, and only for their own tasks
-    const technician = await this.dataSource
-      .getRepository(User)
-      .findOne({ where: { id: effectiveTechnicianId }, relations: ['profile'] });
+    const technician = await this.dataSource.getRepository(User).findOne({
+      where: { id: effectiveTechnicianId },
+      relations: ['profile'],
+    });
     if (!technician) throw new NotFoundException('Technician not found');
 
     if (isTechnicianRole && technicianId !== creator.userId) {
@@ -221,7 +223,12 @@ export class TasksService {
       throw new BadRequestException('Start time must be before end time');
     }
 
-    if (Temporal.Instant.compare(startInstant, now.add({ milliseconds: 5 * 60 * 1000 })) > 0) {
+    if (
+      Temporal.Instant.compare(
+        startInstant,
+        now.add({ milliseconds: 5 * 60 * 1000 }),
+      ) > 0
+    ) {
       throw new BadRequestException('No se pueden crear tareas en el futuro');
     }
 
@@ -239,7 +246,11 @@ export class TasksService {
     let savedTask: Task;
     await this.dataSource.transaction(async (manager) => {
       // Overlap Check (rango completo)
-      await this.checkForOverlaps(effectiveTechnicianId, startInstant, endInstant);
+      await this.checkForOverlaps(
+        effectiveTechnicianId,
+        startInstant,
+        endInstant,
+      );
 
       const askedCompleted = createTaskDto.status === TaskStatus.COMPLETED;
       const taskEntity = this.taskRepository.create({
@@ -276,6 +287,9 @@ export class TasksService {
 
     const transformedTask = {
       ...savedTask!,
+      projectId: savedTask!.project?.id ?? null,
+      serviceId: savedTask!.service?.id ?? null,
+      technicianId: savedTask!.technician?.id ?? null,
       startDateTime: savedTask!.startDateTime.toString(),
       endDateTime: savedTask!.endDateTime.toString(),
       completedAt: savedTask!.completedAt
@@ -284,16 +298,31 @@ export class TasksService {
     };
 
     // Notificación multicanal: tarea creada + evaluación de umbrales de contrato
+    let creatorName = technician.profile?.name || technician.email;
+    if (creator.userId !== effectiveTechnicianId) {
+      try {
+        const creatorUser = await this.usersService.findOneById(creator.userId);
+        creatorName = creatorUser.profile?.name || creatorUser.email;
+      } catch {
+        creatorName = creator.userId;
+      }
+    }
+    const actor = describeActor(creator.role, creatorName);
     this.notifications.taskEvent(
       'task.created',
       NotificationLevel.INFO,
       'Tarea creada',
-      `Se creó la tarea "${savedTask!.title || ''}" para el técnico ${
+      `Tarea creada por ${actor}. Se creó la tarea "${savedTask!.title || ''}" para el técnico ${
         technician.profile?.name || technician.email
       }.`,
       projectId ?? null,
       effectiveTechnicianId,
-      { taskId: savedTask!.id, projectId: projectId ?? null, technicianId: effectiveTechnicianId },
+      {
+        taskId: savedTask!.id,
+        projectId: projectId ?? null,
+        technicianId: effectiveTechnicianId,
+      },
+      { includeAdmins: true, includeLeader: true, includeTechnicians: false },
     );
     if (projectId) {
       void this.contractThresholds.checkAndNotify(projectId);
@@ -372,7 +401,15 @@ export class TasksService {
 
     const pageMetaDto = new PageMeta(filterDto, itemCount);
 
-    return new PageDto(entities, pageMetaDto);
+    const records = entities.map((task) =>
+      Object.assign(task, {
+        projectId: task.project?.id ?? null,
+        serviceId: task.service?.id ?? null,
+        technicianId: task.technician?.id ?? null,
+      }),
+    );
+
+    return new PageDto(records, pageMetaDto);
   }
 
   async update(
@@ -411,35 +448,35 @@ export class TasksService {
     const newDuration = newStart.until(newEnd).total({ unit: 'hours' });
     const diff = newDuration - oldDuration;
 
-  // 4. Track completion date when status changes
-  const oldStatus = task.status;
-  const newStatus = updateTaskDto.status;
-  if (newStatus) {
-    const targetStatus = newStatus as unknown as TaskStatus;
-    if (
-      targetStatus === TaskStatus.COMPLETED &&
-      oldStatus !== TaskStatus.COMPLETED
-    ) {
-      task.completedAt = Temporal.Now.instant();
-    } else if (
-      targetStatus !== TaskStatus.COMPLETED &&
-      oldStatus === TaskStatus.COMPLETED
-    ) {
-      task.completedAt = null as unknown as Temporal.Instant;
+    // 4. Track completion date when status changes
+    const oldStatus = task.status;
+    const newStatus = updateTaskDto.status;
+    if (newStatus) {
+      const targetStatus = newStatus as unknown as TaskStatus;
+      if (
+        targetStatus === TaskStatus.COMPLETED &&
+        oldStatus !== TaskStatus.COMPLETED
+      ) {
+        task.completedAt = Temporal.Now.instant();
+      } else if (
+        targetStatus !== TaskStatus.COMPLETED &&
+        oldStatus === TaskStatus.COMPLETED
+      ) {
+        task.completedAt = null as unknown as Temporal.Instant;
+      }
     }
-  }
 
-  // Validar rango de fechas
-  if (Temporal.Instant.compare(newStart, newEnd) >= 0) {
-    throw new BadRequestException('Start time must be before end time');
-  }
+    // Validar rango de fechas
+    if (Temporal.Instant.compare(newStart, newEnd) >= 0) {
+      throw new BadRequestException('Start time must be before end time');
+    }
 
-  // 5. Update Project Pool if changed
-  if (Math.abs(diff) > 0 && task.project) {
-    const currentPool = Number(task.project.poolHours || 0);
-    task.project.poolHours = currentPool - diff;
-    await this.projectRepository.save(task.project);
-  }
+    // 5. Update Project Pool if changed
+    if (Math.abs(diff) > 0 && task.project) {
+      const currentPool = Number(task.project.poolHours || 0);
+      task.project.poolHours = currentPool - diff;
+      await this.projectRepository.save(task.project);
+    }
 
     // 6. Recalculate factor breakdown for the new span
     const timeZone = process.env.APP_TIMEZONE || 'America/Caracas';
@@ -450,11 +487,14 @@ export class TasksService {
     );
 
     // Validar solapes si cambian fechas
-    const datesChanged = updateTaskDto.startDateTime || updateTaskDto.endDateTime;
+    const datesChanged =
+      updateTaskDto.startDateTime || updateTaskDto.endDateTime;
     if (datesChanged) {
       const overlap = await this.taskRepository
         .createQueryBuilder('task')
-        .where('task.technician.id = :technicianId', { technicianId: task.technician?.id })
+        .where('task.technician.id = :technicianId', {
+          technicianId: task.technician?.id,
+        })
         .andWhere('task.id != :id', { id })
         .andWhere('task.startDateTime < :end', { end: newEnd.toString() })
         .andWhere('task.endDateTime > :start', { start: newStart.toString() })
@@ -480,25 +520,44 @@ export class TasksService {
     const projId = task.project?.id ?? null;
     const techId = task.technician?.id ?? null;
     if (newStatus && oldStatus !== newStatus) {
+      let actor = 'Sistema';
+      if (user?.userId) {
+        try {
+          const actorUser = await this.usersService.findOneById(user.userId);
+          actor = describeActor(
+            actorUser.role?.name || user.role,
+            actorUser.profile?.name || actorUser.email,
+          );
+        } catch {
+          actor = describeActor(user.role, user.userId);
+        }
+      }
+      const audienceOptions = {
+        includeAdmins: true,
+        includeLeader: true,
+        includeTechnicians: true,
+      };
       if (finalStatus === TaskStatus.COMPLETED) {
         this.notifications.taskEvent(
           'task.completed',
           NotificationLevel.INFO,
           'Tarea completada',
-          `La tarea "${saved.title || ''}" fue marcada como completada.`,
+          `La tarea "${saved.title || ''}" fue marcada como completada por ${actor}.`,
           projId,
           techId,
           { taskId: saved.id, projectId: projId },
+          audienceOptions,
         );
       } else if (finalStatus === TaskStatus.CANCELLED) {
         this.notifications.taskEvent(
           'task.cancelled',
           NotificationLevel.WARNING,
           'Tarea cancelada',
-          `La tarea "${saved.title || ''}" fue cancelada.`,
+          `La tarea "${saved.title || ''}" fue cancelada por ${actor}.`,
           projId,
           techId,
           { taskId: saved.id, projectId: projId },
+          audienceOptions,
         );
       }
     }
@@ -536,14 +595,27 @@ export class TasksService {
     }
 
     // Notificación multicanal: tarea eliminada
+    let actor = 'Sistema';
+    if (user?.userId) {
+      try {
+        const actorUser = await this.usersService.findOneById(user.userId);
+        actor = describeActor(
+          actorUser.role?.name || user.role,
+          actorUser.profile?.name || actorUser.email,
+        );
+      } catch {
+        actor = describeActor(user.role, user.userId);
+      }
+    }
     this.notifications.taskEvent(
       'task.deleted',
       NotificationLevel.WARNING,
       'Tarea eliminada',
-      `La tarea "${task.title || ''}" fue eliminada del sistema.`,
+      `La tarea "${task.title || ''}" fue eliminada del sistema por ${actor}.`,
       task.project?.id ?? null,
       task.technician?.id ?? null,
       { taskId: id },
+      { includeAdmins: true, includeLeader: true, includeTechnicians: true },
     );
     if (task.project?.id) {
       void this.contractThresholds.checkAndNotify(task.project.id);

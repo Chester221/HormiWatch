@@ -28,6 +28,7 @@ export interface DigestStaleTaskRow {
   id: string;
   title: string;
   technicianName: string | null;
+  projectId: string | null;
   projectTitle: string | null;
   daysIdle: number;
   lastUpdate: string;

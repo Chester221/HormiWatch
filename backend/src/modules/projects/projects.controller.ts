@@ -43,8 +43,9 @@ export class ProjectsController {
   @ApiOkResponse({ type: ProjectResponseDto })
   async create(
     @Body() createProjectDto: CreateProjectDto,
+    @CurrentUser() user: IActiveUser,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.create(createProjectDto);
+    return this.projectsService.create(createProjectDto, user);
   }
 
   @Get()

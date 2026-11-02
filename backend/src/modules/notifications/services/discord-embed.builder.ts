@@ -58,6 +58,7 @@ const EVENT_TYPES: Record<string, string> = {
   'customer.deleted': 'Cliente eliminado',
   'contract.expiring': 'Contrato por vencer',
   'project.created': 'creado',
+  'project.assigned': 'asignado',
   'project.deleted': 'eliminado',
   'contract.closed': 'cerrado',
   'contract.paused': 'pausado',

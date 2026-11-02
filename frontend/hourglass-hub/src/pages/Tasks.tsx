@@ -253,16 +253,17 @@ export default function Tasks() {
     setDeleteOpen(true);
   };
 
-  const confirmDeleteTask = async (task: any) => {
+  const confirmDeleteTask = (task: any) => {
     if (!task?.id) return;
-    try {
-      await deleteTaskMutation.mutateAsync(task.id);
-      setDeleteOpen(false);
-      setTaskToDelete(null);
-      setDetailOpen(false);
-    } catch (e: any) {
-      toast.error(`Error: ${e.message}`);
-    }
+    const taskId = String(task.id);
+
+    // ✅ Cierre INSTANTÁNEO: no esperamos la respuesta del servidor.
+    // El borrado optimista del hook ya quita la tarea de la lista.
+    setDeleteOpen(false);
+    setTaskToDelete(null);
+    setDetailOpen(false);
+
+    deleteTaskMutation.mutate(taskId);
   };
 
   const handleUpdateTask = async (updatedData: { title?: string; description?: string; status?: string }) => {

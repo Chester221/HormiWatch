@@ -35,6 +35,12 @@ export const requestRefresh = async (): Promise<string | null> => {
 };
 
 const apiClient = async (endpoint: string, options: RequestInit = {}, retry = true): Promise<any> => {
+  if (options.signal?.aborted) {
+    const abortError = new Error('Request aborted');
+    abortError.name = 'AbortError';
+    throw abortError;
+  }
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     credentials: 'include',
@@ -161,8 +167,11 @@ export const rolesApi = {
 
 // ---------- PROJECTS ----------
 export const projectsApi = {
-  getAll: (params?: any) =>
-    apiClient(`/projects${params ? `?${new URLSearchParams(params)}` : ''}`),
+  getAll: (params?: any, signal?: AbortSignal) =>
+    apiClient(`/projects${params ? `?${new URLSearchParams(params)}` : ''}`, {
+      method: 'GET',
+      signal,
+    }),
 
   getById: (id: string) =>
     apiClient(`/projects/${id}`),
@@ -182,8 +191,11 @@ export const projectsApi = {
 
 // ---------- TASKS ----------
 export const tasksApi = {
-  getAll: (params?: any) =>
-    apiClient(`/tasks${params ? `?${new URLSearchParams(params)}` : ''}`),
+  getAll: (params?: any, signal?: AbortSignal) =>
+    apiClient(`/tasks${params ? `?${new URLSearchParams(params)}` : ''}`, {
+      method: 'GET',
+      signal,
+    }),
 
   getById: (id: string) =>
     apiClient(`/tasks/${id}`),

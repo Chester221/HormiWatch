@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { RoleService } from '../role/role.service';
@@ -153,9 +158,15 @@ export class UsersService {
         // try tolerant
         const roles = await (this.roleService as any).roleRepository?.find?.();
         if (roles && roles.length) {
-          const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const norm = (s: string) =>
+            s
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '');
           const n = norm(roleName);
-          const similar = roles.find((r: any) => norm(r.name).includes(n) || n.includes(norm(r.name)));
+          const similar = roles.find(
+            (r: any) => norm(r.name).includes(n) || n.includes(norm(r.name)),
+          );
           if (similar) return similar;
         }
         throw new NotFoundException(`Role with name '${roleName}' not found`);
@@ -492,7 +503,9 @@ export class UsersService {
           this.logger.warn(`Role with name '${userData.role}' not found`);
         }
       } catch (error) {
-        this.logger.warn(`Error finding role by name '${userData.role}': ${error.message}`);
+        this.logger.warn(
+          `Error finding role by name '${userData.role}': ${error.message}`,
+        );
       }
     }
 
@@ -540,7 +553,11 @@ export class UsersService {
 
         if (role.name === 'Admin' && user.isActive !== false) {
           const activeAdminCount = await this.userRepository.count({
-            where: { role: { name: 'Admin' }, isActive: true, id: Not(user.id) },
+            where: {
+              role: { name: 'Admin' },
+              isActive: true,
+              id: Not(user.id),
+            },
           });
           if (activeAdminCount >= 2) {
             throw new ConflictException(
@@ -563,10 +580,13 @@ export class UsersService {
         user.profile.position = userData.position ?? user.profile.position;
         user.profile.deparment = userData.deparment ?? user.profile.deparment;
         // ✅ AGREGAR avatar_url y full_name al perfil
-        user.profile.avatar_url = userData.avatar_url ?? user.profile.avatar_url;
+        user.profile.avatar_url =
+          userData.avatar_url ?? user.profile.avatar_url;
         user.profile.full_name = userData.full_name ?? user.profile.full_name;
-        if (userData.whatsappPhone !== undefined) user.profile.whatsappPhone = userData.whatsappPhone;
-        if (userData.whatsapp_phone !== undefined) user.profile.whatsappPhone = userData.whatsapp_phone;
+        if (userData.whatsappPhone !== undefined)
+          user.profile.whatsappPhone = userData.whatsappPhone;
+        if (userData.whatsapp_phone !== undefined)
+          user.profile.whatsappPhone = userData.whatsapp_phone;
 
         await manager.save(Profile, user.profile);
       });
@@ -605,7 +625,12 @@ export class UsersService {
         NotificationLevel.INFO,
         'Rol de usuario actualizado',
         `El rol de ${user.email} cambió de ${oldRoleName} a ${role.name}.`,
-        { userId: user.id, email: user.email, oldRole: oldRoleName, newRole: role.name },
+        {
+          userId: user.id,
+          email: user.email,
+          oldRole: oldRoleName,
+          newRole: role.name,
+        },
       );
     }
     if (oldIsActive !== user.isActive) {
@@ -650,7 +675,12 @@ export class UsersService {
       [id],
     );
     const related = counts?.[0];
-    if (related && (related.tasks > 0 || related.led_projects > 0 || related.assigned_projects > 0)) {
+    if (
+      related &&
+      (related.tasks > 0 ||
+        related.led_projects > 0 ||
+        related.assigned_projects > 0)
+    ) {
       throw new ConflictException(
         'No se puede eliminar: el usuario tiene tareas o proyectos asignados. Desactívalo en su lugar.',
       );
@@ -688,6 +718,16 @@ export class UsersService {
     }
 
     await this.removeUserAndProfile(id, user, true);
+
+    // Notificación multicanal: usuario eliminado definitivamente
+    this.notifications.toAdmins(
+      'user.deleted',
+      NotificationCategory.USERS,
+      NotificationLevel.WARNING,
+      'Usuario eliminado',
+      `El usuario ${user.email} fue eliminado del sistema.`,
+      { userId: user.id, email: user.email },
+    );
 
     await this.cacheManager.del(`/users/${id}`);
   }

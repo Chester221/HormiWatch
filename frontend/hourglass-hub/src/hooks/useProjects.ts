@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsApi, tasksApi, usersApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { normalizeTask, taskHours } from '@/lib/dashboardUtils';
+import { fetchAllPages } from '@/lib/pagination';
 
 export type Project = {
   id: string;
@@ -72,22 +73,25 @@ const restorePrevious = (queryClient: ReturnType<typeof useQueryClient>, previou
 export const useProjects = () => {
   return useQuery({
     queryKey: PROJECTS_KEY,
-    queryFn: async (): Promise<Project[]> => {
+    queryFn: async ({ signal }): Promise<Project[]> => {
       try {
-        const responseProjects = await projectsApi.getAll();
-        
-        const projects = Array.isArray(responseProjects) 
-          ? responseProjects 
-          : responseProjects?.records || responseProjects?.data || [];
-        
-        if (!projects || projects.length === 0) {
+        const projects = await fetchAllPages<Record<string, unknown>>(
+          (page, pageSignal) =>
+            projectsApi.getAll({ order: 'DESC', take: 100, page }, pageSignal),
+          { take: 100, signal },
+        );
+
+        if (!projects.length) {
           return [];
         }
 
-        const responseTasks = await tasksApi.getAll();
-        const rawTasks = Array.isArray(responseTasks) 
-          ? responseTasks 
-          : responseTasks?.records || responseTasks?.data || [];
+        const rawTasks = await fetchAllPages<Record<string, unknown>>(
+          (page, pageSignal) => tasksApi.getAll(
+            { order: 'DESC', take: 100, page },
+            pageSignal,
+          ),
+          { take: 100, signal },
+        );
 
         // ✅ NORMALIZAR al formato legacy (incluye project_id de la relación anidada)
         const tasks = rawTasks.map(normalizeTask);
@@ -104,6 +108,7 @@ export const useProjects = () => {
 
         return projects.map((project: any) => normalizeProject(project, tasksByProject));
       } catch (err) {
+        if (signal?.aborted) throw err;
         console.error('Error in useProjects:', err);
         return [];
       }
@@ -267,11 +272,12 @@ export const useDeleteProject = () => {
         throw new Error('Solo el creador del proyecto puede eliminarlo');
       }
 
-      const responseTasks = await tasksApi.getAll();
-      const tasks = Array.isArray(responseTasks) 
-        ? responseTasks 
-        : responseTasks?.records || responseTasks?.data || [];
-      const projectTasks = tasks.filter((t: any) => t.project_id === projectId);
+      const projectTasks = await fetchAllPages<Record<string, unknown>>(
+        (page) => tasksApi.getAll(
+          { order: 'DESC', take: 100, page, projectId },
+        ),
+        { take: 100 },
+      );
 
       if (projectTasks.length > 0) {
         if (project.status !== 'Completed' && project.status !== 'Cancelled') {

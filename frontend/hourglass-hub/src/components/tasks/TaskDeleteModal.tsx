@@ -21,7 +21,7 @@ interface TaskDeleteModalProps {
   } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (task: { id?: string }) => Promise<void> | void;
+  onConfirm: (task: { id?: string }) => void;
 }
 
 const STATUS_SPANISH: Record<string, string> = {
@@ -39,14 +39,13 @@ const getStatusSpanish = (status?: string) => {
 export function TaskDeleteModal({ task, open, onOpenChange, onConfirm }: TaskDeleteModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     if (!task) return;
+    // El cierre del modal y la eliminación optimista los maneja el padre.
+    // No esperamos la respuesta de red: solo mostramos el spinner un instante.
     setIsSubmitting(true);
-    try {
-      await onConfirm(task);
-    } finally {
-      setIsSubmitting(false);
-    }
+    onConfirm(task);
+    setIsSubmitting(false);
   };
 
   const date = task?.date ? new Date(task.date) : null;

@@ -9,6 +9,7 @@ import { User } from 'src/modules/users/entities/user.entity';
 import { Role } from 'src/modules/auth/enums/roles.enum';
 import { NotificationCategory } from '../enums/notification-category.enum';
 import { NotificationLevel } from '../enums/notification-level.enum';
+import { NotificationEvent } from '../events/notification.event';
 import { NotificationEmitterService } from './notification-emitter.service';
 import { NotificationSettingsService } from './notification-settings.service';
 import {
@@ -112,6 +113,7 @@ export class StaleDetectionService {
           id: t.id,
           title: t.title || 'Tarea sin titulo',
           technicianName: t.technician?.profile?.name || null,
+          projectId: t.project?.id || null,
           projectTitle: t.project?.title || null,
           daysIdle: Math.max(0, today.since(lastUpdate).days),
           lastUpdate: lastUpdate.toString(),
@@ -189,20 +191,59 @@ export class StaleDetectionService {
     const today = this.today().toString();
 
     if (staleTasks.length) {
-      this.emitter.toAdmins(
-        STALE_TASKS_EVENT_KEY,
-        NotificationCategory.TASKS,
-        NotificationLevel.WARNING,
-        `${staleTasks.length} tarea(s) estancada(s)`,
-        staleTasks
+      const byProject = new Map<string | null, DigestStaleTaskRow[]>();
+      for (const task of staleTasks) {
+        const key = task.projectId || null;
+        if (!byProject.has(key)) byProject.set(key, []);
+        byProject.get(key)!.push(task);
+      }
+
+      for (const [projectId, tasks] of byProject) {
+        const message = tasks
           .map(
             (task) =>
               `${task.title} (${task.technicianName || 'sin tecnico'}) - ${task.daysIdle} dia(s) sin cambios`,
           )
-          .join(' | '),
-        { tasks: staleTasks, staleDays: t.taskStaleDays },
-        `stale:tasks:${today}`,
-      );
+          .join(' | ');
+
+        if (projectId) {
+          this.emitter.emit(
+            new NotificationEvent(
+              STALE_TASKS_EVENT_KEY,
+              NotificationCategory.TASKS,
+              NotificationLevel.WARNING,
+              `${tasks.length} tarea(s) estancada(s)`,
+              message,
+              [
+                {
+                  type: 'project',
+                  projectId,
+                  includeLeader: true,
+                  includeTechnicians: false,
+                  includeAdmins: true,
+                },
+              ],
+              {
+                tasks,
+                staleDays: t.taskStaleDays,
+                projectId,
+                projectTitle: tasks[0]?.projectTitle || null,
+              },
+              `stale:project:${projectId}:${today}`,
+            ),
+          );
+        } else {
+          this.emitter.toAdmins(
+            STALE_TASKS_EVENT_KEY,
+            NotificationCategory.TASKS,
+            NotificationLevel.WARNING,
+            `${tasks.length} tarea(s) estancada(s)`,
+            message,
+            { tasks, staleDays: t.taskStaleDays },
+            `stale:tasks:${today}`,
+          );
+        }
+      }
     }
 
     if (inactiveTechnicians.length) {
@@ -223,6 +264,23 @@ export class StaleDetectionService {
         },
         `inactive:technicians:${today}`,
       );
+
+      for (const tech of inactiveTechnicians) {
+        this.emitter.toUsers(
+          INACTIVE_TECHNICIANS_EVENT_KEY,
+          NotificationCategory.USERS,
+          NotificationLevel.WARNING,
+          'No has registrado horas',
+          `No has registrado horas en los últimos ${tech.daysIdle} día(s) hábil(es). Registra tus tareas para mantener tu actividad al día.`,
+          [tech.id],
+          {
+            technicianId: tech.id,
+            daysIdle: tech.daysIdle,
+            inactivityDays: t.inactivityDays,
+          },
+          `inactive:user:${tech.id}:${today}`,
+        );
+      }
     }
 
     if (staleTasks.length || inactiveTechnicians.length) {

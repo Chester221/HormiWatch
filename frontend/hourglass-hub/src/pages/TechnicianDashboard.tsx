@@ -116,6 +116,7 @@ const TechnicianDashboard = () => {
       technicianId: user.id,
       startDateTime,
       endDateTime,
+      title: data.title || "",
       description: data.motivo ? `[${data.motivo}] ${data.description || ''}` : data.description,
       status: toApiStatus(data.status),
       priority: "MEDIUM",

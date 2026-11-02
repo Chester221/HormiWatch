@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasksApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { normalizeTask, humanStatus } from '@/lib/dashboardUtils';
+import { fetchAllPages } from '@/lib/pagination';
 import type { Tables, InsertTables } from '@/types/supabase'
 
 export type Task = Tables<'tasks'> & {
@@ -20,14 +21,25 @@ const sortTasksDesc = (list: any[]): any[] =>
   );
 
 export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
-  const fetchTasks = async (): Promise<Task[]> => {
-    const response = await tasksApi.getAll();
-    // ✅ CORREGIDO: Verificar si response es array u objeto { records | data }
-    let tasks = Array.isArray(response) ? response : response?.records || response?.data || [];
+  const fetchTasks = async (signal?: AbortSignal): Promise<Task[]> => {
+    const params: Record<string, string | number> = {
+      order: 'DESC',
+      take: 100,
+    };
 
-    // ✅ NORMALIZAR al formato legacy que consume todo el frontend
-    // (project_id/technician_id/service_id, created_at, horas, estados)
-    tasks = tasks.map(normalizeTask);
+    if (projectId && projectId !== 'all') {
+      params.projectId = projectId;
+    }
+
+    if (technicianId) {
+      params.technicianId = technicianId;
+    }
+
+    const response = await fetchAllPages<Record<string, unknown>>(
+      (page, pageSignal) => tasksApi.getAll({ ...params, page }, pageSignal),
+      { take: 100, signal },
+    );
+    let tasks = response.map(normalizeTask);
 
     if (projectId && projectId !== 'all') {
       tasks = tasks.filter((t: any) => t.project_id === projectId);
@@ -47,7 +59,7 @@ export const useTasks = (projectId?: string | 'all', technicianId?: string) => {
 
   return useQuery({
     queryKey: ['tasks', projectId, technicianId],
-    queryFn: fetchTasks,
+    queryFn: ({ signal }) => fetchTasks(signal),
     // ✅ CACHÉ: 30s de staleTime → navegar entre páginas es instantáneo (muestra
     // la caché al instante y refresca en segundo plano solo si está vieja).
     staleTime: 30_000,
@@ -65,36 +77,44 @@ export const useCreateTasks = () => {
       const results = await Promise.all(
         newTasks.map(task => tasksApi.create(task))
       );
-      return results;
+      // El backend devuelve TaskResponseDto[] por cada creación, así que
+      // Promise.all produce arrays anidados. Aplanamos SIEMPRE para que
+      // onSuccess reciba una lista plana de DTOs.
+      return (results as unknown[]).flat(Infinity);
     },
     onMutate: async (newTasks) => {
       await queryClient.cancelQueries({ queryKey: TASKS_KEY });
       const previous = queryClient.getQueriesData({ queryKey: TASKS_KEY });
 
-      // ✅ UPDATE OPTIMISTA: la tarea aparece AL INSTANTE en todas las listas
+      // ✅ UPDATE OPTIMISTA: la tarea aparece AL INSTANTE con EXACTAMENTE los
+      // datos del formulario (título, descripción, proyecto, técnico, horas...).
+      // No dependemos de la respuesta del backend para pintar la tarjeta.
       const nowIso = new Date().toISOString();
       const optimistic = newTasks.map((t, i) => {
         const tempId = `temp-task-${Date.now()}-${i}`;
-        return {
-          ...normalizeTask({
-            id: tempId,
-            _tempId: tempId,
-            status: t.status || 'PENDING',
-            priority: t.priority || 'MEDIUM',
-            title: t.title,
-            description: t.description,
-            startDateTime: t.startDateTime,
-            endDateTime: t.endDateTime,
-            created_at: nowIso,
-            project: t.projectId ? { id: t.projectId } : undefined,
-            project_id: t.projectId,
-            service: t.serviceId ? { id: t.serviceId } : undefined,
-            service_id: t.serviceId,
-            technician_id: t.technicianId,
-            appliedHourlyRate: t.appliedHourlyRate,
-          }),
+        const task = normalizeTask({
+          id: tempId,
           _tempId: tempId,
-        };
+          status: t.status || 'PENDING',
+          priority: t.priority || 'MEDIUM',
+          title: t.title,
+          description: t.description,
+          startDateTime: t.startDateTime,
+          endDateTime: t.endDateTime,
+          createdAt: nowIso,
+          created_at: nowIso,
+          project: t.projectId ? { id: t.projectId } : undefined,
+          project_id: t.projectId,
+          projectName: t.projectName,
+          service: t.serviceId ? { id: t.serviceId } : undefined,
+          service_id: t.serviceId,
+          technician: t.technicianId ? { id: t.technicianId } : undefined,
+          technician_id: t.technicianId,
+          technicianName: t.technicianName,
+          appliedHourlyRate: t.appliedHourlyRate,
+          hours: t.hours,
+        });
+        return { ...task, _tempId: tempId };
       });
 
       queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
@@ -102,26 +122,62 @@ export const useCreateTasks = () => {
         return sortTasksDesc([...optimistic, ...old]);
       });
 
-      return { previous, tempIds: optimistic.map((o) => o.id) };
+      return {
+        previous,
+        tempIds: optimistic.map((o) => o.id),
+        temps: optimistic,
+      };
     },
     onSuccess: (results, _vars, context) => {
       const tempIds = context?.tempIds ?? [];
-      const realList = (Array.isArray(results) ? results : [results])
-        .map((r) => normalizeTask(r));
+      const temps = context?.temps ?? [];
+
+      // El backend puede devolver array de DTOs, array de arrays o un objeto.
+      // Aplanamos SIEMPRE para que normalizeTask reciba UNA tarea, no un array.
+      const flattened = (
+        Array.isArray(results) ? results.flat(Infinity) : [results]
+      ).filter(Boolean) as Record<string, unknown>[];
+      const normalized = flattened.map((r) => normalizeTask(r));
 
       // ✅ Reemplazar temporales por reales. NADA de invalidate/refetch:
       // la tarea real ya quedó en caché y NO debe "recargarse" la lista.
       queryClient.setQueriesData({ queryKey: TASKS_KEY }, (old) => {
         if (!Array.isArray(old)) return old;
         let list = old.slice();
-        realList.forEach((item, i) => {
+
+        normalized.forEach((item, i) => {
+          // Solo reemplazamos si el backend devolvió una tarea real con id.
+          if (!item || item.id === undefined || item.id === null || item.id === '') return;
+
           const tempId = tempIds[i];
-          if (tempId) {
-            list = list.map((t) => (t.id === tempId ? item : t));
-          } else {
+
+          if (!tempId) {
             list = [item, ...list];
+            return;
+          }
+
+          let replaced = false;
+          list = list.map((t) => {
+            if (String(t.id) !== String(tempId)) return t;
+            replaced = true;
+
+            // La respuesta real solo pisa los campos que trae con valor.
+            // Nunca borramos título/proyecto/técnico con null o undefined.
+            const merged: Record<string, unknown> = { ...t };
+            Object.entries(item).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) merged[key] = value;
+            });
+            merged.id = item.id;
+            return merged;
+          });
+
+          if (!replaced) {
+            // El temporal ya no está (p.ej. un refetch lo quitó). Insertamos
+            // la tarea real solo si tiene datos válidos, nunca un objeto vacío.
+            list = [{ ...(temps[i] || {}), ...item, id: item.id }, ...list];
           }
         });
+
         return sortTasksDesc(list);
       });
       toast.success('Tareas creadas correctamente');
@@ -226,7 +282,8 @@ export const useDeleteTask = () => {
       return { previous };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TASKS_KEY });
+      // ✅ Sin refetch global: la tarea ya se quitó del caché en onMutate.
+      // Un invalidate aquí provocaría parpadeos y volvería a pedir la lista.
       toast.success('Tarea eliminada');
     },
     onError: (error: Error, _vars, context) => {

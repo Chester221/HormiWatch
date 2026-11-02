@@ -14,7 +14,6 @@ import { ProjectPageOptionsDto } from './dto/project-page-options.dto';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from '../../common/pagination/metadata';
 import { User } from '../users/entities/user.entity';
-import { Role } from '../auth/enums/roles.enum';
 import { IActiveUser } from '../auth/interface/payload.interface';
 import { CustomerContact } from '../customers/entities/customer_contact.entity';
 import { UsersService } from '../users/users.service';
@@ -45,14 +44,52 @@ export class ProjectsService {
     private readonly contractThresholds: ContractThresholdsService,
   ) {}
 
-  private emitProjectCreated(project: Project): void {
-    this.notifications.projectChanged(
+  private async emitProjectCreated(
+    project: Project,
+    creator?: IActiveUser,
+  ): Promise<void> {
+    let creatorUser: User | null = null;
+    if (creator?.userId) {
+      try {
+        creatorUser = await this.usersService.findOneById(creator.userId);
+      } catch {
+        creatorUser = null;
+      }
+    }
+
+    const creatorRole = (
+      creatorUser?.role?.name ||
+      creator?.role ||
+      ''
+    ).toLowerCase();
+    const manager =
+      creatorRole === 'manager' ? creatorUser : project.projectLeader;
+    const extraUserIds =
+      creatorRole === 'manager' &&
+      creatorUser?.id &&
+      creatorUser.id !== project.projectLeader?.id
+        ? [creatorUser.id]
+        : [];
+
+    this.notifications.projectCreated(
       'project.created',
       NotificationLevel.INFO,
       'Proyecto creado',
       `El proyecto "${project.title}" ha sido creado y está en espera de ejecución.`,
       project.id,
       { projectId: project.id, title: project.title },
+      extraUserIds,
+    );
+
+    const technicians = project.technicians || [];
+    if (!technicians.length) return;
+
+    const managerName = manager?.profile?.name || manager?.email || 'Manager';
+    this.notifications.projectAssignment(
+      project.id,
+      project.title,
+      managerName,
+      technicians.map((t) => t.id),
     );
   }
 
@@ -64,12 +101,22 @@ export class ProjectsService {
     if (!newStatus || oldStatus === newStatus) return;
     const map: Record<string, { title: string; level: NotificationLevel }> = {
       COMPLETED: { title: 'Contrato cerrado', level: NotificationLevel.INFO },
-      IN_PROGRESS: { title: 'Proyecto iniciado', level: NotificationLevel.INFO },
-      CANCELLED: { title: 'Proyecto cancelado', level: NotificationLevel.WARNING },
+      IN_PROGRESS: {
+        title: 'Proyecto iniciado',
+        level: NotificationLevel.INFO,
+      },
+      CANCELLED: {
+        title: 'Proyecto cancelado',
+        level: NotificationLevel.WARNING,
+      },
       PENDING: { title: 'Proyecto pausado', level: NotificationLevel.WARNING },
     };
-    const msg = map[newStatus] || { title: 'Proyecto actualizado', level: NotificationLevel.INFO };
-    const eventKey = newStatus === 'COMPLETED' ? 'contract.closed' : 'contract.paused';
+    const msg = map[newStatus] || {
+      title: 'Proyecto actualizado',
+      level: NotificationLevel.INFO,
+    };
+    const eventKey =
+      newStatus === 'COMPLETED' ? 'contract.closed' : 'contract.paused';
     this.notifications.projectChanged(
       eventKey,
       msg.level,
@@ -80,7 +127,11 @@ export class ProjectsService {
     );
   }
 
-  private emitPoolRenewed(project: Project, oldPool: number, newPool: number): void {
+  private emitPoolRenewed(
+    project: Project,
+    oldPool: number,
+    newPool: number,
+  ): void {
     if (!(newPool > oldPool)) return;
     this.notifications.projectChanged(
       'contract.renewed',
@@ -94,6 +145,7 @@ export class ProjectsService {
 
   async create(
     createProjectDto: CreateProjectDto,
+    creator?: IActiveUser,
   ): Promise<ProjectResponseDto> {
     const {
       projectLeaderId,
@@ -191,7 +243,7 @@ export class ProjectsService {
     }
 
     // Notificación multicanal: proyecto creado + evaluación de umbrales
-    this.emitProjectCreated(savedProject);
+    await this.emitProjectCreated(savedProject, creator);
     void this.contractThresholds.checkAndNotify(savedProject.id);
 
     return this.mapToResponseDto(savedProject);
@@ -259,7 +311,7 @@ export class ProjectsService {
     // ✅ MAPEAR CON LOS DATOS COMPLETOS
     const dtos = entities.map((entity) => {
       const dto = this.mapToResponseDto(entity);
-      
+
       // ✅ AGREGAR DATOS DEL CLIENTE
       if (entity.customerContact?.customer) {
         dto.customer_id = entity.customerContact.customer.id;
@@ -267,23 +319,21 @@ export class ProjectsService {
         dto.contact_name = entity.customerContact.name;
         dto.contact_email = entity.customerContact.email;
       }
-      
+
       // ✅ AGREGAR DATOS DEL LÍDER
       if (entity.projectLeader) {
         dto.leader_email = entity.projectLeader.email;
-        dto.leader_name = entity.projectLeader.profile?.name || entity.projectLeader.email;
+        dto.leader_name =
+          entity.projectLeader.profile?.name || entity.projectLeader.email;
       }
-      
+
       return dto;
     });
 
     return new PageDto(dtos, pageMetaDto);
   }
 
-  async findOne(
-    id: string,
-    user?: IActiveUser,
-  ): Promise<ProjectResponseDto> {
+  async findOne(id: string, user?: IActiveUser): Promise<ProjectResponseDto> {
     const project = await this.projectRepository.findOne({
       where: { id },
       relations: [
@@ -308,9 +358,7 @@ export class ProjectsService {
         project.technicians?.some((t) => t.id === user.userId) ||
         project.projectLeader?.id === user.userId;
       if (!isMember) {
-        throw new ForbiddenException(
-          'You do not have access to this project',
-        );
+        throw new ForbiddenException('You do not have access to this project');
       }
     }
 
@@ -351,11 +399,11 @@ export class ProjectsService {
         throw new NotFoundException(
           `Project Leader with ID ${projectLeaderId} not found`,
         );
-      
+
       const roleName = leader.role?.name?.toLowerCase() || '';
       if (roleName !== 'manager' && roleName !== 'admin') {
         throw new BadRequestException(
-          `User ${leader.email} is not a Manager or Admin. Current role: ${leader.role?.name}`
+          `User ${leader.email} is not a Manager or Admin. Current role: ${leader.role?.name}`,
         );
       }
       project.projectLeader = leader;
@@ -372,7 +420,7 @@ export class ProjectsService {
       if (technicians.length !== technicianIds.length) {
         throw new NotFoundException('One or more technicians not found');
       }
-      
+
       for (const tech of technicians) {
         const techRole = tech.role?.name?.toLowerCase() || '';
         if (techRole !== 'technician' && techRole !== 'employee') {
@@ -520,7 +568,8 @@ export class ProjectsService {
     // ✅ AGREGAR DATOS DEL LÍDER
     if (project.projectLeader) {
       dto.leader_email = project.projectLeader.email;
-      dto.leader_name = project.projectLeader.profile?.name || project.projectLeader.email;
+      dto.leader_name =
+        project.projectLeader.profile?.name || project.projectLeader.email;
     }
 
     return dto;
