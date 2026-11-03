@@ -12,6 +12,8 @@ export interface TaskAudienceOptions {
   includeAdmins?: boolean;
   includeLeader?: boolean;
   includeTechnicians?: boolean;
+  dedupeKey?: string | null;
+  excludeUserIds?: string[];
 }
 
 @Injectable()
@@ -130,13 +132,14 @@ export class NotificationEmitterService {
         includeTechnicians,
         includeAdmins,
       });
-    } else {
-      if (includeAdmins) {
-        audiences.push({ type: 'roles', roles: ['admin'] });
-      }
-      if (includeTechnicians && technicianId) {
-        audiences.push({ type: 'users', userIds: [technicianId] });
-      }
+    } else if (includeAdmins) {
+      audiences.push({ type: 'roles', roles: ['admin'] });
+    }
+
+    // El técnico asignado debe recibir la notificación aunque no figure
+    // entre los técnicos del proyecto.
+    if (technicianId) {
+      audiences.push({ type: 'users', userIds: [technicianId] });
     }
 
     if (!audiences.length) return;
@@ -149,7 +152,8 @@ export class NotificationEmitterService {
         message,
         audiences,
         data,
-        null,
+        options.dedupeKey ?? null,
+        options.excludeUserIds ?? [],
       ),
     );
   }

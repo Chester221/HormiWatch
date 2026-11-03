@@ -32,6 +32,39 @@ import { Service } from '../services/entities/service.entity';
 import { TaskStatus } from './enums/task-status.enum';
 import { IActiveUser } from '../auth/interface/payload.interface';
 
+const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  [TaskStatus.PENDING]: 'Pendiente',
+  [TaskStatus.IN_PROGRESS]: 'En Progreso',
+  [TaskStatus.COMPLETED]: 'Completada',
+  [TaskStatus.CANCELLED]: 'Cancelada',
+};
+
+const TASK_STATUS_EVENTS: Record<
+  TaskStatus,
+  { key: string; title: string; level: NotificationLevel }
+> = {
+  [TaskStatus.PENDING]: {
+    key: 'task.pending',
+    title: 'Tarea reabierta',
+    level: NotificationLevel.INFO,
+  },
+  [TaskStatus.IN_PROGRESS]: {
+    key: 'task.in_progress',
+    title: 'Tarea en progreso',
+    level: NotificationLevel.INFO,
+  },
+  [TaskStatus.COMPLETED]: {
+    key: 'task.completed',
+    title: 'Tarea completada',
+    level: NotificationLevel.INFO,
+  },
+  [TaskStatus.CANCELLED]: {
+    key: 'task.cancelled',
+    title: 'Tarea cancelada',
+    level: NotificationLevel.WARNING,
+  },
+};
+
 @Injectable()
 export class TasksService {
   constructor(
@@ -322,7 +355,12 @@ export class TasksService {
         projectId: projectId ?? null,
         technicianId: effectiveTechnicianId,
       },
-      { includeAdmins: true, includeLeader: true, includeTechnicians: false },
+      {
+        includeAdmins: true,
+        includeLeader: true,
+        includeTechnicians: false,
+        dedupeKey: `task.created:${savedTask!.id}`,
+      },
     );
     if (projectId) {
       void this.contractThresholds.checkAndNotify(projectId);
@@ -519,9 +557,11 @@ export class TasksService {
     const finalStatus = saved.status as unknown as TaskStatus;
     const projId = task.project?.id ?? null;
     const techId = task.technician?.id ?? null;
-    if (newStatus && oldStatus !== newStatus) {
+    if (newStatus && oldStatus !== finalStatus) {
       let actor = 'Sistema';
+      let actorId: string | undefined;
       if (user?.userId) {
+        actorId = user.userId;
         try {
           const actorUser = await this.usersService.findOneById(user.userId);
           actor = describeActor(
@@ -532,32 +572,28 @@ export class TasksService {
           actor = describeActor(user.role, user.userId);
         }
       }
-      const audienceOptions = {
-        includeAdmins: true,
-        includeLeader: true,
-        includeTechnicians: true,
-      };
-      if (finalStatus === TaskStatus.COMPLETED) {
+      const statusEvent = TASK_STATUS_EVENTS[finalStatus];
+      if (statusEvent) {
         this.notifications.taskEvent(
-          'task.completed',
-          NotificationLevel.INFO,
-          'Tarea completada',
-          `La tarea "${saved.title || ''}" fue marcada como completada por ${actor}.`,
+          statusEvent.key,
+          statusEvent.level,
+          statusEvent.title,
+          `La tarea "${saved.title || ''}" pasó a ${TASK_STATUS_LABELS[finalStatus]} por ${actor}.`,
           projId,
           techId,
-          { taskId: saved.id, projectId: projId },
-          audienceOptions,
-        );
-      } else if (finalStatus === TaskStatus.CANCELLED) {
-        this.notifications.taskEvent(
-          'task.cancelled',
-          NotificationLevel.WARNING,
-          'Tarea cancelada',
-          `La tarea "${saved.title || ''}" fue cancelada por ${actor}.`,
-          projId,
-          techId,
-          { taskId: saved.id, projectId: projId },
-          audienceOptions,
+          {
+            taskId: saved.id,
+            projectId: projId,
+            status: finalStatus,
+            oldStatus,
+          },
+          {
+            includeAdmins: true,
+            includeLeader: true,
+            includeTechnicians: false,
+            dedupeKey: `task.status:${saved.id}:${finalStatus}:${Date.now()}`,
+            excludeUserIds: actorId ? [actorId] : [],
+          },
         );
       }
     }
@@ -615,7 +651,12 @@ export class TasksService {
       task.project?.id ?? null,
       task.technician?.id ?? null,
       { taskId: id },
-      { includeAdmins: true, includeLeader: true, includeTechnicians: true },
+      {
+        includeAdmins: true,
+        includeLeader: true,
+        includeTechnicians: true,
+        dedupeKey: `task.deleted:${task.id}:${Date.now()}`,
+      },
     );
     if (task.project?.id) {
       void this.contractThresholds.checkAndNotify(task.project.id);

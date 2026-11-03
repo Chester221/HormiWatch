@@ -75,6 +75,48 @@ const categoryIcons: Record<string, LucideIcon> = {
   customers: Building2,
 };
 
+interface EmptyCopyInput {
+  readFilter: ReadFilter;
+  categoryFilter: string;
+  dateFilter: DateFilter;
+}
+
+function getEmptyCopy({
+  readFilter,
+  categoryFilter,
+  dateFilter,
+}: EmptyCopyInput): { title: string; description: string } {
+  const category =
+    categoryFilter !== 'all'
+      ? categoryLabels[categoryFilter] || categoryFilter
+      : null;
+  const dateLabel =
+    dateFilter === 'today'
+      ? 'de hoy'
+      : dateFilter === '7d'
+        ? 'de los últimos 7 días'
+        : dateFilter === '30d'
+          ? 'de los últimos 30 días'
+          : null;
+
+  if (readFilter === 'all' && !category && !dateLabel) {
+    return {
+      title: 'Sin notificaciones',
+      description: 'Te avisaremos cuando haya novedades.',
+    };
+  }
+
+  let title = 'Sin notificaciones';
+  if (readFilter === 'unread') title += ' sin leer';
+  if (category) title += ` sobre ${category}`;
+  if (dateLabel) title += ` ${dateLabel}`;
+
+  return {
+    title,
+    description: 'Prueba a cambiar los filtros.',
+  };
+}
+
 function normalizeLevel(level?: string | null): 'critical' | 'warning' | 'info' {
   const normalized = String(level || 'info').toLowerCase();
   if (normalized === 'critical' || normalized === 'warning') return normalized;
@@ -170,6 +212,7 @@ export function NotificationsBell() {
 
   const hasActiveFilters =
     readFilter !== 'all' || categoryFilter !== 'all' || dateFilter !== 'all';
+  const emptyCopy = getEmptyCopy({ readFilter, categoryFilter, dateFilter });
 
   const clearFilters = () => {
     setReadFilter('all');
@@ -222,7 +265,7 @@ export function NotificationsBell() {
       >
         <div className="flex max-h-[min(78vh,34rem)] flex-col">
           {/* ═══════ HEADER ═══════ */}
-          <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
                 <Bell className="h-4 w-4 text-[#0DA2E7]" />
@@ -249,7 +292,7 @@ export function NotificationsBell() {
           </div>
 
           {/* ═══════ FILTROS ═══════ */}
-          <div className="space-y-2 border-b border-border bg-card px-3 py-2.5">
+          <div className="shrink-0 space-y-2 border-b border-border bg-card px-3 py-2.5">
             <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
               {([
                 { value: 'all', label: 'Todas' },
@@ -309,20 +352,18 @@ export function NotificationsBell() {
           </div>
 
           {/* ═══════ LISTA ═══════ */}
-          {notifications.length === 0 ? (
+          {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-              <BellOff className="h-8 w-8 text-muted-foreground opacity-40" />
-              <p className="text-sm font-medium text-foreground">Sin notificaciones</p>
-              <p className="text-xs text-muted-foreground">
-                Te avisaremos cuando haya novedades.
+              {hasActiveFilters ? (
+                <Inbox className="h-8 w-8 text-muted-foreground opacity-40" />
+              ) : (
+                <BellOff className="h-8 w-8 text-muted-foreground opacity-40" />
+              )}
+              <p className="text-sm font-medium text-foreground">
+                {emptyCopy.title}
               </p>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-              <Inbox className="h-8 w-8 text-muted-foreground opacity-40" />
-              <p className="text-sm font-medium text-foreground">Nada por aquí</p>
               <p className="text-xs text-muted-foreground">
-                No hay notificaciones con estos filtros.
+                {emptyCopy.description}
               </p>
               {hasActiveFilters && (
                 <Button
@@ -336,7 +377,10 @@ export function NotificationsBell() {
               )}
             </div>
           ) : (
-            <ScrollArea className="min-h-0 flex-1">
+            <ScrollArea
+              type="auto"
+              className="min-h-0 max-h-[min(55dvh,22rem)] flex-1 [&_[data-orientation=vertical]>div]:bg-muted-foreground/40 [&_[data-orientation=vertical]>div:hover]:bg-muted-foreground/60 [&_[data-radix-scroll-area-viewport]]:max-h-[min(55dvh,22rem)] [&_[data-radix-scroll-area-viewport]]:overscroll-contain"
+            >
               <div className="divide-y divide-border">
                 {filtered.map((n: AppNotification) => {
                   const level = normalizeLevel(n.level);
@@ -447,7 +491,7 @@ export function NotificationsBell() {
 
           {/* ═══════ FOOTER ═══════ */}
           {filtered.length > 0 && (
-            <div className="border-t border-border bg-card px-4 py-2 text-[11px] text-muted-foreground">
+            <div className="shrink-0 border-t border-border bg-card px-4 py-2 text-[11px] text-muted-foreground">
               Mostrando {filtered.length} de {notifications.length}
             </div>
           )}

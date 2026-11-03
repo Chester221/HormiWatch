@@ -64,6 +64,8 @@ const EVENT_TYPES: Record<string, string> = {
   'contract.paused': 'pausado',
   'contract.renewed': 'renovado',
   'task.created': 'creada',
+  'task.in_progress': 'en progreso',
+  'task.pending': 'reabierta',
   'task.completed': 'completada',
   'task.cancelled': 'cancelada',
   'task.deleted': 'eliminada',

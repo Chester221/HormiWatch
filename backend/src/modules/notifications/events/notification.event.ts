@@ -34,6 +34,8 @@ export class NotificationEvent {
     public readonly data?: Record<string, any>,
     /** Clave de dedupe por usuario; null = siempre notificar */
     public readonly dedupeKey?: string | null,
+    /** Usuarios que no deben recibir la notificación (ej. el actor) */
+    public readonly excludeUserIds: string[] = [],
   ) {}
 
   get audiences(): NotificationAudience[] {

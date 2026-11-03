@@ -49,7 +49,9 @@ export class NotificationDispatcherService {
       await this.discord.sendEvent(s.discord || {}, channel, event);
     }
 
-    const userIds = await this.resolver.resolve(event.audiences);
+    const resolvedUserIds = await this.resolver.resolve(event.audiences);
+    const excluded = new Set(event.excludeUserIds || []);
+    const userIds = resolvedUserIds.filter((id) => !excluded.has(id));
     if (!userIds.length) return;
 
     const users = await this.userRepo.find({
