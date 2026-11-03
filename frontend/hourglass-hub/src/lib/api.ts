@@ -444,6 +444,10 @@ export const notificationsApi = {
   markAllRead: () =>
     apiClient('/notifications/read-all', { method: 'PATCH' }),
 
+  // Eliminar una notificación propia (borrado lógico en backend)
+  remove: (id: string) =>
+    apiClient(`/notifications/${id}`, { method: 'DELETE' }),
+
   // Configuración global (solo admin puede editar)
   getSettings: () =>
     apiClient('/notifications/settings'),

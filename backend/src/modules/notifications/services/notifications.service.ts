@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Notification } from '../entities/notification.entity';
@@ -75,5 +75,15 @@ export class NotificationsService {
       { userId: user.userId, readAt: IsNull() },
       { readAt: () => 'CURRENT_TIMESTAMP' },
     );
+  }
+
+  async deleteMine(id: string, user: IActiveUser) {
+    const result = await this.notificationRepo.softDelete({
+      id,
+      userId: user.userId,
+    });
+    if (!result.affected) {
+      throw new NotFoundException('Notification not found');
+    }
   }
 }

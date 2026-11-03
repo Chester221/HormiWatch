@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Put,
+  Delete,
   Query,
   UseGuards,
   HttpCode,
@@ -49,6 +50,13 @@ export class NotificationsController {
   @HttpCode(200)
   async markAllRead(@CurrentUser() user: IActiveUser) {
     await this.notifications.markAllRead(user);
+    return { ok: true };
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  async remove(@Param('id') id: string, @CurrentUser() user: IActiveUser) {
+    await this.notifications.deleteMine(id, user);
     return { ok: true };
   }
 

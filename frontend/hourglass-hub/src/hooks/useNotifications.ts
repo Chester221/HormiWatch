@@ -104,6 +104,32 @@ export const useMarkAllNotificationsRead = () => {
   });
 };
 
+export const useDeleteNotification = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => notificationsApi.remove(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: NOTIFICATIONS_KEY });
+      const previous = qc.getQueryData<AppNotification[]>(NOTIFICATIONS_KEY);
+      qc.setQueryData(NOTIFICATIONS_KEY, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.filter((n: AppNotification) => n.id !== id);
+      });
+      return { previous };
+    },
+    onError: (_error, _id, context: any) => {
+      if (context?.previous) {
+        qc.setQueryData(NOTIFICATIONS_KEY, context.previous);
+      }
+      toast.error('No se pudo eliminar la notificación');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: NOTIFICATIONS_KEY });
+      qc.invalidateQueries({ queryKey: COUNT_KEY });
+    },
+  });
+};
+
 /** Configuración global de notificaciones (lectura para cualquier usuario autenticado). */
 export const useGlobalNotificationSettings = (enabled = true) => {
   return useQuery({

@@ -21,7 +21,6 @@ import { HoursByDayChart } from "@/components/DashboardMG/HoursByDayChart";
 import { UpcomingTasks } from "@/components/TechnicianDashboard/UpcomingTasks";
 import { MyProjects } from "@/components/TechnicianDashboard/MyProjects";
 import { Performance } from "@/components/TechnicianDashboard/Performance";
-import { AlertsPanel } from "@/components/notifications/AlertsPanel";
 import { useNotifications, useCriticalNotificationToasts } from "@/hooks/useNotifications";
 
 const HORMI_BLUE = "#0DA2E7";
@@ -308,9 +307,6 @@ const TechnicianDashboard = () => {
                 </motion.div>
               ))}
             </div>
-
-            {/* ═══════════ ALERTAS RECIENTES ═══════════ */}
-            <AlertsPanel limit={4} />
 
             {/* ═══════════ MI RENDIMIENTO + HORAS POR DÍA ═══════════ */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-5">
