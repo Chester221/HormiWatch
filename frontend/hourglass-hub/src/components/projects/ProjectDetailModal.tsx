@@ -8,6 +8,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock,
@@ -66,11 +68,22 @@ export function ProjectDetailModal({
 
   const status = getStatusInfo(project.status);
 
+  const formatProjectDate = (
+    value: string | null | undefined,
+    pattern: string,
+  ) => {
+    if (!value) return "...";
+    const date = parseISO(value);
+    if (Number.isNaN(date.getTime())) return "...";
+    return format(date, pattern, { locale: es });
+  };
+
   // Calcular horas totales desde inicio hasta fin
   const calculateTotalHours = () => {
     if (!project.startDate || !project.endDate) return 0;
-    const start = new Date(project.startDate);
-    const end = new Date(project.endDate);
+    const start = parseISO(project.startDate);
+    const end = parseISO(project.endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
     const diffHours = Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60);
     return Math.round(diffHours);
   };
@@ -114,11 +127,10 @@ export function ProjectDetailModal({
                   <span className="h-1 w-1 rounded-full bg-muted-foreground/30 shrink-0" />
                   <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                     <Calendar className="h-4 w-4 shrink-0" />
-                    {new Date(project.endDate || project.end_date).toLocaleDateString("es-ES", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
+                    {formatProjectDate(
+                      project.endDate || project.end_date,
+                      "d 'de' MMMM 'de' yyyy",
+                    )}
                   </span>
                 </DialogDescription>
               </div>
@@ -287,13 +299,13 @@ function ProjectInfoTab({ project, totalProjectHours, budget, formatNumber }: an
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Línea de tiempo</span>
           </div>
           <p className="text-sm font-medium text-foreground">
-            {project.startDate ? new Date(project.startDate).toLocaleDateString("es-ES", { month: "short", day: "numeric" }) : "..."}
+            {formatProjectDate(project.startDate, "d MMM")}
             <span className="text-muted-foreground mx-1">→</span>
-            {project.endDate ? new Date(project.endDate).toLocaleDateString("es-ES", { month: "short", day: "numeric" }) : "..."}
+            {formatProjectDate(project.endDate, "d MMM")}
           </p>
           <p className="text-sm text-muted-foreground">{formatNumber(totalProjectHours)}h totales</p>
           <p className="text-xs text-muted-foreground/50 mt-1">
-            {project.startDate ? new Date(project.startDate).toLocaleDateString("es-ES", { month: "long", day: "numeric", year: "numeric" }) : "..."}
+            {formatProjectDate(project.startDate, "d 'de' MMMM 'de' yyyy")}
           </p>
         </div>
       </div>

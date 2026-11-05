@@ -338,7 +338,7 @@ const TechnicianDashboard = () => {
         <>
           <CreateProjectModal
             open={createProjectModalOpen}
-            onOpenChange={(open) => setCreateTaskModalOpen(open)}
+            onOpenChange={(open) => setCreateProjectModalOpen(open)}
             onSuccess={() => { refetchProjects(); setCreateProjectModalOpen(false); }}
           />
           <AddUserModal

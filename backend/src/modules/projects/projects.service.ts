@@ -561,6 +561,7 @@ export class ProjectsService {
         dto.customer_id = project.customerContact.customer.id;
         dto.customer_name = project.customerContact.customer.name;
       }
+      dto.customer_contact_id = project.customerContact.id;
       dto.contact_name = project.customerContact.name;
       dto.contact_email = project.customerContact.email;
     }

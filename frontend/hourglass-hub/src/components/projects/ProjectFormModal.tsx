@@ -1,57 +1,116 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { format } from "date-fns";
+import { format, isAfter, parseISO, startOfToday } from "date-fns";
 import { es } from "date-fns/locale";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  CalendarIcon,
+  Check,
+  ChevronDown,
+  Clock,
+  Crown,
+  DollarSign,
+  FileText,
+  FolderKanban,
+  Hash,
+  Loader2,
+  Pencil,
+  User,
+  Users,
+  X,
+  Building2,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { 
-  CalendarIcon, X, Check, Loader2, Search, FolderKanban, User, Crown, Users, 
-  Clock, DollarSign, Hash, Pencil, Building2, Sparkles, Calendar as CalendarIcon2, 
-  Users2, ArrowRight, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft,
-  Rocket, Gift, TrendingUp, Shield
-} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
-import { useCreateProject, useUpdateProject } from "@/hooks/useProjects";
-import { useClients, useClientContacts } from "@/hooks/useClientes";
-import { useTechnicians, useAllUsers } from "@/hooks/useTeamMembers";
-
-const HORMI_BLUE = '#0DA2E7';
-const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
-
-const getRoleName = (role: any): string => {
-  if (typeof role === 'string') return role;
-  if (role?.name) return role.name;
-  return '';
-};
+import {
+  useCreateProject,
+  useUpdateProject,
+  type ProjectMutationPayload,
+} from "@/hooks/useProjects";
+import { useClientContacts, useClients } from "@/hooks/useClientes";
+import { useAllUsers, useTechnicians } from "@/hooks/useTeamMembers";
 
 const projectFormSchema = z.object({
-  name: z.string().trim().min(3, "Mínimo 3 caracteres").max(100),
-  rate: z.number().min(1, "Mínimo $1").max(10000),
-  hoursPool: z.number().min(1, "Mínimo 1 hora").max(10000),
-  endDate: z.date({ required_error: "Selecciona una fecha" }),
+  name: z
+    .string()
+    .trim()
+    .min(3, "El nombre debe tener al menos 3 caracteres")
+    .max(100, "El nombre no puede superar los 100 caracteres"),
+  description: z
+    .string()
+    .max(500, "La descripción no puede superar los 500 caracteres")
+    .optional(),
+  rate: z
+    .number({ invalid_type_error: "Ingresa una tarifa válida" })
+    .min(1, "La tarifa mínima es $1")
+    .max(10000, "La tarifa máxima es $10.000"),
+  hoursPool: z
+    .number({ invalid_type_error: "Ingresa un pool de horas válido" })
+    .min(1, "El pool mínimo es 1 hora")
+    .max(10000, "El pool máximo es 10.000 horas"),
+  endDate: z.date({ required_error: "Selecciona una fecha de fin" }),
   clientId: z.string().min(1, "Selecciona un cliente"),
-  clientContactId: z.string().optional(),
+  clientContactId: z.string().min(1, "Selecciona un contacto"),
   leaderId: z.string().min(1, "Selecciona un líder"),
-  technicianIds: z.array(z.string()).min(0),
+  technicianIds: z
+    .array(z.string())
+    .min(1, "Selecciona al menos un técnico"),
 });
 
 type ProjectFormValues = z.infer<typeof projectFormSchema>;
 
 interface Project {
-  id: string; name: string; client: string; clientId?: string;
-  status: string; progress: number; hoursConsumed: number; hoursPool: number;
-  endDate: string; startDate?: string; rate?: number;
+  id: string;
+  name: string;
+  description?: string | null;
+  client: string;
+  clientId?: string;
+  contactId?: string | null;
+  status: string;
+  progress: number;
+  hoursConsumed: number;
+  hoursPool: number;
+  endDate: string;
+  startDate?: string;
+  rate?: number;
   teamLead: { name: string; avatar: string; id?: string };
   team: { name: string; avatar: string; id?: string }[];
 }
@@ -63,965 +122,859 @@ interface ProjectFormModalProps {
   onSubmit?: (data: ProjectFormValues) => void;
 }
 
-type TabType = 'general' | 'cliente' | 'equipo';
-type StepType = 'basicos' | 'cliente' | 'equipo' | 'resumen';
+const getRoleName = (role: unknown): string => {
+  if (typeof role === "string") return role;
+  if (role && typeof role === "object" && "name" in role) {
+    return String((role as { name?: string }).name || "");
+  }
+  return "";
+};
 
-export function ProjectFormModal({ open, onOpenChange, project, onSubmit }: ProjectFormModalProps) {
-  const isEditing = !!project;
+const getMemberName = (member: {
+  full_name?: string | null;
+  name?: string | null;
+  email?: string | null;
+}): string => member.full_name || member.name || member.email || "Sin nombre";
+
+export function ProjectFormModal({
+  open,
+  onOpenChange,
+  project,
+  onSubmit,
+}: ProjectFormModalProps) {
+  const isEditing = Boolean(project);
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
-  
-  const [activeTab, setActiveTab] = useState<TabType>('general');
-  const [currentStep, setCurrentStep] = useState<StepType>('basicos');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedTechnicians, setSelectedTechnicians] = useState<string[]>([]);
-  const [clientSearch, setClientSearch] = useState("");
-  const [leaderSearch, setLeaderSearch] = useState("");
-  const [techSearch, setTechSearch] = useState("");
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [clientOpen, setClientOpen] = useState(false);
+  const [technicianOpen, setTechnicianOpen] = useState(false);
 
-  const { data: clients = [] } = useClients(clientSearch);
-  const { data: allUsers = [] } = useAllUsers(leaderSearch);
-  
-  // ✅ FILTRAR LÍDERES (solo Managers, sin Admins)
-  const managers = allUsers.filter((u: any) => {
-    const roleName = getRoleName(u.role);
-    return roleName === 'Manager';
-  });
+  const { data: clients = [] } = useClients();
+  const { data: allUsers = [] } = useAllUsers();
+  const { data: technicians = [] } = useTechnicians();
 
-  const { data: technicians = [] } = useTechnicians(techSearch);
-
-  const [selectedClientId, setSelectedClientId] = useState<string | undefined>();
-  const { data: clientContacts = [] } = useClientContacts(selectedClientId);
+  const defaultValues = useMemo<ProjectFormValues>(
+    () => ({
+      name: "",
+      description: "",
+      rate: 85,
+      hoursPool: 100,
+      endDate: undefined as unknown as Date,
+      clientId: "",
+      clientContactId: "",
+      leaderId: "",
+      technicianIds: [],
+    }),
+    [],
+  );
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectFormSchema),
-    defaultValues: { name: "", rate: 85, hoursPool: 100, endDate: undefined, clientId: "", clientContactId: "", leaderId: "", technicianIds: [] },
+    mode: "onTouched",
+    defaultValues,
   });
 
-  const formValues = form.watch();
+  const watchedClientId = form.watch("clientId");
+  const watchedLeaderId = form.watch("leaderId");
+  const selectedTechnicianIds = form.watch("technicianIds") || [];
+
+  const { data: clientContacts = [], isLoading: contactsLoading } =
+    useClientContacts(watchedClientId || undefined);
+
+  const sortedClients = useMemo(
+    () => [...clients].sort((a, b) => a.name.localeCompare(b.name, "es")),
+    [clients],
+  );
+
+  const managers = useMemo(
+    () =>
+      allUsers
+        .filter((user) => {
+          const role = getRoleName(user.role);
+          return role === "Manager" || role === "Admin";
+        })
+        .sort((a, b) => getMemberName(a).localeCompare(getMemberName(b), "es")),
+    [allUsers],
+  );
+
+  const sortedTechnicians = useMemo(
+    () =>
+      [...technicians].sort((a, b) =>
+        getMemberName(a).localeCompare(getMemberName(b), "es"),
+      ),
+    [technicians],
+  );
+
+  const availableTechnicians = useMemo(
+    () => sortedTechnicians.filter((tech) => tech.id !== watchedLeaderId),
+    [sortedTechnicians, watchedLeaderId],
+  );
+
+  const selectedClient = useMemo(
+    () => sortedClients.find((client) => client.id === watchedClientId),
+    [sortedClients, watchedClientId],
+  );
 
   useEffect(() => {
-    if (open) {
-      if (project) {
-        form.reset({
-          name: project.name, rate: project.rate || 85, hoursPool: project.hoursPool,
-          endDate: new Date(project.endDate), clientId: project.clientId || "",
-          clientContactId: "", leaderId: project.teamLead.id || "",
-          technicianIds: project.team.map(t => t.id).filter(Boolean) as string[],
-        });
-        setSelectedTechnicians(project.team.map(t => t.id).filter(Boolean) as string[]);
-        setSelectedClientId(project.clientId);
-      } else {
-        form.reset({ name: "", rate: 85, hoursPool: 100, endDate: undefined, clientId: "", clientContactId: "", leaderId: "", technicianIds: [] });
-        setSelectedTechnicians([]);
-        setSelectedClientId(undefined);
-      }
-      setCurrentStep('basicos');
-      setActiveTab('general');
-      setShowSuccess(false);
-      setIsSubmitting(false);
+    if (!open) {
+      setClientOpen(false);
+      setTechnicianOpen(false);
+      return;
     }
-  }, [open, project, form]);
 
-  // ✅ HANDLE SUBMIT
+    if (project) {
+      const parsedEndDate = project.endDate ? parseISO(project.endDate) : undefined;
+      const validEndDate =
+        parsedEndDate && !Number.isNaN(parsedEndDate.getTime())
+          ? parsedEndDate
+          : undefined;
+      const leaderId = project.teamLead?.id || "";
+
+      form.reset({
+        name: project.name || "",
+        description: project.description || "",
+        rate: project.rate || 85,
+        hoursPool: project.hoursPool || 100,
+        endDate: validEndDate as Date,
+        clientId: project.clientId || "",
+        clientContactId: project.contactId || "",
+        leaderId,
+        technicianIds: (project.team || [])
+          .map((member) => member.id)
+          .filter((id): id is string => Boolean(id) && id !== leaderId),
+      });
+    } else {
+      form.reset(defaultValues);
+    }
+  }, [open, project, form, defaultValues]);
+
+  useEffect(() => {
+    if (!watchedClientId || contactsLoading) return;
+
+    const currentContactId = form.getValues("clientContactId");
+    if (
+      currentContactId &&
+      !clientContacts.some((contact) => contact.id === currentContactId)
+    ) {
+      form.setValue("clientContactId", "", {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [watchedClientId, contactsLoading, clientContacts, form]);
+
   const handleSubmit = async (data: ProjectFormValues) => {
-    setIsSubmitting(true);
+    if (!isEditing && !isAfter(data.endDate, startOfToday())) {
+      form.setError("endDate", {
+        message: "La fecha de fin debe ser posterior a hoy",
+      });
+      return;
+    }
+
+    const description = data.description?.trim()
+      ? data.description.trim()
+      : isEditing
+        ? null
+        : undefined;
+
+    const payload: ProjectMutationPayload = {
+      title: data.name.trim(),
+      description,
+      hourlyRate: data.rate,
+      poolHours: data.hoursPool,
+      endDate: format(data.endDate, "yyyy-MM-dd"),
+      customerContactId: data.clientContactId,
+      projectLeaderId: data.leaderId,
+      technicianIds: data.technicianIds,
+    };
+
     try {
-      const projectData = {
-        title: data.name,
-        hourlyRate: data.rate,
-        poolHours: data.hoursPool,
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: data.endDate.toISOString().split('T')[0],
-        customerContactId: data.clientContactId || data.clientId,
-        status: 'IN_PROGRESS',
-        projectLeaderId: data.leaderId,
-        technicianIds: data.technicianIds,
-      };
-
-      let projectId = project?.id || '';
-
-      // ✅ MUTACIONES OPTIMISTAS: el proyecto se refleja en la lista al instante
       if (isEditing && project) {
-        const updated = await updateProject.mutateAsync({ id: project.id, data: projectData });
-        projectId = updated?.id || project.id;
+        await updateProject.mutateAsync({ id: project.id, data: payload });
       } else {
-        const newProject = await createProject.mutateAsync(projectData);
-        projectId = newProject?.id || '';
+        await createProject.mutateAsync({
+          ...payload,
+          status: "IN_PROGRESS",
+          startDate: format(new Date(), "yyyy-MM-dd"),
+          clientId: data.clientId,
+          customerName: selectedClient?.name,
+        });
       }
 
-      setShowSuccess(true);
-      setIsSubmitting(false);
-      
-      if (onSubmit) onSubmit(data);
-      
-      setTimeout(() => {
-        onOpenChange(false);
-        setShowSuccess(false);
-      }, 600);
-
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-      setIsSubmitting(false);
+      onSubmit?.(data);
+      onOpenChange(false);
+    } catch (error) {
+      form.setError("root", {
+        message:
+          error instanceof Error
+            ? error.message
+            : "No se pudo guardar el proyecto",
+      });
     }
   };
 
-  const toggleTechnician = (techId: string) => {
-    const ns = selectedTechnicians.includes(techId) ? selectedTechnicians.filter(id => id !== techId) : [...selectedTechnicians, techId];
-    setSelectedTechnicians(ns);
-    form.setValue("technicianIds", ns);
-  };
+  const isPending = createProject.isPending || updateProject.isPending;
+  const contactPlaceholder = !watchedClientId
+    ? "Primero selecciona un cliente"
+    : contactsLoading
+      ? "Cargando contactos..."
+      : clientContacts.length === 0
+        ? "Este cliente no tiene contactos"
+        : "Selecciona un contacto";
 
-  const availableTechnicians = technicians.filter(m => m.id !== form.watch("leaderId"));
+  const handleLeaderChange = (value: string, onChange: (value: string) => void) => {
+    onChange(value);
 
-  const isStepValid = (step: StepType): boolean => {
-    const errors = form.formState.errors;
-    switch (step) {
-      case 'basicos':
-        return !errors.name && !errors.rate && !errors.hoursPool && !!formValues.name && !!formValues.rate && !!formValues.hoursPool;
-      case 'cliente':
-        return !errors.clientId && !errors.endDate && !!formValues.clientId && !!formValues.endDate;
-      case 'equipo':
-        return !errors.leaderId && !!formValues.leaderId;
-      case 'resumen':
-        return true;
-      default:
-        return false;
+    if (selectedTechnicianIds.includes(value)) {
+      form.setValue(
+        "technicianIds",
+        selectedTechnicianIds.filter((id) => id !== value),
+        { shouldDirty: true, shouldValidate: true },
+      );
     }
   };
 
-  const steps: { id: StepType; label: string; icon: any; color: string; description: string }[] = [
-    { id: 'basicos', label: 'Básicos', icon: FolderKanban, color: '#0DA2E7', description: 'Nombre, tarifa y horas' },
-    { id: 'cliente', label: 'Cliente', icon: Building2, color: '#F59E0B', description: 'Cliente y fecha de fin' },
-    { id: 'equipo', label: 'Equipo', icon: Users2, color: '#10B981', description: 'Líder y técnicos' },
-    { id: 'resumen', label: 'Resumen', icon: Rocket, color: '#8B5CF6', description: 'Confirmar y crear' },
-  ];
-
-  const tabs: { id: TabType; label: string; icon: any; color: string }[] = [
-    { id: 'general', label: 'General', icon: FolderKanban, color: '#0DA2E7' },
-    { id: 'cliente', label: 'Cliente', icon: Building2, color: '#F59E0B' },
-    { id: 'equipo', label: 'Equipo', icon: Users2, color: '#10B981' },
-  ];
-
-  const currentStepIndex = steps.findIndex(s => s.id === currentStep);
-  const progress = ((currentStepIndex + 1) / steps.length) * 100;
-
-  const stepContentVariants = {
-    hidden: { opacity: 0, x: 30 },
-    visible: { opacity: 1, x: 0 },
-    exit: { opacity: 0, x: -30 }
-  };
-
-  const formatNumber = (num: number): string => {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  };
-
-  // ──────────────────────────────────────────────
-  // RENDER: VERSIÓN CREACIÓN (WIZARD)
-  // ──────────────────────────────────────────────
-  const renderCreationMode = () => {
-    const renderStep = () => {
-      switch (currentStep) {
-        case 'basicos': return renderBasicStep();
-        case 'cliente': return renderClientStep();
-        case 'equipo': return renderTeamStep();
-        case 'resumen': return renderSummaryStep();
-        default: return null;
-      }
-    };
-
-    return (
-      <>
-        <div className="px-6 pt-3 flex-shrink-0">
-          <div className="relative h-1.5 w-full bg-muted/30 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full rounded-full"
-              style={{ background: HORMI_GRADIENT }}
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.5 }}
-            />
-          </div>
-          <div className="flex justify-between mt-1.5">
-            {steps.map((step, index) => {
-              const isCompleted = index < currentStepIndex;
-              const isActive = index === currentStepIndex;
-              const Icon = step.icon;
-              return (
-                <div key={step.id} className="flex flex-col items-center">
-                  <div className={cn(
-                    "flex items-center gap-1 transition-all duration-200",
-                    isCompleted ? "text-[#0DA2E7]" : isActive ? "text-foreground font-medium" : "text-muted-foreground"
-                  )}>
-                    <Icon className={cn("h-3.5 w-3.5", isCompleted && "text-[#0DA2E7]")} />
-                    <span className="hidden sm:inline text-[10px]">{step.label}</span>
-                    {isCompleted && <Check className="h-3 w-3 text-[#0DA2E7]" />}
-                  </div>
-                  <div className={cn(
-                    "h-1 w-1 rounded-full mt-0.5",
-                    isActive ? "bg-[#0DA2E7]" : isCompleted ? "bg-[#0DA2E7]" : "bg-muted-foreground/30"
-                  )} />
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentStep}
-              variants={stepContentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={{ duration: 0.3, ease: "easeInOut" }}
-            >
-              {renderStep()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div className="p-6 pt-0 border-t border-border/30 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Button 
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              className="gap-2 rounded-xl h-11 px-5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            >
-              Cancelar
-            </Button>
-            {currentStepIndex > 0 && (
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button 
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCurrentStep(steps[currentStepIndex - 1].id)}
-                  className="gap-2 rounded-xl h-11 px-6 text-sm font-medium border-2 border-border/50 hover:border-[#0DA2E7]/30 hover:bg-[#0DA2E7]/5"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Atrás
-                </Button>
-              </motion.div>
-            )}
-
-            <div className="flex-1" />
-
-            {currentStepIndex < steps.length - 1 ? (
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                <Button 
-                  type="button"
-                  onClick={() => {
-                    if (isStepValid(currentStep)) {
-                      setCurrentStep(steps[currentStepIndex + 1].id);
-                    } else {
-                      toast.warning("Completa todos los campos requeridos");
-                    }
-                  }}
-                  disabled={!isStepValid(currentStep)}
-                  className="gap-2 rounded-xl h-11 px-6 text-white font-medium shadow-md hover:shadow-lg"
-                  style={{ background: HORMI_GRADIENT }}
-                >
-                  Siguiente
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </motion.div>
-            ) : (
-              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
-                <Button 
-                  type="button"
-                  onClick={form.handleSubmit(handleSubmit)}
-                  disabled={isSubmitting || showSuccess}
-                  className="w-full gap-2.5 rounded-xl h-11 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                  style={{ background: HORMI_GRADIENT }}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Creando...
-                    </>
-                  ) : showSuccess ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      ¡Creado!
-                    </>
-                  ) : (
-                    <>
-                      <Rocket className="h-4 w-4" />
-                      Crear Proyecto
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
-                </Button>
-              </motion.div>
-            )}
-          </div>
-        </div>
-      </>
-    );
-  };
-
-  // ──────────────────────────────────────────────
-  // RENDER: VERSIÓN EDICIÓN (TABS)
-  // ──────────────────────────────────────────────
-  const renderEditMode = () => {
-    const renderTabContent = () => {
-      switch (activeTab) {
-        case 'general': return renderBasicStep();
-        case 'cliente': return renderClientStep();
-        case 'equipo': return renderTeamStep();
-        default: return null;
-      }
-    };
-
-    return (
-      <>
-        <div className="px-6 pt-3 border-b border-border/50 flex-shrink-0">
-          <div className="flex items-center gap-1 bg-muted/10 p-1 rounded-xl">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const Icon = tab.icon;
-              return (
-                <motion.button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={cn(
-                    "flex-1 text-xs rounded-lg px-4 py-2 transition-all duration-300",
-                    "flex items-center justify-center gap-2 font-medium",
-                    isActive
-                      ? 'bg-white text-[#0DA2E7] shadow-md shadow-[#0DA2E7]/10'
-                      : 'text-muted-foreground/70 hover:text-foreground hover:bg-muted/30'
-                  )}
-                >
-                  <Icon className={cn(
-                    "h-4 w-4 transition-colors",
-                    isActive ? "text-[#0DA2E7]" : "text-muted-foreground/50"
-                  )} />
-                  <span className="hidden sm:inline">{tab.label}</span>
-                </motion.button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              variants={stepContentVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-            >
-              {renderTabContent()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        <div className="p-6 pt-0 border-t border-border/30 flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Button 
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              className="gap-2 rounded-xl h-11 px-5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            >
-              Cancelar
-            </Button>
-            <div className="flex-1" />
-            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="flex-1">
-              <Button 
-                type="button"
-                onClick={form.handleSubmit(handleSubmit)}
-                disabled={isSubmitting || showSuccess}
-                className="w-full gap-2.5 rounded-xl h-11 text-white font-medium shadow-lg hover:shadow-xl transition-all duration-200"
-                style={{ background: HORMI_GRADIENT }}
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Guardando...
-                  </>
-                ) : showSuccess ? (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    ¡Actualizado!
-                  </>
-                ) : (
-                  <>
-                    <Pencil className="h-4 w-4" />
-                    Guardar Cambios
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          </div>
-        </div>
-      </>
-    );
-  };
-
-  // ──────────────────────────────────────────────
-  // RENDER DE PASOS (COMPARTIDOS)
-  // ──────────────────────────────────────────────
-
-  const renderBasicStep = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-          <Hash className="h-4 w-4 text-[#0DA2E7]" />
-          Nombre del Proyecto
-          <span className="text-red-500 text-xs">*</span>
-        </Label>
-        <div className="relative">
-          <Input 
-            placeholder="Ej: Migración de Datos 2026" 
-            {...form.register("name")} 
-            className={cn(
-              "bg-muted/10 border-2 h-12 rounded-xl pl-4 text-sm transition-all duration-200",
-              "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-              form.formState.errors.name && "border-red-300 focus:border-red-500"
-            )}
-            autoFocus={!isEditing}
-          />
-          {form.formState.errors.name && (
-            <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
-          )}
-        </div>
-        {form.formState.errors.name && (
-          <motion.p 
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-xs text-red-500 flex items-center gap-1"
-          >
-            <X className="h-3 w-3" /> {form.formState.errors.name.message}
-          </motion.p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-            <DollarSign className="h-4 w-4 text-[#0DA2E7]" />
-            Tarifa por hora (USD)
-            <span className="text-red-500 text-xs">*</span>
-          </Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-            <Input 
-              type="number" 
-              placeholder="Ej: 85" 
-              {...form.register("rate", { valueAsNumber: true })} 
-              className={cn(
-                "pl-7 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200",
-                "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-                form.formState.errors.rate && "border-red-300 focus:border-red-500"
-              )}
-            />
-            {form.formState.errors.rate && (
-              <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
-            )}
-          </div>
-          {form.formState.errors.rate && (
-            <motion.p 
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-red-500 flex items-center gap-1"
-            >
-              <X className="h-3 w-3" /> {form.formState.errors.rate.message}
-            </motion.p>
-          )}
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-            <Clock className="h-4 w-4 text-[#0DA2E7]" />
-            Pool de Horas
-            <span className="text-red-500 text-xs">*</span>
-          </Label>
-          <div className="relative">
-            <Input 
-              type="number" 
-              placeholder="Ej: 100" 
-              {...form.register("hoursPool", { valueAsNumber: true })} 
-              className={cn(
-                "bg-muted/10 border-2 h-12 rounded-xl pl-4 text-sm transition-all duration-200",
-                "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-                form.formState.errors.hoursPool && "border-red-300 focus:border-red-500"
-              )}
-            />
-            {form.formState.errors.hoursPool && (
-              <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
-            )}
-          </div>
-          {form.formState.errors.hoursPool && (
-            <motion.p 
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-xs text-red-500 flex items-center gap-1"
-            >
-              <X className="h-3 w-3" /> {form.formState.errors.hoursPool.message}
-            </motion.p>
-          )}
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
-        <Sparkles className="h-3 w-3 text-[#0DA2E7]" />
-        Ej: tarifa de $85/hora con 100 horas contratadas para el proyecto
-      </p>
-    </div>
-  );
-
-  const renderClientStep = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-          <Building2 className="h-4 w-4 text-[#0DA2E7]" />
-          Cliente
-          <span className="text-red-500 text-xs">*</span>
-        </Label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar cliente por nombre..." 
-            value={clientSearch} 
-            onChange={e => setClientSearch(e.target.value)} 
-            className="pl-10 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5" 
-          />
-        </div>
-        <Select 
-          value={form.watch("clientId")} 
-          onValueChange={(v) => { 
-            form.setValue("clientId", v); 
-            setSelectedClientId(v); 
-            form.setValue("clientContactId", ""); 
-          }}
-        >
-          <SelectTrigger className={cn(
-            "bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200",
-            "focus:border-[#0DA2E7]/50 focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-            form.formState.errors.clientId && "border-red-300 focus:border-red-500"
-          )}>
-            <SelectValue placeholder="Seleccionar cliente" />
-          </SelectTrigger>
-          <SelectContent className="bg-card border-border shadow-xl rounded-xl max-h-60">
-            {clients.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                {clientSearch ? `Sin resultados para "${clientSearch}"` : "No hay clientes disponibles"}
-              </div>
-            ) : (
-              clients.map((c: any) => (
-                <SelectItem key={c.id} value={c.id} className="cursor-pointer py-2.5">
-                  <div className="flex items-center gap-3">
-                    {c.logo_url ? (
-                      <img src={c.logo_url} alt={c.name} className="h-6 w-6 rounded-lg object-cover" />
-                    ) : (
-                      <div className="h-6 w-6 rounded-lg bg-muted flex items-center justify-center">
-                        <Building2 className="h-3 w-3 text-muted-foreground" />
-                      </div>
-                    )}
-                    <span className="font-medium">{c.name}</span>
-                  </div>
-                </SelectItem>
-              ))
-            )}
-          </SelectContent>
-        </Select>
-        {form.formState.errors.clientId && (
-          <motion.p 
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-xs text-red-500 flex items-center gap-1"
-          >
-            <X className="h-3 w-3" /> {form.formState.errors.clientId.message}
-          </motion.p>
-        )}
-        <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
-          <Building2 className="h-3 w-3 text-[#0DA2E7]" />
-          El cliente es obligatorio. Escribe para buscarlo en la lista.
-        </p>
-      </div>
-
-      {/* Contacto + Fecha de Fin en grid de 2 columnas */}
-      <div className={cn("grid gap-4", (selectedClientId && clientContacts.length > 0) && "sm:grid-cols-2")}>
-        {selectedClientId && clientContacts.length > 0 && (
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-1.5 sm:min-w-0"
-        >
-          <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-            <User className="h-4 w-4 text-[#0DA2E7]" />
-            Contacto del Cliente
-          </Label>
-          <Select 
-            value={form.watch("clientContactId")} 
-            onValueChange={(v) => form.setValue("clientContactId", v)}
-          >
-            <SelectTrigger className="bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5">
-              <SelectValue placeholder="Seleccionar contacto (opcional)" />
-            </SelectTrigger>
-            <SelectContent className="bg-card border-border shadow-xl rounded-xl">
-              {clientContacts.map((c: any) => (
-                <SelectItem key={c.id} value={c.id} className="cursor-pointer py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-xs bg-[#0DA2E7]/10 text-[#0DA2E7]">
-                        {(c.name || "C")[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-sm">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.position}</p>
-                    </div>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </motion.div>
-      )}
-
-      <div className="space-y-1.5 sm:min-w-0">
-        <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-          <CalendarIcon className="h-4 w-4 text-[#0DA2E7]" />
-          Fecha de Fin
-          <span className="text-red-500 text-xs">*</span>
-        </Label>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
-              className={cn(
-                "w-full h-12 pl-4 text-left font-normal bg-muted/10 border-2 rounded-xl text-sm transition-all duration-200",
-                "hover:bg-muted/20 hover:border-[#0DA2E7]/30",
-                "focus:border-[#0DA2E7]/50 focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-                !form.watch("endDate") && "text-muted-foreground",
-                form.formState.errors.endDate && "border-red-300 focus:border-red-500"
-              )}
-            >
-              {form.watch("endDate") ? (
-                format(form.watch("endDate"), "PPP", { locale: es })
-              ) : (
-                "Seleccionar fecha de fin"
-              )}
-              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0 bg-card border-border shadow-xl rounded-xl" align="start">
-            <Calendar 
-              mode="single" 
-              selected={form.watch("endDate")} 
-              onSelect={(d) => form.setValue("endDate", d as Date)} 
-              disabled={(date) => date < new Date()} 
-              initialFocus 
-              className="rounded-xl"
-              locale={es}
-            />
-          </PopoverContent>
-        </Popover>
-        {form.formState.errors.endDate && (
-          <motion.p 
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-xs text-red-500 flex items-center gap-1"
-          >
-            <X className="h-3 w-3" /> {form.formState.errors.endDate.message}
-          </motion.p>
-        )}
-        <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
-          <Clock className="h-3 w-3" />
-          El proyecto comenzará automáticamente el día de creación
-        </p>
-      </div>
-      </div>
-    </div>
-  );
-
-  const renderTeamStep = () => (
-    <div className="space-y-5">
-      <div className="space-y-1.5">
-        <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-          <Crown className="h-4 w-4 text-amber-400" />
-          Líder del Proyecto
-          <span className="text-red-500 text-xs">*</span>
-        </Label>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Buscar líder (Manager)..." 
-            value={leaderSearch} 
-            onChange={e => setLeaderSearch(e.target.value)} 
-            className="pl-10 bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-lg focus:shadow-[#0DA2E7]/5" 
-          />
-        </div>
-        <Select 
-          value={form.watch("leaderId")} 
-          onValueChange={(v) => { 
-            form.setValue("leaderId", v); 
-            if (selectedTechnicians.includes(v)) toggleTechnician(v); 
-          }}
-        >
-          <SelectTrigger className={cn(
-            "bg-muted/10 border-2 h-12 rounded-xl text-sm transition-all duration-200",
-            "focus:border-[#0DA2E7]/50 focus:shadow-lg focus:shadow-[#0DA2E7]/5",
-            form.formState.errors.leaderId && "border-red-300 focus:border-red-500"
-          )}>
-            <SelectValue placeholder="Seleccionar líder" />
-          </SelectTrigger>
-          <SelectContent className="bg-card border-border shadow-xl rounded-xl">
-            {managers.map((m: any) => {
-              const fullName = m.full_name || m.name || m.email || 'Sin nombre';
-              return (
-                <SelectItem key={m.id} value={m.id} className="cursor-pointer py-2.5">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-6 w-6 ring-2 ring-amber-400/30">
-                      <AvatarImage src={m.avatar_url} />
-                      <AvatarFallback className="text-xs bg-amber-100 text-amber-700 font-bold">
-                        {fullName.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-medium text-sm">{fullName}</p>
-                      <Badge className="text-[9px] bg-amber-100 text-amber-700 border-amber-200 px-1.5 py-0">Líder</Badge>
-                    </div>
-                  </div>
-                </SelectItem>
-              );
-            })}
-            {managers.length === 0 && (
-              <div className="p-4 text-center text-sm text-muted-foreground">
-                No hay managers disponibles
-              </div>
-            )}
-          </SelectContent>
-        </Select>
-        {form.formState.errors.leaderId && (
-          <motion.p 
-            initial={{ opacity: 0, y: -5 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-xs text-red-500 flex items-center gap-1"
-          >
-            <X className="h-3 w-3" /> {form.formState.errors.leaderId.message}
-          </motion.p>
-        )}
-      </div>
-
-      <div className="space-y-1.5 sm:min-w-0">
-        <Label className="text-sm font-medium flex items-center gap-2 text-foreground">
-          <Users className="h-4 w-4 text-[#0DA2E7]" />
-          Técnicos Asignados
-        </Label>
-        <div className="rounded-2xl border-2 border-border/30 bg-muted/5 p-4 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar técnico por nombre..." 
-              value={techSearch} 
-              onChange={e => setTechSearch(e.target.value)} 
-              className="pl-10 bg-white border-2 h-10 rounded-xl text-sm transition-all duration-200 focus:border-[#0DA2E7]/50 focus:shadow-md focus:shadow-[#0DA2E7]/5" 
-            />
-          </div>
-          
-          {selectedTechnicians.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {selectedTechnicians.map(tid => {
-                const tech = technicians.find(m => m.id === tid);
-                if (!tech) return null;
-                const fullName = tech.full_name || tech.name || tech.email || 'Sin nombre';
-                return (
-                  <motion.div
-                    key={tid}
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    exit={{ scale: 0 }}
-                  >
-                    <Badge className="gap-1.5 pl-1 pr-2.5 py-1.5 text-xs bg-[#0DA2E7]/10 text-foreground border-[#0DA2E7]/20 rounded-full">
-                      <Avatar className="h-5 w-5">
-                        <AvatarImage src={tech.avatar_url} />
-                        <AvatarFallback className="text-[9px] bg-[#0DA2E7]/20 text-[#0DA2E7]">
-                          {fullName.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      {fullName}
-                      <button 
-                        type="button" 
-                        onClick={() => toggleTechnician(tid)} 
-                        className="ml-1 hover:text-red-500 transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-1">
-            {availableTechnicians.length === 0 ? (
-              <p className="text-xs text-muted-foreground col-span-2 text-center py-4">
-                {techSearch ? "No se encontraron técnicos" : "No hay técnicos disponibles"}
-              </p>
-            ) : (
-              availableTechnicians.map((m: any) => {
-                const isSel = selectedTechnicians.includes(m.id);
-                const fullName = m.full_name || m.name || m.email || 'Sin nombre';
-                return (
-                  <motion.button 
-                    key={m.id} 
-                    type="button" 
-                    onClick={() => toggleTechnician(m.id)}
-                    whileHover={{ scale: 1.02, y: -1 }}
-                    whileTap={{ scale: 0.97 }}
-                    className={cn(
-                      "flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-all duration-200 text-sm",
-                      isSel 
-                        ? "bg-[#0DA2E7]/10 border-2 border-[#0DA2E7]/30 shadow-sm" 
-                        : "bg-white border-2 border-border/30 hover:border-[#0DA2E7]/20 hover:shadow-md"
-                    )}
-                  >
-                    <Avatar className="h-7 w-7 ring-1 ring-border/30">
-                      <AvatarImage src={m.avatar_url} />
-                      <AvatarFallback className="text-[9px] bg-muted/30 font-medium">
-                        {fullName.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="flex-1 truncate text-xs font-medium">{fullName}</span>
-                    {isSel && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                      >
-                        <Check className="h-4 w-4 text-[#0DA2E7] shrink-0" />
-                      </motion.div>
-                    )}
-                  </motion.button>
-                );
-              })
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground/60 flex items-center gap-1.5">
-          <Users className="h-3 w-3 text-[#0DA2E7]" />
-          Toca un técnico para asignarlo o quitarlo. El líder no puede ser técnico del mismo proyecto.
-        </p>
-      </div>
-    </div>
-  );
-
-  const renderSummaryStep = () => {
-    const data = formValues;
-    const client = clients.find((c: any) => c.id === data.clientId);
-    const leader = managers.find((m: any) => m.id === data.leaderId);
-    const techs = technicians.filter(t => selectedTechnicians.includes(t.id));
-    
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-[#0DA2E7]/5 border border-[#0DA2E7]/10 p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Nombre</p>
-            <p className="text-sm font-medium mt-0.5">{data.name || "—"}</p>
-          </div>
-          <div className="rounded-xl bg-[#0DA2E7]/5 border border-[#0DA2E7]/10 p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Tarifa</p>
-            <p className="text-sm font-medium mt-0.5">${data.rate || 0}/h</p>
-          </div>
-          <div className="rounded-xl bg-[#0DA2E7]/5 border border-[#0DA2E7]/10 p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pool de Horas</p>
-            <p className="text-sm font-medium mt-0.5">{data.hoursPool || 0}h</p>
-          </div>
-          <div className="rounded-xl bg-[#0DA2E7]/5 border border-[#0DA2E7]/10 p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha de Fin</p>
-            <p className="text-sm font-medium mt-0.5">
-              {data.endDate ? format(data.endDate, "PPP", { locale: es }) : "—"}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl bg-amber-50/30 border border-amber-200/20 p-3">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Cliente</p>
-          <p className="text-sm font-medium mt-0.5">{client?.name || "—"}</p>
-        </div>
-
-        <div className="rounded-xl bg-emerald-50/30 border border-emerald-200/20 p-3">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Equipo</p>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            {leader && (
-              <Badge className="gap-1.5 bg-amber-100 text-amber-700 border-amber-200">
-                <Crown className="h-3 w-3" />
-                {leader.full_name || leader.name || leader.email || 'Sin nombre'}
-              </Badge>
-            )}
-            {techs.map((t: any) => {
-              const fullName = t.full_name || t.name || t.email || 'Sin nombre';
-              return (
-                <Badge key={t.id} variant="secondary" className="gap-1">
-                  <Avatar className="h-4 w-4">
-                    <AvatarFallback className="text-[8px]">{fullName.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  {fullName}
-                </Badge>
-              );
-            })}
-            {techs.length === 0 && <span className="text-sm text-muted-foreground">Sin técnicos asignados</span>}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // ──────────────────────────────────────────────
-  // RENDER PRINCIPAL
-  // ──────────────────────────────────────────────
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[92vh] overflow-hidden flex flex-col bg-card border-border p-0 rounded-2xl shadow-2xl data-[state=open]:duration-300">
-        
-        <div className="relative p-6 bg-gradient-to-br from-[#0DA2E7]/20 via-[#0DA2E7]/5 to-transparent border-b border-border/50 flex-shrink-0 overflow-hidden">
-          <div className="absolute -right-32 -top-32 h-80 w-80 rounded-full bg-[#0DA2E7]/10 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 h-80 w-80 rounded-full bg-[#0DA2E7]/5 blur-3xl" />
-          
-          <div className="relative flex items-center gap-4">
-            <motion.div 
-              whileHover={{ scale: 1.05, rotate: -5 }}
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0DA2E7] to-[#0B8BC7] shadow-lg shadow-[#0DA2E7]/30"
-            >
-              {isEditing ? (
-                <Pencil className="h-7 w-7 text-white" />
-              ) : (
-                <FolderKanban className="h-7 w-7 text-white" />
-              )}
-            </motion.div>
-            
-            <div className="min-w-0 flex-1">
-              <DialogTitle className="text-2xl font-bold text-foreground flex items-center gap-3 flex-wrap">
-                {isEditing ? "Editar Proyecto" : "Nuevo Proyecto"}
-                {isEditing && project && (
-                  <Badge className="bg-[#0DA2E7]/10 text-[#0DA2E7] border-none text-[10px] px-3 py-0.5 rounded-full">
-                    {project.status || "Activo"}
-                  </Badge>
-                )}
-              </DialogTitle>
-              <DialogDescription className="text-sm text-muted-foreground/80 mt-0.5 flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
-                {isEditing 
-                  ? `Editando: ${project?.name}`
-                  : `Paso ${currentStepIndex + 1} de ${steps.length}: ${steps[currentStepIndex].description}`
-                }
-              </DialogDescription>
-            </div>
+      <DialogContent className="flex max-h-[92vh] w-[95vw] max-w-3xl flex-col gap-0 overflow-hidden rounded-2xl border-border bg-card p-0 shadow-2xl">
+        <div className="flex shrink-0 items-start gap-3 border-b border-border bg-muted/5 p-5 pr-12">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#0DA2E7]/10">
+            {isEditing ? (
+              <Pencil className="h-5 w-5 text-[#0DA2E7]" />
+            ) : (
+              <FolderKanban className="h-5 w-5 text-[#0DA2E7]" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <DialogTitle className="text-xl font-bold text-foreground">
+              {isEditing ? "Editar Proyecto" : "Nuevo Proyecto"}
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-sm text-muted-foreground">
+              {isEditing
+                ? `Actualiza la información de ${project?.name || "este proyecto"}.`
+                : "Completa la información del proyecto en una sola pantalla."}
+            </DialogDescription>
           </div>
         </div>
 
-        {isEditing ? renderEditMode() : renderCreationMode()}
-        
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+              <section className="space-y-4 rounded-xl border border-border bg-muted/5 p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <FolderKanban className="h-4 w-4 text-[#0DA2E7]" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Datos del proyecto
+                  </h3>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Hash className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Nombre <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="Ej: Migración de Datos 2026"
+                            className="h-10"
+                            autoFocus
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <FileText className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Descripción
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Objetivo y alcance del proyecto..."
+                            rows={3}
+                            className="resize-none"
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="rate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <DollarSign className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Tarifa por hora <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            step="0.01"
+                            inputMode="decimal"
+                            placeholder="85"
+                            className="h-10"
+                            value={Number.isFinite(field.value) ? field.value : ""}
+                            onChange={(event) =>
+                              field.onChange(
+                                event.target.value === ""
+                                  ? undefined
+                                  : Number(event.target.value),
+                              )
+                            }
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="hoursPool"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Pool de horas <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={1}
+                            step="1"
+                            inputMode="numeric"
+                            placeholder="100"
+                            className="h-10"
+                            value={Number.isFinite(field.value) ? field.value : ""}
+                            onChange={(event) =>
+                              field.onChange(
+                                event.target.value === ""
+                                  ? undefined
+                                  : Number(event.target.value),
+                              )
+                            }
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="endDate"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <CalendarIcon className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Fecha de fin <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className={cn(
+                                  "h-10 w-full justify-start text-left font-normal",
+                                  !field.value && "text-muted-foreground",
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value
+                                  ? format(field.value, "PPP", { locale: es })
+                                  : "Selecciona una fecha de fin"}
+                                <ChevronDown className="ml-auto h-4 w-4 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-auto p-0"
+                            align="start"
+                          >
+                            <Calendar
+                              mode="single"
+                              selected={field.value}
+                              onSelect={field.onChange}
+                              disabled={(date) =>
+                                !isEditing && !isAfter(date, startOfToday())
+                              }
+                              locale={es}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <p className="text-xs text-muted-foreground">
+                          {isEditing
+                            ? "La fecha de inicio no se modifica al editar."
+                            : "El proyecto comenzará automáticamente hoy."}
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-xl border border-border bg-muted/5 p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-[#0DA2E7]" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Cliente
+                  </h3>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="clientId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Building2 className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Cliente <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <Popover open={clientOpen} onOpenChange={setClientOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                aria-expanded={clientOpen}
+                                className={cn(
+                                  "h-10 w-full justify-between font-normal",
+                                  !field.value && "text-muted-foreground",
+                                )}
+                              >
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <Building2 className="h-4 w-4 shrink-0 opacity-60" />
+                                  <span className="truncate">
+                                    {selectedClient?.name ||
+                                      "Selecciona un cliente"}
+                                  </span>
+                                </span>
+                                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            className="w-[var(--radix-popover-trigger-width)] p-0"
+                            align="start"
+                          >
+                            <Command>
+                              <CommandInput placeholder="Buscar cliente..." />
+                              <CommandList>
+                                <CommandEmpty>
+                                  No se encontraron clientes.
+                                </CommandEmpty>
+                                <CommandGroup>
+                                  {sortedClients.map((client) => (
+                                    <CommandItem
+                                      key={client.id}
+                                      value={`${client.name} ${
+                                        client.ruc || ""
+                                      } ${client.id}`}
+                                      onSelect={() => {
+                                        if (field.value !== client.id) {
+                                          field.onChange(client.id);
+                                          form.setValue(
+                                            "clientContactId",
+                                            "",
+                                            {
+                                              shouldDirty: true,
+                                              shouldValidate: false,
+                                            },
+                                          );
+                                          form.clearErrors("clientContactId");
+                                        }
+                                        setClientOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          field.value === client.id
+                                            ? "opacity-100"
+                                            : "opacity-0",
+                                        )}
+                                      />
+                                      <span className="truncate">
+                                        {client.name}
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="clientContactId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <User className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                          Contacto <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={field.onChange}
+                          disabled={
+                            !watchedClientId ||
+                            contactsLoading ||
+                            clientContacts.length === 0
+                          }
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder={contactPlaceholder} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {clientContacts.map((contact) => (
+                              <SelectItem key={contact.id} value={contact.id}>
+                                <span className="flex items-center gap-2">
+                                  <Avatar className="h-6 w-6">
+                                    <AvatarFallback className="bg-[#0DA2E7]/10 text-[10px] text-[#0DA2E7]">
+                                      {(contact.name || "C")
+                                        .charAt(0)
+                                        .toUpperCase()}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="flex flex-col">
+                                    <span>{contact.name}</span>
+                                    {(contact.position || contact.email) && (
+                                      <span className="text-xs text-muted-foreground">
+                                        {contact.position || contact.email}
+                                      </span>
+                                    )}
+                                  </span>
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {watchedClientId &&
+                          !contactsLoading &&
+                          clientContacts.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Este cliente no tiene contactos. Créalo desde la
+                              sección Clientes para poder continuar.
+                            </p>
+                          )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-xl border border-border bg-muted/5 p-4 sm:p-5">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-[#0DA2E7]" />
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Equipo
+                  </h3>
+                </div>
+
+                <div className="grid gap-4">
+                  <FormField
+                    control={form.control}
+                    name="leaderId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          <Crown className="h-3.5 w-3.5 text-amber-500" />
+                          Líder del proyecto <span className="text-destructive">*</span>
+                        </FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={(value) =>
+                            handleLeaderChange(value, field.onChange)
+                          }
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder="Selecciona un líder" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {managers.map((manager) => {
+                              const fullName = getMemberName(manager);
+                              return (
+                                <SelectItem key={manager.id} value={manager.id}>
+                                  <span className="flex items-center gap-2">
+                                    <Avatar className="h-6 w-6">
+                                      <AvatarImage
+                                        src={manager.avatar_url || undefined}
+                                      />
+                                      <AvatarFallback className="bg-amber-100 text-[10px] font-semibold text-amber-700">
+                                        {fullName.charAt(0).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span>{fullName}</span>
+                                      <Badge
+                                        variant="secondary"
+                                        className="ml-1 px-1.5 py-0 text-[9px]"
+                                      >
+                                        {getRoleName(manager.role) || "Manager"}
+                                      </Badge>
+                                  </span>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        {managers.length === 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            No hay líderes disponibles.
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="technicianIds"
+                    render={({ field }) => {
+                      const value = field.value || [];
+
+                      return (
+                        <FormItem>
+                          <FormLabel className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <Users className="h-3.5 w-3.5 text-[#0DA2E7]" />
+                            Técnicos <span className="text-destructive">*</span>
+                          </FormLabel>
+                          <Popover
+                            open={technicianOpen}
+                            onOpenChange={setTechnicianOpen}
+                          >
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={technicianOpen}
+                                  className={cn(
+                                    "h-10 w-full justify-between font-normal",
+                                    value.length === 0 &&
+                                      "text-muted-foreground",
+                                  )}
+                                >
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <Users className="h-4 w-4 shrink-0 opacity-60" />
+                                    <span className="truncate">
+                                      {value.length === 0
+                                        ? "Selecciona al menos un técnico"
+                                        : `${value.length} técnico${
+                                            value.length === 1 ? "" : "s"
+                                          } seleccionado${
+                                            value.length === 1 ? "" : "s"
+                                          }`}
+                                    </span>
+                                  </span>
+                                  <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-[var(--radix-popover-trigger-width)] p-0"
+                              align="start"
+                            >
+                              <Command>
+                                <CommandInput placeholder="Buscar técnico..." />
+                                <CommandList>
+                                  <CommandEmpty>
+                                    No se encontraron técnicos.
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {availableTechnicians.map((technician) => {
+                                      const fullName =
+                                        getMemberName(technician);
+                                      const isSelected = value.includes(
+                                        technician.id,
+                                      );
+
+                                      return (
+                                        <CommandItem
+                                          key={technician.id}
+                                          value={`${fullName} ${
+                                            technician.email || ""
+                                          } ${technician.id}`}
+                                          onSelect={() => {
+                                            const next = isSelected
+                                              ? value.filter(
+                                                  (id) => id !== technician.id,
+                                                )
+                                              : [...value, technician.id];
+                                            field.onChange(next);
+                                          }}
+                                        >
+                                          <Checkbox
+                                            checked={isSelected}
+                                            className="pointer-events-none mr-3"
+                                            aria-hidden="true"
+                                          />
+                                          <Avatar className="mr-2 h-6 w-6">
+                                            <AvatarImage
+                                              src={
+                                                technician.avatar_url ||
+                                                undefined
+                                              }
+                                            />
+                                            <AvatarFallback className="text-[10px]">
+                                              {fullName
+                                                .charAt(0)
+                                                .toUpperCase()}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                          <span className="truncate">
+                                            {fullName}
+                                          </span>
+                                        </CommandItem>
+                                      );
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+
+                          {value.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {value.map((technicianId) => {
+                                const technician = sortedTechnicians.find(
+                                  (item) => item.id === technicianId,
+                                );
+                                if (!technician) return null;
+                                const fullName = getMemberName(technician);
+
+                                return (
+                                  <Badge
+                                    key={technicianId}
+                                    variant="secondary"
+                                    className="gap-1.5 py-1 pl-1 pr-2 font-normal"
+                                  >
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarImage
+                                        src={
+                                          technician.avatar_url || undefined
+                                        }
+                                      />
+                                      <AvatarFallback className="text-[9px]">
+                                        {fullName.charAt(0).toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <span className="max-w-[180px] truncate">
+                                      {fullName}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                                      onClick={() =>
+                                        field.onChange(
+                                          value.filter(
+                                            (id) => id !== technicianId,
+                                          ),
+                                        )
+                                      }
+                                      aria-label={`Quitar a ${fullName}`}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <p className="text-xs text-muted-foreground">
+                            El líder no puede asignarse también como técnico.
+                          </p>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
+              </section>
+
+              {form.formState.errors.root?.message && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  {form.formState.errors.root.message}
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="shrink-0 gap-2 border-t border-border bg-card p-4 sm:flex-row sm:justify-end sm:px-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isPending}
+                className="w-full sm:w-auto"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isPending}
+                className="w-full sm:w-auto"
+              >
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isEditing ? (
+                  <Pencil className="h-4 w-4" />
+                ) : (
+                  <FolderKanban className="h-4 w-4" />
+                )}
+                {isPending
+                  ? isEditing
+                    ? "Guardando..."
+                    : "Creando..."
+                  : isEditing
+                    ? "Guardar cambios"
+                    : "Crear proyecto"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

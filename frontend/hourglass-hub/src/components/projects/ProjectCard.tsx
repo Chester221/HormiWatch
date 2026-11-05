@@ -5,6 +5,8 @@ import {
   Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Clock, Users, Calendar, Lock, Pencil, Trash2, FolderKanban,
@@ -246,17 +248,15 @@ export function ProjectCard({
           <span className="flex items-center gap-1 whitespace-nowrap">
             <Calendar className={cn("text-muted-foreground/40", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
             <span className="font-medium">
-              {project?.startDate ? new Date(project.startDate).toLocaleDateString("es-ES", { 
-                day: "numeric", 
-                month: "short" 
-              }) : "..."}
+              {project?.startDate
+                ? format(parseISO(project.startDate), "d MMM", { locale: es })
+                : "..."}
             </span>
             <span className="text-muted-foreground/30">→</span>
             <span className="font-medium">
-              {project?.endDate ? new Date(project.endDate).toLocaleDateString("es-ES", { 
-                day: "numeric", 
-                month: "short" 
-              }) : "..."}
+              {project?.endDate
+                ? format(parseISO(project.endDate), "d MMM", { locale: es })
+                : "..."}
             </span>
           </span>
         </motion.div>
@@ -512,9 +512,9 @@ export function ProjectListRow({
       {/* Fecha fin */}
       <span className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground shrink-0 w-28">
         <Calendar className="h-3.5 w-3.5 text-muted-foreground/40" />
-        {project?.endDate ? new Date(project.endDate).toLocaleDateString("es-ES", {
-          day: "numeric", month: "short", year: "numeric",
-        }) : "..."}
+        {project?.endDate
+          ? format(parseISO(project.endDate), "d MMM yyyy", { locale: es })
+          : "..."}
       </span>
 
       {/* Estado */}

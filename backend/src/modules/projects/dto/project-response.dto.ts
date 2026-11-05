@@ -13,6 +13,10 @@ export class ProjectResponseDto {
   @Expose()
   title: string;
 
+  @ApiProperty({ required: false })
+  @Expose()
+  description?: string;
+
   @ApiProperty()
   @Expose()
   hourlyRate: number;
@@ -67,6 +71,10 @@ export class ProjectResponseDto {
   @ApiProperty({ required: false })
   @Expose()
   customer_name?: string;
+
+  @ApiProperty({ required: false })
+  @Expose()
+  customer_contact_id?: string;
 
   @ApiProperty({ required: false })
   @Expose()

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,13 +168,13 @@ const ProjectDetailModal = ({
                 <div className="p-3 rounded-lg border border-border bg-muted/20">
                   <p className="text-xs text-muted-foreground">Fecha de Inicio</p>
                   <p className="text-sm font-semibold text-foreground mt-0.5">
-                    {format(new Date(project.startDate), "dd 'de' MMMM 'de' yyyy")}
+                    {format(parseISO(project.startDate), "dd 'de' MMMM 'de' yyyy")}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg border border-border bg-muted/20">
                   <p className="text-xs text-muted-foreground">Fecha de Fin</p>
                   <p className="text-sm font-semibold text-foreground mt-0.5">
-                    {format(new Date(project.endDate), "dd 'de' MMMM 'de' yyyy")}
+                    {format(parseISO(project.endDate), "dd 'de' MMMM 'de' yyyy")}
                   </p>
                 </div>
               </div>
@@ -549,9 +549,9 @@ export default function ProyectosTab({ projectStatus, tasks, clients, onViewClie
                         <TableCell className="text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <CalendarDays className="h-3 w-3 flex-shrink-0" />
-                            <span>{format(new Date(project.startDate), "dd/MM")}</span>
+                            <span>{format(parseISO(project.startDate), "dd/MM")}</span>
                             <span className="mx-0.5">→</span>
-                            <span>{format(new Date(project.endDate), "dd/MM")}</span>
+                            <span>{format(parseISO(project.endDate), "dd/MM")}</span>
                           </div>
                           <p className="text-[10px] mt-0.5">
                             {project.isDelayed ? <span className="text-destructive">+{project.daysDelayed}d</span> : <span>{project.daysRemaining}d rest.</span>}

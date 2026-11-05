@@ -24,6 +24,7 @@ import { usersApi } from "@/lib/api";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { parseISO } from "date-fns";
 
 const HORMI_BLUE = '#0DA2E7';
 
@@ -314,8 +315,9 @@ export default function Projects() {
     
     const calculateTotalHours = (startDate?: string, endDate?: string): number => {
       if (!startDate || !endDate) return 0;
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = parseISO(startDate);
+      const end = parseISO(endDate);
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
       const diffHours = Math.abs(end.getTime() - start.getTime()) / (1000 * 60 * 60);
       return Math.round(diffHours);
     };
@@ -328,7 +330,14 @@ export default function Projects() {
       : 0;
     
     const isClosed = item.status === 'COMPLETED' || item.status === 'CANCELLED' || item.status === 'completed' || progress >= 100;
-    const isDelayed = new Date(item.endDate || item.end_date || new Date()) < new Date() && progress < 100 && !isClosed;
+    const projectEndDate = parseISO(
+      item.endDate || item.end_date || new Date().toISOString(),
+    );
+    const isDelayed =
+      !Number.isNaN(projectEndDate.getTime()) &&
+      projectEndDate < new Date() &&
+      progress < 100 &&
+      !isClosed;
     
     let status = item.status || "active";
     if (isClosed) status = "completed";
@@ -342,8 +351,10 @@ export default function Projects() {
     return {
       id: item.id,
       name: item.title || item.name || 'Proyecto sin nombre',
+      description: item.description || "",
       client: clientName,
       clientId: clientId,
+      contactId: item.customer_contact_id || item.contact_id || null,
       status: status,
       statusRaw: item.status || null,
       hoursPool: hoursPool,

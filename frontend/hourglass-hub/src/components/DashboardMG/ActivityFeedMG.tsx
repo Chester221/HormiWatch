@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { format, formatDistanceToNow } from "date-fns";
+import { format, formatDistanceToNow, parseISO } from "date-fns";
 import { es } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -1505,7 +1505,7 @@ const ProjectsView = ({ projectStatus, tasks, technicians }: any) => {
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1">
                       <CalendarDays className="h-3 w-3" />
-                      {format(new Date(p.startDate), "dd/MM/yy")} → {format(new Date(p.endDate), "dd/MM/yy")}
+                      {format(parseISO(p.startDate), "dd/MM/yy")} → {format(parseISO(p.endDate), "dd/MM/yy")}
                     </span>
                     {lastActivity && (
                       <span className="flex items-center gap-1">

@@ -10,6 +10,12 @@ export type Project = {
   description: string | null;
   status: string;
   client_id?: string;
+  customer_id?: string | null;
+  customer_name?: string | null;
+  customer_contact_id?: string | null;
+  contact_id?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
   clients?: { name: string; logo_url?: string } | null;
   pool_hours?: number;
   hours_consumed?: number;
@@ -21,6 +27,22 @@ export type Project = {
   project_leader_id?: string | null;
   technicians?: { id: string; name?: string; lastName?: string }[];
   tasks?: any[];
+};
+
+export type ProjectMutationPayload = {
+  title?: string;
+  name?: string;
+  description?: string | null;
+  status?: string;
+  hourlyRate?: number;
+  poolHours?: number;
+  startDate?: string;
+  endDate?: string;
+  customerContactId?: string;
+  projectLeaderId?: string;
+  technicianIds?: string[];
+  clientId?: string;
+  customerName?: string;
 };
 
 const PROJECTS_KEY = ['projects'] as const;
@@ -40,6 +62,10 @@ const normalizeProject = (project: any, tasksByProject: Record<string, any[]> = 
     created_by: project.createdBy || project.created_by || null,
     customer_id: project.customer_id || null,
     customer_name: project.customer_name || 'Sin cliente',
+    customer_contact_id: project.customer_contact_id || project.customerContact?.id || null,
+    contact_id: project.customer_contact_id || project.customerContact?.id || null,
+    contact_name: project.contact_name || project.customerContact?.name || null,
+    contact_email: project.contact_email || project.customerContact?.email || null,
     client_id: project.client_id || project.customer_id || null,
     clients: project.clients ??
       (project.customer_id
@@ -119,19 +145,7 @@ export const useProjects = () => {
 export const useCreateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (newProject: {
-      title?: string;
-      name?: string;
-      description?: string | null;
-      status?: string;
-      hourlyRate?: number;
-      poolHours?: number;
-      startDate?: string;
-      endDate?: string;
-      customerContactId?: string;
-      projectLeaderId?: string;
-      technicianIds?: string[];
-    }) => {
+    mutationFn: async (newProject: ProjectMutationPayload) => {
       // ✅ PAYLOAD CAMELCASE (0 snake_case): el DTO usa title, hourlyRate,
       // poolHours, startDate... Inyectar pool_hours/hourly_rate causaba
       // 400 "property pool_hours should not exist".
@@ -166,11 +180,11 @@ export const useCreateProject = () => {
         end_date: newProject.endDate || (newProject as any).end_date,
         created_at: new Date().toISOString(),
         created_by: (newProject as any).created_by,
-        project_leader_id: (newProject as any).project_leader_id,
-        customer_id: (newProject as any).client_id,
-        customer_name: (newProject as any).customer_name,
-        clients: (newProject as any).client_id
-          ? { name: (newProject as any).customer_name || 'Sin cliente' }
+        project_leader_id: newProject.projectLeaderId,
+        customer_id: newProject.clientId,
+        customer_name: newProject.customerName,
+        clients: newProject.clientId
+          ? { name: newProject.customerName || 'Sin cliente' }
           : null,
       });
 
@@ -205,7 +219,7 @@ export const useCreateProject = () => {
 export const useUpdateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<Project> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: ProjectMutationPayload }) => {
       const updated = await projectsApi.update(id, data);
       return updated;
     },
@@ -222,18 +236,10 @@ export const useUpdateProject = () => {
           if (data.title !== undefined) patch.name = data.title;
           if (data.name !== undefined) patch.name = data.name;
           if (data.status !== undefined) patch.status = data.status;
-          if (data.pool_hours !== undefined || (data as any).poolHours !== undefined) {
-            patch.pool_hours = (data as any).poolHours ?? data.pool_hours;
-          }
-          if (data.hourly_rate !== undefined || (data as any).hourlyRate !== undefined) {
-            patch.hourly_rate = (data as any).hourlyRate ?? data.hourly_rate;
-          }
-          if (data.start_date !== undefined || (data as any).startDate !== undefined) {
-            patch.start_date = (data as any).startDate ?? data.start_date;
-          }
-          if (data.end_date !== undefined || (data as any).endDate !== undefined) {
-            patch.end_date = (data as any).endDate ?? data.end_date;
-          }
+          if (data.poolHours !== undefined) patch.pool_hours = data.poolHours;
+          if (data.hourlyRate !== undefined) patch.hourly_rate = data.hourlyRate;
+          if (data.startDate !== undefined) patch.start_date = data.startDate;
+          if (data.endDate !== undefined) patch.end_date = data.endDate;
           if (data.description !== undefined) patch.description = data.description;
           return { ...p, ...patch };
         });

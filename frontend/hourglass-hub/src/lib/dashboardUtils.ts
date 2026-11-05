@@ -4,6 +4,9 @@
  * para que todos los componentes usen la misma lógica a prueba de errores.
  */
 
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
+
 type AnyRecord = Record<string, unknown>;
 
 export const toFinite = (value: unknown, fallback = 0): number => {
@@ -224,11 +227,7 @@ export const projectStatusInfo = (status: unknown): { label: string; cls: string
  */
 export const formatProjectDate = (value: unknown): string | null => {
   if (value == null || value === '') return null;
-  const str = String(value);
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(str);
-  const date = match
-    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
-    : new Date(str);
+  const date = value instanceof Date ? value : parseISO(String(value));
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+  return format(date, 'dd MMM yyyy', { locale: es });
 };
