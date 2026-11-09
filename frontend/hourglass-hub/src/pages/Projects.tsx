@@ -127,7 +127,6 @@ export default function Projects() {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; projectId: string; projectName: string }>({ open: false, projectId: '', projectName: '' });
-  const [isDeleting, setIsDeleting] = useState(false);
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -353,6 +352,7 @@ export default function Projects() {
       id: item.id,
       name: item.title || item.name || 'Proyecto sin nombre',
       description: item.description || "",
+      createdBy: item.created_by || item.createdBy || null,
       client: clientName,
       clientId: clientId,
       contactId: item.customer_contact_id || item.contact_id || null,
@@ -454,6 +454,22 @@ export default function Projects() {
   const handleDeleteClick = (id: string, name: string, e: React.MouseEvent) => { 
     if (!canEdit) return; 
     e.stopPropagation(); 
+
+    const target = projects.find((p: any) => String(p.id) === String(id));
+    if (!target) return;
+
+    if (target.createdBy && target.createdBy !== user?.id) {
+      toast.error('Solo el creador del proyecto puede eliminarlo');
+      return;
+    }
+
+    if (target.totalTasks > 0 && !target.isClosed) {
+      toast.error(
+        `No puedes eliminar "${name}" porque tiene ${target.totalTasks} tarea(s). Solo se pueden eliminar proyectos completados o cancelados.`,
+      );
+      return;
+    }
+
     setDeleteDialog({ open: true, projectId: id, projectName: name }); 
   };
   
@@ -462,17 +478,11 @@ export default function Projects() {
     navigate(`/team?member=${memberId}`); 
   };
 
-  const confirmDelete = async () => {
-    setIsDeleting(true);
-    try {
-      // ✅ DELETE OPTIMISTA: desaparece al instante de la lista
-      await deleteProjectMutation.mutateAsync({ projectId: deleteDialog.projectId, userId: user?.id || '' });
-      setDeleteDialog({ open: false, projectId: '', projectName: '' });
-      loadProjectMembers();
-    } catch (error: any) { 
-      toast.error(`Error: ${error.message}`); 
-    }
-    setIsDeleting(false);
+  const confirmDelete = () => {
+    const projectId = deleteDialog.projectId;
+    // Cierre inmediato: la mutación sigue en segundo plano y revierte si falla.
+    setDeleteDialog({ open: false, projectId: '', projectName: '' });
+    deleteProjectMutation.mutate({ projectId });
   };
 
   const getStatusColor = (status: string) => statusConfig[status]?.color || HORMI_BLUE;
@@ -802,11 +812,10 @@ export default function Projects() {
                   <Button
                     type="button"
                     onClick={confirmDelete}
-                    disabled={isDeleting}
-                    className="h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-10 px-6 gap-2 text-white text-sm rounded-xl flex-1 shadow-md hover:shadow-lg transition-all bg-red-500 hover:bg-red-600"
                   >
-                    {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    {isDeleting ? "Eliminando..." : "Eliminar"}
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar
                   </Button>
                 </DialogFooter>
               </>

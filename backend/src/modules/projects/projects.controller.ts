@@ -76,8 +76,9 @@ export class ProjectsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateProjectDto: UpdateProjectDto,
+    @CurrentUser() user: IActiveUser,
   ): Promise<ProjectResponseDto> {
-    return this.projectsService.update(id, updateProjectDto);
+    return this.projectsService.update(id, updateProjectDto, user);
   }
 
   @Delete(':id')

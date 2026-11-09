@@ -44,19 +44,11 @@ export class NotificationsScheduler {
   })
   async dailyDigest() {
     const s = await this.settings.get();
-    if (!s.digestEnabled) return;
-
-    // El resumen diario se entrega por correo. Mientras el canal de email
-    // este deshabilitado ("Muy pronto") no se envia nada; la hora y los
-    // umbrales quedan guardados y aplican al habilitarse el correo.
-    if (s.channels?.email !== true) {
-      this.logger.log(
-        'Resumen diario omitido: el canal de correo esta deshabilitado',
-      );
-      return;
-    }
 
     // ── 1. Deteccion diaria: tareas estancadas y tecnicos inactivos ──
+    // Se ejecuta antes de las validaciones del resumen por correo: las
+    // alertas del sistema deben emitirse a Discord/in-app aunque el email
+    // este deshabilitado. El dispatcher aplica los toggles de cada canal.
     let detection: {
       staleTasks: DigestStaleTaskRow[];
       inactiveTechnicians: DigestInactiveTechnicianRow[];
@@ -67,6 +59,18 @@ export class NotificationsScheduler {
       this.logger.warn(
         `Deteccion de tareas/tecnicos fallo: ${e instanceof Error ? e.message : String(e)}`,
       );
+    }
+
+    if (!s.digestEnabled) return;
+
+    // El resumen diario se entrega por correo. Mientras el canal de email
+    // este deshabilitado ("Muy pronto") no se envia nada; la hora y los
+    // umbrales quedan guardados y aplican al habilitarse el correo.
+    if (s.channels?.email !== true) {
+      this.logger.log(
+        'Resumen diario omitido: el canal de correo esta deshabilitado',
+      );
+      return;
     }
 
     // ── 2. Notificaciones no criticas pendientes de incluir en el resumen ──

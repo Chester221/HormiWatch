@@ -252,7 +252,16 @@ export const useUpdateProject = () => {
         const real = normalizeProject(updated);
         queryClient.setQueriesData({ queryKey: PROJECTS_KEY }, (old) => {
           if (!Array.isArray(old)) return old;
-          return old.map((p: any) => (String(p.id) === String(real.id) ? { ...p, ...real } : p));
+          return old.map((p: any) =>
+            String(p.id) === String(real.id)
+              ? {
+                  ...p,
+                  ...real,
+                  tasks: p.tasks,
+                  hours_consumed: p.hours_consumed,
+                }
+              : p,
+          );
         });
       }
       void queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
@@ -269,30 +278,8 @@ export const useDeleteProject = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ projectId, userId }: { projectId: string; userId: string }) => {
-      const project = await projectsApi.getById(projectId);
-      
-      if (!project) throw new Error('Proyecto no encontrado');
-
-      if (project.created_by && project.created_by !== userId) {
-        throw new Error('Solo el creador del proyecto puede eliminarlo');
-      }
-
-      const projectTasks = await fetchAllPages<Record<string, unknown>>(
-        (page) => tasksApi.getAll(
-          { order: 'DESC', take: 100, page, projectId },
-        ),
-        { take: 100 },
-      );
-
-      if (projectTasks.length > 0) {
-        if (project.status !== 'Completed' && project.status !== 'Cancelled') {
-          throw new Error(`No puedes eliminar "${project.name}" porque tiene ${projectTasks.length} tarea(s). Solo se pueden eliminar proyectos completados o cancelados.`);
-        }
-      }
-
+    mutationFn: async ({ projectId }: { projectId: string }) => {
       await projectsApi.delete(projectId);
-
       return true;
     },
     onMutate: async ({ projectId }) => {

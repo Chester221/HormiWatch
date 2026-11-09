@@ -278,7 +278,6 @@ export function ProjectFormModal({
   };
 
   const handleMutationSuccess = (data: ProjectFormValues) => {
-    onOpenChange(false);
     onSubmit?.(data);
   };
 
@@ -311,6 +310,8 @@ export function ProjectFormModal({
       onSuccess: () => handleMutationSuccess(data),
       onError: handleMutationError,
     };
+
+    onOpenChange(false);
 
     if (isEditing && project) {
       updateProject.mutate(

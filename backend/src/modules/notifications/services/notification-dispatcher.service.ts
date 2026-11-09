@@ -11,10 +11,19 @@ import { NotificationSettingsService } from './notification-settings.service';
 import { NotificationRecipientsResolver } from './recipients.resolver.service';
 import { DiscordService } from './discord.service';
 import { DiscordChannelKey } from './discord-embed.builder';
+import type { DiscordWebhooks } from '../interfaces/notification-settings.interface';
 import { WhatsAppService } from './whatsapp.service';
 import { NotificationCategory } from '../enums/notification-category.enum';
 import { User } from 'src/modules/users/entities/user.entity';
 import { MailService } from 'src/mails/mails.service';
+
+const DISCORD_CHANNEL_KEYS: DiscordChannelKey[] = [
+  'alertas',
+  'usuarios',
+  'contratos',
+  'proyectos',
+  'tareas',
+];
 
 @Injectable()
 export class NotificationDispatcherService {
@@ -46,7 +55,17 @@ export class NotificationDispatcherService {
     // lleguen aunque no haya administradores configurados.
     if (s.channels?.discord === true) {
       const channel = this.discordChannelFor(event.category);
-      await this.discord.sendEvent(s.discord || {}, channel, event);
+      const webhooks = this.resolveDiscordWebhooks(
+        s.discord || {},
+        s.discordWebhookUrl,
+      );
+      if (webhooks[channel]) {
+        await this.discord.sendEvent(webhooks, channel, event);
+      } else {
+        this.logger.warn(
+          `Discord webhook no configurado para el canal "${channel}" (evento "${event.key}")`,
+        );
+      }
     }
 
     const resolvedUserIds = await this.resolver.resolve(event.audiences);
@@ -103,6 +122,25 @@ export class NotificationDispatcherService {
           .catch(() => undefined);
       }
     }
+  }
+
+  private resolveDiscordWebhooks(
+    configured: DiscordWebhooks,
+    singleWebhook?: string | null,
+  ): DiscordWebhooks {
+    const result: DiscordWebhooks = { ...configured };
+    const fallback = (singleWebhook || '').trim();
+
+    for (const key of DISCORD_CHANNEL_KEYS) {
+      const candidates = [configured[key], configured.alertas, fallback];
+      const url = candidates.find(
+        (value): value is string =>
+          typeof value === 'string' && value.trim().length > 0,
+      );
+      if (url) result[key] = url.trim();
+    }
+
+    return result;
   }
 
   private discordChannelFor(category: NotificationCategory): DiscordChannelKey {

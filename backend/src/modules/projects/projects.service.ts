@@ -143,6 +143,76 @@ export class ProjectsService {
     );
   }
 
+  private dateKey(
+    value: { toString(): string } | null | undefined,
+  ): string | null {
+    if (value === null || value === undefined) return null;
+    return value.toString();
+  }
+
+  private collectProjectChangeLabels(
+    previous: {
+      title: string;
+      description: string | null;
+      hourlyRate: number;
+      startDate: string | null;
+      endDate: string | null;
+      projectLeaderId: string | null;
+      technicianIds: string[];
+      customerContactId: string | null;
+    },
+    project: Project,
+  ): string[] {
+    const current = {
+      title: project.title || '',
+      description: project.description ?? null,
+      hourlyRate: Number(project.hourlyRate ?? 0),
+      startDate: this.dateKey(project.startDate),
+      endDate: this.dateKey(project.endDate),
+      projectLeaderId: project.projectLeader?.id ?? null,
+      technicianIds: (project.technicians || []).map((t) => t.id).sort(),
+      customerContactId: project.customerContact?.id ?? null,
+    };
+
+    const sameTechnicians =
+      previous.technicianIds.length === current.technicianIds.length &&
+      previous.technicianIds.every(
+        (id, index) => id === current.technicianIds[index],
+      );
+
+    const changes: string[] = [];
+    const addIfChanged = (label: string, changed: boolean) => {
+      if (changed) changes.push(label);
+    };
+
+    addIfChanged('nombre', (previous.title || '') !== current.title);
+    addIfChanged(
+      'descripción',
+      (previous.description ?? '') !== (current.description ?? ''),
+    );
+    addIfChanged('tarifa por hora', previous.hourlyRate !== current.hourlyRate);
+    addIfChanged('fecha de inicio', previous.startDate !== current.startDate);
+    addIfChanged('fecha de fin', previous.endDate !== current.endDate);
+    addIfChanged('líder', previous.projectLeaderId !== current.projectLeaderId);
+    addIfChanged('técnicos asignados', !sameTechnicians);
+    addIfChanged(
+      'contacto del cliente',
+      previous.customerContactId !== current.customerContactId,
+    );
+
+    return changes;
+  }
+
+  private async resolveActorName(user?: IActiveUser): Promise<string> {
+    if (!user?.userId) return 'Sistema';
+    try {
+      const actor = await this.usersService.findOneById(user.userId);
+      return actor.profile?.name || actor.email || user.userId;
+    } catch {
+      return user.userId;
+    }
+  }
+
   async create(
     createProjectDto: CreateProjectDto,
     creator?: IActiveUser,
@@ -368,11 +438,21 @@ export class ProjectsService {
   async update(
     id: string,
     updateProjectDto: UpdateProjectDto,
+    user?: IActiveUser,
   ): Promise<ProjectResponseDto> {
     this.logger.log(`Updating project with ID: ${id}`);
     const project = await this.projectRepository.findOne({
       where: { id },
-      relations: ['projectLeader', 'technicians'],
+      relations: [
+        'projectLeader',
+        'projectLeader.profile',
+        'projectLeader.role',
+        'technicians',
+        'technicians.profile',
+        'technicians.role',
+        'customerContact',
+        'customerContact.customer',
+      ],
     });
 
     if (!project) {
@@ -382,9 +462,19 @@ export class ProjectsService {
     const { projectLeaderId, technicianIds, customerContactId, ...updateData } =
       updateProjectDto;
 
-    // Capturar estado previo para eventos de dominio
+    // Capturar estado previo para eventos de dominio y diferencias
     const oldStatus = project.status;
     const oldPool = project.poolHours;
+    const previous = {
+      title: project.title,
+      description: project.description ?? null,
+      hourlyRate: Number(project.hourlyRate ?? 0),
+      startDate: this.dateKey(project.startDate),
+      endDate: this.dateKey(project.endDate),
+      projectLeaderId: project.projectLeader?.id ?? null,
+      technicianIds: (project.technicians || []).map((t) => t.id).sort(),
+      customerContactId: project.customerContact?.id ?? null,
+    };
 
     // Update Scalar fields
     Object.assign(project, updateData);
@@ -393,7 +483,7 @@ export class ProjectsService {
     if (projectLeaderId) {
       const leader = await this.userRepository.findOne({
         where: { id: projectLeaderId },
-        relations: ['role'],
+        relations: ['role', 'profile'],
       });
       if (!leader)
         throw new NotFoundException(
@@ -489,10 +579,28 @@ export class ProjectsService {
     // Notificaciones multicanal por cambios de dominio
     this.emitPoolRenewed(savedProject, oldPool, savedProject.poolHours);
     this.emitProjectStatusChanged(savedProject, oldStatus, savedProject.status);
+
+    const changes = this.collectProjectChangeLabels(previous, savedProject);
+    if (changes.length) {
+      const actorName = await this.resolveActorName(user);
+      this.notifications.projectChanged(
+        'project.updated',
+        NotificationLevel.INFO,
+        'Proyecto modificado',
+        `El proyecto "${savedProject.title}" fue modificado por ${actorName}. Cambios: ${changes.join(', ')}.`,
+        savedProject.id,
+        {
+          projectId: savedProject.id,
+          title: savedProject.title,
+          actorName,
+          changes,
+        },
+      );
+    }
+
     void this.contractThresholds.checkAndNotify(savedProject.id);
 
-    // Refresh to get full relations for DTO mapping
-    return this.findOne(savedProject.id);
+    return this.mapToResponseDto(savedProject);
   }
 
   async remove(id: string): Promise<void> {

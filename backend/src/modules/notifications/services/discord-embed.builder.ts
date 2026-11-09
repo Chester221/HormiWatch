@@ -58,6 +58,7 @@ const EVENT_TYPES: Record<string, string> = {
   'customer.deleted': 'Cliente eliminado',
   'contract.expiring': 'Contrato por vencer',
   'project.created': 'creado',
+  'project.updated': 'modificado',
   'project.assigned': 'asignado',
   'project.deleted': 'eliminado',
   'contract.closed': 'cerrado',
@@ -445,6 +446,40 @@ export class DiscordEmbedBuilder {
       EMPTY;
     const status = this.text(data.newStatus) || project?.status || EMPTY;
     const actor = this.text(data.actorName) || 'Sistema';
+    const changes = Array.isArray(data.changes)
+      ? data.changes
+          .map((change) => this.text(change))
+          .filter((change): change is string => Boolean(change))
+          .join(', ')
+      : this.text(data.changes);
+
+    const fields: DiscordEmbedField[] = [
+      { name: '📁 Nombre', value: this.value(title), inline: true },
+      {
+        name: '👤 Cliente',
+        value: this.value(customerName),
+        inline: true,
+      },
+      { name: '📊 Estado', value: this.value(status), inline: true },
+      {
+        name: '📅 Fecha',
+        value: this.value(this.nowLabel()),
+        inline: true,
+      },
+      {
+        name: '👤 Acción realizada por',
+        value: this.value(actor),
+        inline: true,
+      },
+    ];
+
+    if (changes) {
+      fields.push({
+        name: '📝 Cambios',
+        value: this.value(changes),
+        inline: false,
+      });
+    }
 
     return {
       content: '📁 **Actualización de proyecto**',
@@ -453,25 +488,7 @@ export class DiscordEmbedBuilder {
           `Proyecto ${type}`,
           `El proyecto **${title}** del cliente **${customerName}** ha sido ${type}.`,
           COLORS.proyectos,
-          [
-            { name: '📁 Nombre', value: this.value(title), inline: true },
-            {
-              name: '👤 Cliente',
-              value: this.value(customerName),
-              inline: true,
-            },
-            { name: '📊 Estado', value: this.value(status), inline: true },
-            {
-              name: '📅 Fecha',
-              value: this.value(this.nowLabel()),
-              inline: true,
-            },
-            {
-              name: '👤 Acción realizada por',
-              value: this.value(actor),
-              inline: true,
-            },
-          ],
+          fields,
         ),
       ],
     };
