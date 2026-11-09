@@ -38,6 +38,16 @@ const formatProgress = (value: number): string => {
   return value.toFixed(1);
 };
 
+const formatProjectDate = (
+  value: string | null | undefined,
+  pattern: string,
+) => {
+  if (!value) return "...";
+  const date = parseISO(value);
+  if (Number.isNaN(date.getTime())) return "...";
+  return format(date, pattern, { locale: es });
+};
+
 export function ProjectDetailModal({
   project,
   open,
@@ -67,16 +77,6 @@ export function ProjectDetailModal({
   };
 
   const status = getStatusInfo(project.status);
-
-  const formatProjectDate = (
-    value: string | null | undefined,
-    pattern: string,
-  ) => {
-    if (!value) return "...";
-    const date = parseISO(value);
-    if (Number.isNaN(date.getTime())) return "...";
-    return format(date, pattern, { locale: es });
-  };
 
   // Calcular horas totales desde inicio hasta fin
   const calculateTotalHours = () => {

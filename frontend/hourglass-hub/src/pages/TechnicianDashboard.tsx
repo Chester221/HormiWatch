@@ -334,12 +334,12 @@ const TechnicianDashboard = () => {
         services={services}
         onSuccess={(data) => handleCreateTask(data)}
       />
-      {isManager && (
+      {!isTechnician && (isManager || isAdmin) && (
         <>
           <CreateProjectModal
             open={createProjectModalOpen}
             onOpenChange={(open) => setCreateProjectModalOpen(open)}
-            onSuccess={() => { refetchProjects(); setCreateProjectModalOpen(false); }}
+            onSuccess={() => { setCreateProjectModalOpen(false); }}
           />
           <AddUserModal
             open={addUserModalOpen}

@@ -205,8 +205,8 @@ export const useCreateProject = () => {
           );
         });
       }
-      queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Proyecto creado correctamente'); 
     },
     onError: (error: any, _vars, context) => {
@@ -255,7 +255,7 @@ export const useUpdateProject = () => {
           return old.map((p: any) => (String(p.id) === String(real.id) ? { ...p, ...real } : p));
         });
       }
-      queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
+      void queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
       toast.success('Proyecto actualizado correctamente');
     },
     onError: (error: any, _vars, context) => {
@@ -308,8 +308,8 @@ export const useDeleteProject = () => {
       return { previous };
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: PROJECTS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       toast.success('Proyecto eliminado correctamente');
     },
     onError: (error: Error, _vars, context) => {

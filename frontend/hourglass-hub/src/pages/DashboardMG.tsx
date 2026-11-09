@@ -56,7 +56,7 @@ const DashboardMG = () => {
 
   // Hooks
   const { data: tasks = [], isLoading: isLoadingTasks } = useTasks();
-  const { data: projects = [], isLoading: isLoadingProjects, refetch: refetchProjects } = useProjects();
+  const { data: projects = [], isLoading: isLoadingProjects } = useProjects();
   const { data: clients = [] } = useClientsWithContacts();
   const { data: services = [] } = useServices();
   const { data: technicians = [] } = useTechnicians();
@@ -319,7 +319,6 @@ const DashboardMG = () => {
         onOpenChange={setCreateProjectModalOpen}
         onSuccess={() => {
           setCreateProjectModalOpen(false);
-          refetchProjects();
         }}
       />
       <ManageMemberModal

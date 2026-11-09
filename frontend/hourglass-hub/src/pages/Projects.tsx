@@ -118,8 +118,9 @@ export default function Projects() {
   const userRole = authProfile?.role;
   const isAdmin = userRole === 'Admin';
   const isManager = userRole === 'Manager';
+  const isTechnician = userRole === 'Technician';
   const canEdit = isManager;
-  const canCreate = isManager;
+  const canCreate = !isTechnician && (isManager || isAdmin);
 
   const [selectedProject, setSelectedProject] = useState<any>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);

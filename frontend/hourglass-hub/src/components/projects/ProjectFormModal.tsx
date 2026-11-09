@@ -262,7 +262,27 @@ export function ProjectFormModal({
     }
   }, [watchedClientId, contactsLoading, clientContacts, form]);
 
-  const handleSubmit = async (data: ProjectFormValues) => {
+  const handleMutationError = (error: unknown) => {
+    const status =
+      (error as { status?: number; statusCode?: number } | null)?.status ??
+      (error as { statusCode?: number } | null)?.statusCode;
+
+    form.setError("root", {
+      message:
+        status === 403
+          ? "No tienes permisos para crear o editar proyectos."
+          : error instanceof Error
+            ? error.message
+            : "No se pudo guardar el proyecto",
+    });
+  };
+
+  const handleMutationSuccess = (data: ProjectFormValues) => {
+    onOpenChange(false);
+    onSubmit?.(data);
+  };
+
+  const handleSubmit = (data: ProjectFormValues) => {
     if (!isEditing && !isAfter(data.endDate, startOfToday())) {
       form.setError("endDate", {
         message: "La fecha de fin debe ser posterior a hoy",
@@ -287,28 +307,27 @@ export function ProjectFormModal({
       technicianIds: data.technicianIds,
     };
 
-    try {
-      if (isEditing && project) {
-        await updateProject.mutateAsync({ id: project.id, data: payload });
-      } else {
-        await createProject.mutateAsync({
+    const mutationOptions = {
+      onSuccess: () => handleMutationSuccess(data),
+      onError: handleMutationError,
+    };
+
+    if (isEditing && project) {
+      updateProject.mutate(
+        { id: project.id, data: payload },
+        mutationOptions,
+      );
+    } else {
+      createProject.mutate(
+        {
           ...payload,
           status: "IN_PROGRESS",
           startDate: format(new Date(), "yyyy-MM-dd"),
           clientId: data.clientId,
           customerName: selectedClient?.name,
-        });
-      }
-
-      onSubmit?.(data);
-      onOpenChange(false);
-    } catch (error) {
-      form.setError("root", {
-        message:
-          error instanceof Error
-            ? error.message
-            : "No se pudo guardar el proyecto",
-      });
+        },
+        mutationOptions,
+      );
     }
   };
 
