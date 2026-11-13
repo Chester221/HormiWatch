@@ -16,6 +16,13 @@ export class MailService {
     private readonly configService: ConfigService,
   ) {}
 
+  isConfigured(): boolean {
+    const host = this.configService.get<string>('smtp.host');
+    const user = this.configService.get<string>('smtp.auth.user');
+    const pass = this.configService.get<string>('smtp.auth.pass');
+    return Boolean(host && user && pass);
+  }
+
   async sendMail(sendMailDto: SendMailDto) {
     try {
       const { to, subject, template, context, attachments } = sendMailDto;

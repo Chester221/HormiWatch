@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './jwt.strategy';
 import { PassportModule } from '@nestjs/passport';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MailsModule } from '../../mails/mails.module';
 
 @Global()
 @Module({
@@ -15,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     UsersModule,
     HashingModule,
     NotificationsModule,
+    MailsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],

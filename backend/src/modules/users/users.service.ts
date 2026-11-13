@@ -32,6 +32,8 @@ import { NotificationEmitterService } from '../notifications/services/notificati
 import { NotificationCategory } from '../notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
 
+const MAX_ACTIVE_ADMINS = 3;
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -138,6 +140,58 @@ export class UsersService {
     await this.userRepository.save(user);
   }
 
+  async findActiveUserForPasswordReset(email: string): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.profile', 'profile')
+      .where('LOWER(user.email) = LOWER(:email)', { email })
+      .andWhere('user.isActive = :isActive', { isActive: true })
+      .getOne();
+  }
+
+  async setPasswordResetToken(
+    id: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.userRepository.update(id, {
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: expiresAt,
+    });
+  }
+
+  async findUserByPasswordResetTokenHash(
+    tokenHash: string,
+  ): Promise<User | null> {
+    return this.userRepository
+      .createQueryBuilder('user')
+      .addSelect([
+        'user.passwordResetTokenHash',
+        'user.passwordResetExpiresAt',
+      ])
+      .where('user.passwordResetTokenHash = :tokenHash', { tokenHash })
+      .andWhere('user.isActive = :isActive', { isActive: true })
+      .getOne();
+  }
+
+  async completePasswordReset(
+    id: string,
+    passwordHash: string,
+  ): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    await this.userRepository.update(id, {
+      password: passwordHash,
+      refreshToken: null as unknown as string,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+      updatedAt: new Date(),
+    });
+  }
+
   async create(
     createUserDto: CreateUserDto,
     profilePicture?: Express.Multer.File,
@@ -228,9 +282,9 @@ export class UsersService {
           const activeAdminCount = await tx.count(User, {
             where: { role: { name: 'Admin' }, isActive: true },
           });
-          if (activeAdminCount >= 2) {
+          if (activeAdminCount >= MAX_ACTIVE_ADMINS) {
             throw new ConflictException(
-              'Límite de 2 administradores activos alcanzado. Desactiva uno primero.',
+              'Límite de 3 administradores activos alcanzado. Desactiva uno primero.',
             );
           }
         }
@@ -559,9 +613,9 @@ export class UsersService {
               id: Not(user.id),
             },
           });
-          if (activeAdminCount >= 2) {
+          if (activeAdminCount >= MAX_ACTIVE_ADMINS) {
             throw new ConflictException(
-              'Límite de 2 administradores activos alcanzado. Desactiva uno primero.',
+              'Límite de 3 administradores activos alcanzado. Desactiva uno primero.',
             );
           }
         }

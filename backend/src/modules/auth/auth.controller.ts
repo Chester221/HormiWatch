@@ -18,6 +18,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { IActiveUser } from './interface/payload.interface';
 import { SkipAuth } from './decorator/skipAuth.decorator';
@@ -131,6 +133,27 @@ export class AuthController {
     return {
       accessToken: newTokens.accessToken,
     };
+  }
+
+  @SkipAuth()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Solicitar enlace de recuperación de contraseña' })
+  @ApiOkResponse({
+    description:
+      'Si el correo existe, se envía un enlace de recuperación (respuesta genérica)',
+  })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto);
+  }
+
+  @SkipAuth()
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Restablecer contraseña con token temporal' })
+  @ApiOkResponse({ description: 'Contraseña actualizada correctamente' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(resetPasswordDto);
   }
 
   @UseGuards(JwtAuthGuard)
