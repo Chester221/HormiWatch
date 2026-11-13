@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Crown, Briefcase, Wrench, Mail, Phone, Eye, Pencil, Trash2, ArrowRight, MoreVertical,
+  Crown, Briefcase, Wrench, Mail, Phone, Eye, Pencil, ArrowRight, MoreVertical,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,14 +68,12 @@ interface TeamMemberCardProps {
   member: TeamMemberLike;
   idx: number;
   canEdit: boolean;
-  canDelete: boolean;
   onEdit: (m: TeamMemberLike) => void;
-  onDelete: (m: TeamMemberLike) => void;
   onOpenDetail: (m: TeamMemberLike) => void;
 }
 
 export function TeamMemberCard({
-  member, idx, canEdit, canDelete, onEdit, onDelete, onOpenDetail,
+  member, idx, canEdit, onEdit, onOpenDetail,
 }: TeamMemberCardProps) {
   const roleConfig = getRoleConfig(member?.role);
   const RoleIcon = roleConfig.icon;
@@ -161,15 +159,6 @@ export function TeamMemberCard({
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
               >
                 <Pencil className="h-3.5 w-3.5" /> Editar
-              </button>
-            )}
-            {canDelete && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onDelete(member); }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-500"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Eliminar
               </button>
             )}
           </DropdownMenuContent>

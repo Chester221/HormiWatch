@@ -8,17 +8,14 @@ import { TeamMemberFormModal } from "@/components/team/TeamMemberFormModal";
 import { MemberDetailModal } from "@/components/team/MemberDetailModal";
 import { TeamMemberCard, type TeamMemberLike } from "@/components/team/TeamMemberCard";
 import { TeamFilters, type TeamFilterOption } from "@/components/team/TeamFilters";
-import {
-  Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
-  Users, Shield, Wrench, Briefcase, UserCog, Loader2, AlertTriangle,
+  Users, Shield, Wrench, Briefcase, UserCog,
   Crown, CheckCircle, ChevronLeft, ChevronRight, Table, Grid3x3,
-  Pencil, Trash2, TrendingUp, Ban, Eye,
+  Pencil, TrendingUp, Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useTeamMembers, useUpdateTeamMember, useDeleteTeamMember } from "@/hooks/useTeamMembers";
+import { useTeamMembers, useUpdateTeamMember } from "@/hooks/useTeamMembers";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -60,14 +57,12 @@ const ROLE_ORDER: Record<string, number> = { Admin: 0, Manager: 1, Technician: 2
 // ═══════════════ TABLE ROW ═══════════════
 
 function TableRow({
-  member, onDelete, onEdit, onOpenDetail, canEdit, canDelete,
+  member, onEdit, onOpenDetail, canEdit,
 }: {
   member: Member;
-  onDelete: (m: Member) => void;
   onEdit: (m: Member) => void;
   onOpenDetail: (m: Member) => void;
   canEdit: boolean;
-  canDelete: boolean;
 }) {
   const roleConfig = getRoleConfig(member?.role);
   const RoleIcon = roleConfig.icon;
@@ -129,16 +124,6 @@ function TableRow({
               <Pencil className="h-3.5 w-3.5" />
             </Button>
           )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-red-50 hover:text-red-500"
-              onClick={(e) => { e.stopPropagation(); onDelete(member); }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
         </div>
       </td>
     </motion.tr>
@@ -160,10 +145,6 @@ export default function Team() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editMember, setEditMember] = useState<Member | null>(null);
   const [editOpen, setEditOpen] = useState(false);
-  const [deleteMember, setDeleteMember] = useState<Member | null>(null);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteMode, setDeleteMode] = useState<"deactivate" | "remove">("deactivate");
-  const [deleting, setDeleting] = useState(false);
 
   // Datos
   const [currentPage, setCurrentPage] = useState(1);
@@ -175,7 +156,6 @@ export default function Team() {
 
   const { data: teamMembers = [], isLoading } = useTeamMembers();
   const updateMember = useUpdateTeamMember();
-  const deleteMemberMutation = useDeleteTeamMember();
   const { profile } = useAuth();
   const canViewTeam = profile?.role === 'Admin' || profile?.role === 'Manager';
   const isAdmin = profile?.role === 'Admin';
@@ -277,34 +257,6 @@ export default function Team() {
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(`Error: ${message}`);
-    }
-  };
-
-  const handleDeleteRequest = (m: Member) => {
-    setDeleteMember(m);
-    setDeleteMode("deactivate");
-    setDeleteOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteMember) return;
-    setDeleting(true);
-    try {
-      if (deleteMode === "remove") {
-        // ✅ DELETE OPTIMISTA: desaparece al instante
-        await deleteMemberMutation.mutateAsync(deleteMember.id);
-      } else {
-        // ✅ UPDATE OPTIMISTA: se desactiva al instante
-        await updateMember.mutateAsync({ id: deleteMember.id, data: { isActive: false, is_active: false } });
-      }
-      setDeleteOpen(false);
-      setDetailOpen(false);
-      setCurrentPage(1);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      toast.error(`Error: ${message}`);
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -502,9 +454,7 @@ export default function Team() {
                         member={member}
                         idx={idx}
                         canEdit={canManageMembersEdit}
-                        canDelete={isAdmin}
                         onEdit={handleEditRequest}
-                        onDelete={handleDeleteRequest}
                         onOpenDetail={handleOpenDetail}
                       />
                     ))}
@@ -528,11 +478,9 @@ export default function Team() {
                           <TableRow
                             key={member.id}
                             member={member}
-                            onDelete={handleDeleteRequest}
                             onEdit={handleEditRequest}
                             onOpenDetail={handleOpenDetail}
                             canEdit={canManageMembersEdit}
-                            canDelete={isAdmin}
                           />
                         ))}
                       </tbody>
@@ -584,100 +532,9 @@ export default function Team() {
         isAdmin={isAdmin}
         isManager={isManager}
         onEdit={handleEditRequest}
-        onDelete={handleDeleteRequest}
         onToggleActive={handleToggleActive}
       />
 
-      {/* Confirmación de eliminación / desactivación (solo Admin) */}
-      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="sm:max-w-md bg-card border-border p-0 overflow-hidden rounded-2xl shadow-2xl">
-          <div className="relative p-5 bg-gradient-to-r from-red-500/10 via-transparent to-transparent border-b border-border">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50">
-                <AlertTriangle className="h-5 w-5 text-red-500" />
-              </div>
-              <div>
-                <DialogTitle className="text-lg font-bold text-foreground">
-                  {deleteMode === "remove" ? "Eliminar miembro" : "Desactivar miembro"}
-                </DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  {deleteMode === "remove"
-                    ? "Esta acción no se puede deshacer"
-                    : "El miembro conservará sus datos, pero no podrá acceder"}
-                </DialogDescription>
-              </div>
-            </div>
-          </div>
-
-          <div className="p-5 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40">
-              <Avatar className="h-10 w-10">
-                <AvatarImage src={getAvatar(deleteMember) || ""} />
-                <AvatarFallback className="text-xs bg-muted">{getInitials(deleteMember)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{getFullName(deleteMember)}</p>
-                <p className="text-xs text-muted-foreground truncate">{deleteMember?.email}</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                onClick={() => setDeleteMode("deactivate")}
-                className={cn(
-                  "w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
-                  deleteMode === "deactivate"
-                    ? "border-[#0DA2E7]/40 bg-[#0DA2E7]/5 ring-2 ring-[#0DA2E7]/10"
-                    : "border-border/50 hover:bg-muted/5"
-                )}
-              >
-                <div className={cn("mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0", deleteMode === "deactivate" ? "border-[#0DA2E7]" : "border-muted-foreground/30")}>
-                  {deleteMode === "deactivate" && <span className="h-2 w-2 rounded-full bg-[#0DA2E7]" />}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                    <Ban className="h-3.5 w-3.5 text-amber-500" /> Desactivar (lógica)
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Recomendado: se puede reactivar luego</p>
-                </div>
-              </button>
-              <button
-                onClick={() => setDeleteMode("remove")}
-                className={cn(
-                  "w-full flex items-start gap-3 p-3 rounded-xl border text-left transition-all",
-                  deleteMode === "remove"
-                    ? "border-red-400/50 bg-red-50/50 ring-2 ring-red-500/10"
-                    : "border-border/50 hover:bg-muted/5"
-                )}
-              >
-                <div className={cn("mt-0.5 h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0", deleteMode === "remove" ? "border-red-500" : "border-muted-foreground/30")}>
-                  {deleteMode === "remove" && <span className="h-2 w-2 rounded-full bg-red-500" />}
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
-                    <Trash2 className="h-3.5 w-3.5 text-red-500" /> Eliminar definitivamente (física)
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Borra la cuenta y su perfil de forma permanente</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <DialogFooter className="p-5 pt-0 gap-2">
-            <Button variant="outline" onClick={() => setDeleteOpen(false)} className="flex-1 rounded-lg h-10 text-sm border-border/60">
-              Cancelar
-            </Button>
-            <Button
-              onClick={confirmDelete}
-              disabled={deleting}
-              className={`flex-1 rounded-lg h-10 gap-2 text-white text-sm ${deleteMode === "remove" ? "bg-red-500 hover:bg-red-600" : "bg-[#0DA2E7] hover:bg-[#0B8BC7]"}`}
-            >
-              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : deleteMode === "remove" ? <Trash2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-              {deleting ? "Procesando..." : deleteMode === "remove" ? "Eliminar" : "Desactivar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </DashboardLayout>
   );
 }
