@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { usersApi } from "@/lib/api";
+import { MAX_ACTIVE_ADMINS } from "@/lib/constants";
 import { useUpdateTeamMember } from "@/hooks/useTeamMembers";
 import { Users, Shield, Search } from "lucide-react";
 
@@ -59,10 +60,21 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isMa
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [newRole, setNewRole] = useState("");
 
-  // ✅ visibleRoleOptions calculado dentro del componente con isManager
-  const visibleRoleOptions = isManager
-    ? ROLE_OPTIONS.filter((o) => o.value !== 'Admin')
-    : ROLE_OPTIONS;
+  const activeAdmins = users.filter(
+    (user) => getRoleName(user.role) === 'Admin' && user.isActive !== false
+  ).length;
+  const selectedRoleName = getRoleName(selectedUser?.role);
+  const adminRoleDisabled =
+    !isManager &&
+    activeAdmins >= MAX_ACTIVE_ADMINS &&
+    selectedRoleName !== 'Admin';
+
+  const visibleRoleOptions = (
+    isManager ? ROLE_OPTIONS.filter((o) => o.value !== 'Admin') : ROLE_OPTIONS
+  ).map((option) => ({
+    ...option,
+    disabled: option.value === 'Admin' && adminRoleDisabled,
+  }));
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -124,6 +136,10 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isMa
     // Manager no puede asignar Administrador
     if (isManager && newRole === 'Admin') {
       toast.error('No tienes permisos para asignar Administrador');
+      return;
+    }
+    if (adminRoleDisabled && newRole === 'Admin') {
+      toast.error(`Límite de ${MAX_ACTIVE_ADMINS} administradores activos alcanzado`);
       return;
     }
 
@@ -256,8 +272,17 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isMa
                     </SelectTrigger>
                     <SelectContent>
                       {visibleRoleOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
+                        <SelectItem
+                          key={option.value}
+                          value={option.value}
+                          disabled={option.disabled}
+                        >
                           {option.label}
+                          {option.disabled && (
+                            <span className="ml-1 text-[10px] text-muted-foreground">
+                              (límite {MAX_ACTIVE_ADMINS})
+                            </span>
+                          )}
                         </SelectItem>
                       ))}
                     </SelectContent>

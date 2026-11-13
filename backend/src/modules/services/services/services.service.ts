@@ -66,7 +66,9 @@ export class ServicesService {
     const platform =
       platforms.find((p) => p.name === 'General') || platforms[0];
     if (!platform) {
-      throw new NotFoundException('No hay plataformas de servicio configuradas');
+      throw new NotFoundException(
+        'No hay plataformas de servicio configuradas',
+      );
     }
     return { id: platform.id };
   }

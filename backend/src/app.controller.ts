@@ -26,7 +26,10 @@ export class AppController {
       await this.dataSource.query('SELECT 1');
       return { status: 'ok', database: 'ok' };
     } catch {
-      throw new ServiceUnavailableException({ status: 'error', database: 'error' });
+      throw new ServiceUnavailableException({
+        status: 'error',
+        database: 'error',
+      });
     }
   }
 }

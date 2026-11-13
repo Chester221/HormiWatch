@@ -2,7 +2,6 @@ import {
   Controller,
   Post,
   Get,
-  Patch,
   Delete,
   Body,
   Query,
@@ -17,9 +16,6 @@ import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guard/jwt-auth.guard';
 import { IActiveUser } from './interface/payload.interface';
 import { SkipAuth } from './decorator/skipAuth.decorator';
@@ -54,7 +50,9 @@ export class AuthController {
 
   @SkipAuth()
   @Post('register')
-  @ApiOperation({ summary: 'Public registration (creates a Technician account)' })
+  @ApiOperation({
+    summary: 'Public registration (creates a Technician account)',
+  })
   @ApiOkResponse({ description: 'Account created successfully' })
   async register(@Body() registerDto: RegisterDto) {
     const user = await this.authService.register(registerDto);
@@ -81,7 +79,11 @@ export class AuthController {
     const loginData = await this.authService.login(user);
 
     // Set Refresh Token in HttpOnly Cookie
-    response.cookie('refresh_token', loginData.refreshToken, this.buildRefreshCookieOptions());
+    response.cookie(
+      'refresh_token',
+      loginData.refreshToken,
+      this.buildRefreshCookieOptions(),
+    );
 
     return {
       accessToken: loginData.accessToken,
@@ -128,38 +130,24 @@ export class AuthController {
     const newTokens = await this.authService.refreshToken(refreshToken);
 
     // Update Refresh Token Cookie
-    response.cookie('refresh_token', newTokens.refreshToken, this.buildRefreshCookieOptions());
+    response.cookie(
+      'refresh_token',
+      newTokens.refreshToken,
+      this.buildRefreshCookieOptions(),
+    );
 
     return {
       accessToken: newTokens.accessToken,
     };
   }
 
-  @SkipAuth()
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Solicitar enlace de recuperación de contraseña' })
-  @ApiOkResponse({
-    description:
-      'Si el correo existe, se envía un enlace de recuperación (respuesta genérica)',
-  })
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(forgotPasswordDto);
-  }
-
-  @SkipAuth()
-  @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Restablecer contraseña con token temporal' })
-  @ApiOkResponse({ description: 'Contraseña actualizada correctamente' })
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.authService.resetPassword(resetPasswordDto);
-  }
-
   @UseGuards(JwtAuthGuard)
   @Delete('account')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Eliminar la propia cuenta (force: ignora tareas/proyectos asociados)' })
+  @ApiOperation({
+    summary:
+      'Eliminar la propia cuenta (force: ignora tareas/proyectos asociados)',
+  })
   async deleteAccount(
     @Request() req: { user: IActiveUser },
     @Query('force') force?: string,
@@ -173,16 +161,5 @@ export class AuthController {
   @ApiOkResponse({ description: 'Returns current user session data' })
   async getSession(@Request() req: { user: IActiveUser }) {
     return this.authService.getSession(req.user.userId);
-  }
-
-  @UseGuards(JwtAuthGuard)
-  @Patch('change-password')
-  @ApiOperation({ summary: 'Cambiar la contraseña del usuario autenticado' })
-  @ApiOkResponse({ description: 'Contraseña actualizada correctamente' })
-  async changePassword(
-    @Request() req: { user: IActiveUser },
-    @Body() changePasswordDto: ChangePasswordDto,
-  ) {
-    return this.authService.changePassword(req.user.userId, changePasswordDto);
   }
 }

@@ -68,7 +68,12 @@ export class Profile {
   @Column({ type: 'varchar', nullable: true })
   full_name: string;
 
-  @Column({ type: 'varchar', length: 20, nullable: true, name: 'whatsapp_phone' })
+  @Column({
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+    name: 'whatsapp_phone',
+  })
   whatsappPhone: string | null;
 
   //entity relations

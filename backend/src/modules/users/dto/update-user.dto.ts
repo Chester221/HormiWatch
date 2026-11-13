@@ -56,7 +56,9 @@ export class UpdateUserDto {
   roleId?: string;
 
   // 🔥 AGREGADO: role como string (para cambiar rol directamente)
-  @ApiPropertyOptional({ description: 'User role (Admin, Manager, Technician)' })
+  @ApiPropertyOptional({
+    description: 'User role (Admin, Manager, Technician)',
+  })
   @IsOptional()
   @IsString()
   role?: string;

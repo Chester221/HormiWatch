@@ -8,7 +8,7 @@ export class Customer extends BaseUuidEntity {
   name: string;
 
   @Column({ type: 'varchar', nullable: true })
-  ruc: string; 
+  ruc: string;
 
   @Column({ type: 'varchar', nullable: true })
   country: string;

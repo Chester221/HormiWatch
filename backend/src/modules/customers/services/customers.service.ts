@@ -60,7 +60,7 @@ export class CustomersService {
         this.customerContactRepository.create({
           ...contact,
           customer: { id: id },
-        })
+        }),
       );
       await this.customerContactRepository.save(contactEntities);
     }
@@ -158,7 +158,7 @@ export class CustomersService {
           this.customerContactRepository.create({
             ...contact,
             customer: { id: id },
-          })
+          }),
         );
         await this.customerContactRepository.save(contactEntities);
       }

@@ -30,7 +30,10 @@ export class NotificationsController {
   ) {}
 
   @Get()
-  async mine(@CurrentUser() user: IActiveUser, @Query('unread') unread?: string) {
+  async mine(
+    @CurrentUser() user: IActiveUser,
+    @Query('unread') unread?: string,
+  ) {
     return this.notifications.getMine(user, unread === 'true');
   }
 

@@ -6,9 +6,7 @@ import { Express } from 'express';
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
 
-  constructor(
-    private readonly fileValidationService: FileValidationService,
-  ) {}
+  constructor(private readonly fileValidationService: FileValidationService) {}
 
   async uploadFile(
     file: Express.Multer.File,
@@ -16,12 +14,14 @@ export class StorageService {
     allowedMimeTypes: string[],
     maxFileSize: number,
   ): Promise<{ url: string; key: string }> {
-    this.logger.warn('⚠️ StorageService está en modo mock. Los archivos no se guardan realmente.');
-    
+    this.logger.warn(
+      '⚠️ StorageService está en modo mock. Los archivos no se guardan realmente.',
+    );
+
     // Simular una URL de archivo
     const fakeUrl = `https://example.com/uploads/${Date.now()}-${file.originalname}`;
     const fakeKey = `${destinationPath}/${Date.now()}-${file.originalname}`;
-    
+
     return {
       url: fakeUrl,
       key: fakeKey,
@@ -29,7 +29,9 @@ export class StorageService {
   }
 
   async deleteFile(fileKey: string): Promise<void> {
-    this.logger.warn(`⚠️ StorageService mock: No se eliminó el archivo ${fileKey}`);
+    this.logger.warn(
+      `⚠️ StorageService mock: No se eliminó el archivo ${fileKey}`,
+    );
     return;
   }
 }

@@ -36,12 +36,6 @@ export class UserResponseDto {
   @Exclude()
   refreshToken: string;
 
-  @Exclude()
-  passwordResetTokenHash: string | null;
-
-  @Exclude()
-  passwordResetExpiresAt: Date | null;
-
   @ApiProperty({ description: 'The date and time of the last connection' })
   @Expose()
   lastConnection: Date;

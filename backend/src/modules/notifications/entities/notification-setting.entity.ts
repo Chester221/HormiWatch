@@ -20,14 +20,27 @@ export interface DailySummaryConfig {
 
 @Entity({ name: 'notification_settings' })
 export class NotificationSetting extends BaseUuidEntity {
-  @Column({ type: 'jsonb', nullable: false, default: () => `'${JSON.stringify(DEFAULT_CHANNELS)}'` })
+  @Column({
+    type: 'jsonb',
+    nullable: false,
+    default: () => `'${JSON.stringify(DEFAULT_CHANNELS)}'`,
+  })
   channels: NotificationChannels;
 
-  @Column({ type: 'jsonb', nullable: false, default: () => `'${JSON.stringify(DEFAULT_THRESHOLDS)}'` })
+  @Column({
+    type: 'jsonb',
+    nullable: false,
+    default: () => `'${JSON.stringify(DEFAULT_THRESHOLDS)}'`,
+  })
   thresholds: NotificationThresholds;
 
   /** Toggles por evento, ej: { 'task.created': false } */
-  @Column({ type: 'jsonb', name: 'event_toggles', nullable: false, default: () => `'{}'` })
+  @Column({
+    type: 'jsonb',
+    name: 'event_toggles',
+    nullable: false,
+    default: () => `'{}'`,
+  })
   eventToggles: NotificationEventToggles;
 
   /** Webhooks de Discord por canal: { alertas, usuarios, contratos, proyectos, tareas } */
@@ -35,7 +48,12 @@ export class NotificationSetting extends BaseUuidEntity {
   discord: DiscordWebhooks;
 
   /** Webhook único de Discord para canal #notificaciones */
-  @Column({ type: 'varchar', length: 255, nullable: true, name: 'discord_webhook_url' })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    name: 'discord_webhook_url',
+  })
   discordWebhookUrl: string | null;
 
   @Column({ type: 'integer', name: 'digest_hour', default: 8 })

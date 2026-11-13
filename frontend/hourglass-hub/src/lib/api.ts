@@ -119,13 +119,6 @@ export const authApi = {
   refresh: () =>
     apiClient('/auth/refresh', { method: 'POST' }),
 
-  // ✅ NUEVO: cambiar la contraseña del usuario autenticado
-  changePassword: (currentPassword: string, newPassword: string) =>
-    apiClient('/auth/change-password', {
-      method: 'PATCH',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
-
   // ✅ NUEVO: session para obtener sesión actual
   session: () =>
     apiClient('/auth/session', { method: 'GET' }),

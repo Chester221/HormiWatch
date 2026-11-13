@@ -6,10 +6,7 @@ import { FileValidationService } from './services/storage-validations.service';
 @Module({
   imports: [],
   controllers: [StorageController],
-  providers: [
-    StorageService,
-    FileValidationService,
-  ],
+  providers: [StorageService, FileValidationService],
   exports: [StorageService, FileValidationService],
 })
 export class StorageModule {}

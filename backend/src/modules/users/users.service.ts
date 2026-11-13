@@ -140,58 +140,6 @@ export class UsersService {
     await this.userRepository.save(user);
   }
 
-  async findActiveUserForPasswordReset(email: string): Promise<User | null> {
-    return this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.profile', 'profile')
-      .where('LOWER(user.email) = LOWER(:email)', { email })
-      .andWhere('user.isActive = :isActive', { isActive: true })
-      .getOne();
-  }
-
-  async setPasswordResetToken(
-    id: string,
-    tokenHash: string,
-    expiresAt: Date,
-  ): Promise<void> {
-    await this.userRepository.update(id, {
-      passwordResetTokenHash: tokenHash,
-      passwordResetExpiresAt: expiresAt,
-    });
-  }
-
-  async findUserByPasswordResetTokenHash(
-    tokenHash: string,
-  ): Promise<User | null> {
-    return this.userRepository
-      .createQueryBuilder('user')
-      .addSelect([
-        'user.passwordResetTokenHash',
-        'user.passwordResetExpiresAt',
-      ])
-      .where('user.passwordResetTokenHash = :tokenHash', { tokenHash })
-      .andWhere('user.isActive = :isActive', { isActive: true })
-      .getOne();
-  }
-
-  async completePasswordReset(
-    id: string,
-    passwordHash: string,
-  ): Promise<void> {
-    const user = await this.userRepository.findOne({ where: { id } });
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-
-    await this.userRepository.update(id, {
-      password: passwordHash,
-      refreshToken: null as unknown as string,
-      passwordResetTokenHash: null,
-      passwordResetExpiresAt: null,
-      updatedAt: new Date(),
-    });
-  }
-
   async create(
     createUserDto: CreateUserDto,
     profilePicture?: Express.Multer.File,
@@ -563,6 +511,7 @@ export class UsersService {
       }
     }
 
+    const passwordChanged = Boolean(password);
     let hashedPassword = user.password;
     if (password) {
       hashedPassword = await this.hashingService.hash(password);
@@ -602,6 +551,10 @@ export class UsersService {
         user.email = userData.email ?? user.email;
         user.isActive = userData.isActive ?? user.isActive;
         user.password = hashedPassword;
+        // 🔐 Al resetear la contraseña, invalidar la sesión activa del usuario
+        if (passwordChanged) {
+          user.refreshToken = null as unknown as string;
+        }
         user.role = role;
         user.preferences = userData.preferences ?? user.preferences;
 
@@ -695,6 +648,18 @@ export class UsersService {
         user.isActive ? 'Usuario activado' : 'Usuario desactivado',
         `El usuario ${user.email} fue ${user.isActive ? 'activado' : 'desactivado'}.`,
         { userId: user.id, email: user.email, isActive: user.isActive },
+      );
+    }
+    if (passwordChanged) {
+      // Notificación al propio usuario: un administrador cambió su contraseña
+      this.notifications.toUsers(
+        'user.password.reset',
+        NotificationCategory.USERS,
+        NotificationLevel.INFO,
+        'Contraseña actualizada',
+        'Tu contraseña fue actualizada por un administrador. Si no lo solicitaste, contacta al administrador.',
+        [user.id],
+        { userId: user.id },
       );
     }
 

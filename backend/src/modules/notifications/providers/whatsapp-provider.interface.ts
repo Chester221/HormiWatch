@@ -3,7 +3,11 @@ export interface WhatsAppMessageParams {
 }
 
 export interface IWhatsAppProvider {
-  send(to: string, template?: string, params?: WhatsAppMessageParams): Promise<boolean>;
+  send(
+    to: string,
+    template?: string,
+    params?: WhatsAppMessageParams,
+  ): Promise<boolean>;
 }
 
 export const WHATSAPP_PROVIDER = 'WHATSAPP_PROVIDER';

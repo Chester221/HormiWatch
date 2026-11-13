@@ -30,7 +30,9 @@ export class ServicePlatformService {
   async findOne(id: string): Promise<ServicePlatformResponseDto> {
     const platform = await this.platformRepository.findOneBy({ id });
     if (!platform) {
-      throw new NotFoundException(`Plataforma de servicio con ID ${id} no encontrada`);
+      throw new NotFoundException(
+        `Plataforma de servicio con ID ${id} no encontrada`,
+      );
     }
     return plainToInstance(ServicePlatformResponseDto, platform);
   }
@@ -41,7 +43,9 @@ export class ServicePlatformService {
   ): Promise<ServicePlatformResponseDto> {
     const platform = await this.platformRepository.findOneBy({ id });
     if (!platform) {
-      throw new NotFoundException(`Plataforma de servicio con ID ${id} no encontrada`);
+      throw new NotFoundException(
+        `Plataforma de servicio con ID ${id} no encontrada`,
+      );
     }
     this.platformRepository.merge(platform, updateDto);
     const updatedPlatform = await this.platformRepository.save(platform);
@@ -51,7 +55,9 @@ export class ServicePlatformService {
   async remove(id: string): Promise<ServicePlatformResponseDto> {
     const platform = await this.platformRepository.findOneBy({ id });
     if (!platform) {
-      throw new NotFoundException(`Plataforma de servicio con ID ${id} no encontrada`);
+      throw new NotFoundException(
+        `Plataforma de servicio con ID ${id} no encontrada`,
+      );
     }
     const removedPlatform = await this.platformRepository.softRemove(platform);
     return plainToInstance(ServicePlatformResponseDto, removedPlatform);

@@ -39,7 +39,10 @@ export class TasksController {
     description: 'The task has been successfully created.',
     type: [TaskResponseDto],
   })
-  create(@Body() createTaskDto: CreateTaskDto, @CurrentUser() user: IActiveUser) {
+  create(
+    @Body() createTaskDto: CreateTaskDto,
+    @CurrentUser() user: IActiveUser,
+  ) {
     return this.tasksService.create(createTaskDto, user);
   }
 
@@ -89,7 +92,10 @@ export class TasksController {
     description: 'The task has been successfully deleted.',
   })
   @ApiResponse({ status: 404, description: 'Task not found.' })
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: IActiveUser) {
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: IActiveUser,
+  ) {
     return this.tasksService.remove(id, user);
   }
 }

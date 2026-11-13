@@ -39,25 +39,6 @@ export class User extends BaseUuidEntity {
   @Column({ type: 'varchar', nullable: true })
   refreshToken: string;
 
-  @Column({
-    type: 'varchar',
-    length: 64,
-    nullable: true,
-    select: false,
-    name: 'password_reset_token_hash',
-  })
-  @Index('idx_password_reset_token_hash')
-  passwordResetTokenHash: string | null;
-
-  @Column({
-    type: 'timestamp',
-    nullable: true,
-    select: false,
-    name: 'password_reset_expires_at',
-    transformer: UtcDateTransformer,
-  })
-  passwordResetExpiresAt: Date | null;
-
   @Column({ type: 'varchar', nullable: true, name: 'auth_user_id' })
   authUserId: string;
 

@@ -289,6 +289,11 @@ const Auth = () => {
                         </button>
                       </div>
                     </div>
+                    <div className="flex justify-end">
+                      <p className="text-xs text-muted-foreground">
+                        ¿Olvidaste tu contraseña? Contacta al Administrador.
+                      </p>
+                    </div>
                     <Button type="submit" className="w-full gap-2 shadow-glow" disabled={isLoading}>
                       {isLoading ? (
                         <div className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />

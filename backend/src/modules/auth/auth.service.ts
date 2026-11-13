@@ -2,51 +2,32 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
-  BadRequestException,
-  Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { createHmac, randomBytes } from 'crypto';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
 import { HashingService } from '../../common/hashing/hashing.service';
 import { User } from '../users/entities/user.entity';
 import { IJwtPayload } from './interface/payload.interface';
-import { ChangePasswordDto } from './dto/change-password.dto';
 import { RegisterDto } from './dto/register.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
-import { MailService } from '../../mails/mails.service';
 import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
 import { NotificationCategory } from '../notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
-import { NotificationEvent } from '../notifications/events/notification.event';
-
-const DEFAULT_PASSWORD_RESET_TTL_MINUTES = 30;
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
-
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly hashingService: HashingService,
-    private readonly configService: ConfigService,
-    private readonly mailService: MailService,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly notifications: NotificationEmitterService,
   ) {}
 
   // ✅ REGISTRO PÚBLICO: crea la cuenta (rol Technician) sin requerir sesión.
   async register(dto: RegisterDto) {
-    return this.usersService.registerPublic(
-      dto.email,
-      dto.password,
-      dto.name,
-    );
+    return this.usersService.registerPublic(dto.email, dto.password, dto.name);
   }
 
   async login(user: User) {
@@ -95,14 +76,14 @@ export class AuthService {
     }
 
     try {
-      const [{ count: assignedTasks }] = (await this.dataSource.query(
+      const [{ count: assignedTasks }] = await this.dataSource.query(
         'SELECT COUNT(*) AS count FROM tasks WHERE technician_id = $1',
         [userId],
-      )) as Array<{ count: number }>;
-      const [{ count: assignedProjects }] = (await this.dataSource.query(
+      );
+      const [{ count: assignedProjects }] = await this.dataSource.query(
         'SELECT COUNT(*) AS count FROM projects WHERE project_leader_id = $1',
         [userId],
-      )) as Array<{ count: number }>;
+      );
 
       if (Number(assignedTasks) > 0 || Number(assignedProjects) > 0) {
         throw new ConflictException(
@@ -134,14 +115,16 @@ export class AuthService {
       email: user.email,
       role: user.role.name,
       is_active: user.isActive,
-      profile: user.profile ? {
-        first_name: user.profile.name,
-        last_name: user.profile.lastName,
-        avatar_url: user.profile.avatar_url,
-        phone: user.profile.phone,
-        position: user.profile.position,
-        whatsappPhone: user.profile.whatsappPhone,
-      } : null,
+      profile: user.profile
+        ? {
+            first_name: user.profile.name,
+            last_name: user.profile.lastName,
+            avatar_url: user.profile.avatar_url,
+            phone: user.profile.phone,
+            position: user.profile.position,
+            whatsappPhone: user.profile.whatsappPhone,
+          }
+        : null,
       created_at: user.createdAt,
       updated_at: user.updatedAt,
     };
@@ -208,147 +191,6 @@ export class AuthService {
       );
       throw new UnauthorizedException('Credenciales inválidas');
     }
-    return user as User;
-  }
-
-  async forgotPassword(dto: ForgotPasswordDto) {
-    const genericMessage =
-      'Si el correo existe y está activo, recibirás un enlace para restablecer tu contraseña.';
-    const user = await this.usersService.findActiveUserForPasswordReset(
-      dto.email,
-    );
-
-    if (!user) {
-      return { message: genericMessage };
-    }
-
-    const token = randomBytes(32).toString('base64url');
-    const tokenHash = this.hashPasswordResetToken(token);
-    const ttlMinutes = this.getPasswordResetTtlMinutes();
-    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
-
-    await this.usersService.setPasswordResetToken(
-      user.id,
-      tokenHash,
-      expiresAt,
-    );
-
-    const frontendUrl = (
-      this.configService.get<string>('FRONTEND_URL') || 'http://localhost:8080'
-    ).replace(/\/+$/, '');
-    const resetUrl = `${frontendUrl}/#/reset-password?token=${encodeURIComponent(token)}`;
-    const isDebug =
-      this.configService.get<string>('PASSWORD_RESET_DEBUG') === 'true';
-    const mailConfigured = this.mailService.isConfigured();
-
-    if (isDebug) {
-      this.logger.log(`Password reset link for ${user.email}: ${resetUrl}`);
-    }
-
-    if (mailConfigured) {
-      try {
-        await this.mailService.sendMail({
-          to: user.email,
-          subject: 'Restablece tu contraseña de HormiWatch',
-          template: 'password-reset',
-          context: {
-            name: user.profile?.name || user.email,
-            resetUrl,
-            expiresMinutes: ttlMinutes,
-          },
-        });
-      } catch (error: any) {
-        this.logger.error(
-          `Failed to send password reset email to ${user.email}: ${error.message}`,
-          error.stack,
-        );
-      }
-    } else if (!isDebug) {
-      this.logger.warn(
-        'Password reset email not sent: SMTP is not configured and PASSWORD_RESET_DEBUG is disabled.',
-      );
-    }
-
-    return { message: genericMessage };
-  }
-
-  async resetPassword(dto: ResetPasswordDto) {
-    const tokenHash = this.hashPasswordResetToken(dto.token);
-    const user =
-      await this.usersService.findUserByPasswordResetTokenHash(tokenHash);
-
-    if (
-      !user ||
-      !user.passwordResetExpiresAt ||
-      user.passwordResetExpiresAt.getTime() <= Date.now()
-    ) {
-      throw new BadRequestException('El enlace es inválido o expiró');
-    }
-
-    const hashedPassword = await this.hashingService.hash(dto.newPassword);
-    await this.usersService.completePasswordReset(user.id, hashedPassword);
-
-    this.notifications.emit(
-      new NotificationEvent(
-        'auth.password.reset',
-        NotificationCategory.USERS,
-        NotificationLevel.INFO,
-        'Contraseña restablecida',
-        'Tu contraseña fue restablecida correctamente. Si no fuiste tú, contacta al administrador.',
-        { type: 'users', userIds: [user.id] },
-        { userId: user.id },
-        null,
-      ),
-    );
-
-    return { message: 'Contraseña actualizada correctamente' };
-  }
-
-  private hashPasswordResetToken(token: string): string {
-    const secret = this.configService.getOrThrow<string>('SECRET_KEY');
-    return createHmac('sha256', secret).update(token).digest('hex');
-  }
-
-  private getPasswordResetTtlMinutes(): number {
-    const configured = Number(
-      this.configService.get<string>('PASSWORD_RESET_TOKEN_TTL_MINUTES'),
-    );
-    return Number.isFinite(configured) && configured > 0
-      ? configured
-      : DEFAULT_PASSWORD_RESET_TTL_MINUTES;
-  }
-
-  async changePassword(userId: string, dto: ChangePasswordDto) {
-    const user = await this.usersService.findOneById(userId);
-    if (!user) {
-      throw new UnauthorizedException('Usuario no encontrado');
-    }
-
-    const isCurrentPasswordValid = await this.hashingService.compare(
-      dto.currentPassword,
-      user.password,
-    );
-    if (!isCurrentPasswordValid) {
-      throw new BadRequestException('La contraseña actual es incorrecta');
-    }
-
-    const hashedPassword = await this.hashingService.hash(dto.newPassword);
-    await this.usersService.updatePassword(userId, hashedPassword);
-
-    // Notificación multicanal: contraseña cambiada (in-app al usuario)
-    this.notifications.emit(
-      new NotificationEvent(
-        'auth.password.changed',
-        NotificationCategory.USERS,
-        NotificationLevel.INFO,
-        'Contraseña actualizada',
-        'Tu contraseña fue actualizada correctamente. Si no fuiste tú, contacta al administrador.',
-        { type: 'users', userIds: [userId] },
-        { userId },
-        null,
-      ),
-    );
-
-    return { message: 'Contraseña actualizada correctamente' };
+    return user;
   }
 }

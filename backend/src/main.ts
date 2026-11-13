@@ -21,7 +21,10 @@ async function bootstrap() {
 
   // 🛡️ Anti-caché: evitar que el navegador guarde respuestas 304
   app.use((req, res, next) => {
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set(
+      'Cache-Control',
+      'no-store, no-cache, must-revalidate, proxy-revalidate',
+    );
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
     next();
@@ -40,7 +43,10 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  app.useGlobalFilters(new QueryFailedFilter(), new SystemErrorFilter(eventEmitter));
+  app.useGlobalFilters(
+    new QueryFailedFilter(),
+    new SystemErrorFilter(eventEmitter),
+  );
   app.useGlobalPipes(new TrimPipe());
   app.useGlobalPipes(
     new ValidationPipe({
@@ -78,9 +84,7 @@ async function bootstrap() {
       if (isExplicit || isVercelPreview) {
         return callback(null, true);
       }
-      return callback(
-        new Error(`Origin ${origin} not allowed by CORS`),
-      );
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],

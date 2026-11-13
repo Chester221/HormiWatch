@@ -41,6 +41,7 @@ const ThemeController = () => {
 
   useEffect(() => {
     const isAuthRoute = location.pathname === "/auth";
+
     if (isAuthRoute || !profile?.dark_mode) {
       document.documentElement.classList.remove("dark");
     } else {

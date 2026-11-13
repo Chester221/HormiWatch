@@ -25,7 +25,7 @@ export class CustomerContact extends BaseUuidEntity {
   email: string;
 
   //entity relations
-  @ManyToOne(() => Customer, (customer) => customer.contacts, { 
+  @ManyToOne(() => Customer, (customer) => customer.contacts, {
     nullable: true,
   })
   @JoinColumn({ name: 'customer_id' })

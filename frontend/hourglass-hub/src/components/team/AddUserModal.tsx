@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { usersApi, rolesApi, storageApi } from "@/lib/api";
+import { MAX_ACTIVE_ADMINS } from "@/lib/constants";
 import { useCreateTeamMember } from "@/hooks/useTeamMembers";
 import { motion } from "framer-motion";
 
@@ -95,7 +96,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
     usersApi.getAll().then((data: any) => {
       const list = Array.isArray(data) ? data : data?.records || data?.data || [];
       const admins = list.filter(
-        (u: any) => (u.role?.name === "Admin" || u.role_name === "Admin") && u.isActive !== false && u.isActive !== false
+        (u: any) => (u.role?.name === "Admin" || u.role_name === "Admin") && u.isActive !== false
       ).length;
       setActiveAdmins(admins);
     }).catch(() => {});
@@ -310,7 +311,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
                 <SelectContent className="bg-card border-border">
                   {roles.map((r) => {
                     const I = getRoleIcon(r.name);
-                    const adminFull = r.name === "Admin" && activeAdmins >= 2;
+                    const adminFull = r.name === "Admin" && activeAdmins >= MAX_ACTIVE_ADMINS;
                     return (
                       <SelectItem
                         key={r.id}
@@ -321,7 +322,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
                         <span className="flex items-center gap-2">
                           <I className={`h-3.5 w-3.5 ${getRoleAccent(r.name).icon}`} />
                           {r.name}
-                          {adminFull && <span className="ml-1 text-[10px] text-muted-foreground">(límite 2)</span>}
+                          {adminFull && <span className="ml-1 text-[10px] text-muted-foreground">(límite {MAX_ACTIVE_ADMINS})</span>}
                         </span>
                       </SelectItem>
                     );

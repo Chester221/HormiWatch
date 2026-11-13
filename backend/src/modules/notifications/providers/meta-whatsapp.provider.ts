@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { IWhatsAppProvider, WhatsAppMessageParams } from '../providers/whatsapp-provider.interface';
+import {
+  IWhatsAppProvider,
+  WhatsAppMessageParams,
+} from '../providers/whatsapp-provider.interface';
 
 @Injectable()
 export class MetaWhatsAppProvider implements IWhatsAppProvider {
@@ -9,7 +12,11 @@ export class MetaWhatsAppProvider implements IWhatsAppProvider {
 
   constructor(private readonly config: ConfigService) {}
 
-  async send(to: string, template?: string, params?: WhatsAppMessageParams): Promise<boolean> {
+  async send(
+    to: string,
+    template?: string,
+    params?: WhatsAppMessageParams,
+  ): Promise<boolean> {
     const token = this.config.get<string>('WHATSAPP_TOKEN');
     const phoneId = this.config.get<string>('WHATSAPP_PHONE_NUMBER_ID');
     if (!token || !phoneId) return false;

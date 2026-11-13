@@ -8,7 +8,10 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { NotificationEvent, NOTIFICATION_DISPATCH_EVENT } from '../../modules/notifications/events/notification.event';
+import {
+  NotificationEvent,
+  NOTIFICATION_DISPATCH_EVENT,
+} from '../../modules/notifications/events/notification.event';
 import { NotificationCategory } from '../../modules/notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../../modules/notifications/enums/notification-level.enum';
 
@@ -29,7 +32,10 @@ export class SystemErrorFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     if (status >= 500) {
-      this.logger.error(`System error: ${exception}`, exception instanceof Error ? exception.stack : undefined);
+      this.logger.error(
+        `System error: ${exception}`,
+        exception instanceof Error ? exception.stack : undefined,
+      );
       try {
         const hourBucket = new Date().toISOString().slice(0, 13);
         const errorMessage =
@@ -62,9 +68,9 @@ export class SystemErrorFilter implements ExceptionFilter {
 
     if (exception instanceof HttpException) {
       const res = exception.getResponse();
-      response.status(status).json(
-        typeof res === 'object' ? res : { message: res },
-      );
+      response
+        .status(status)
+        .json(typeof res === 'object' ? res : { message: res });
       return;
     }
     response.status(status).json({

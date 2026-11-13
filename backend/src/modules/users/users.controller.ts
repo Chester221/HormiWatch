@@ -114,10 +114,11 @@ export class UsersController {
       if (
         updateUserDto.role ||
         updateUserDto.roleId ||
-        updateUserDto.isActive !== undefined
+        updateUserDto.isActive !== undefined ||
+        updateUserDto.password !== undefined
       ) {
         throw new ForbiddenException(
-          'No autorizado para cambiar tu propio rol o estado',
+          'No autorizado para cambiar tu propio rol, estado o contraseña',
         );
       }
       return this.usersService.update(id, updateUserDto, profilePicture);
@@ -145,11 +146,20 @@ export class UsersController {
       if (updateUserDto.role) {
         const newRole = updateUserDto.role.toLowerCase();
         if (newRole !== 'manager' && newRole !== 'technician') {
-          throw new ForbiddenException('No autorizado para asignar el rol Administrador');
+          throw new ForbiddenException(
+            'No autorizado para asignar el rol Administrador',
+          );
         }
       }
       if (updateUserDto.isActive !== undefined) {
-        throw new ForbiddenException('No autorizado para cambiar el estado del miembro');
+        throw new ForbiddenException(
+          'No autorizado para cambiar el estado del miembro',
+        );
+      }
+      if (updateUserDto.password !== undefined) {
+        throw new ForbiddenException(
+          'Solo un Administrador puede restablecer contraseñas',
+        );
       }
     }
     return this.usersService.update(id, updateUserDto, profilePicture);

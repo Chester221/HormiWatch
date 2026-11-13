@@ -14,10 +14,11 @@ import {
   Loader2, Users, Mail, AlertTriangle, Settings2, Briefcase, Wrench,
   ChevronLeft, ChevronRight, CheckCircle, XCircle,
   Phone, User, Upload, Camera, X, CreditCard, MoreVertical,
-  Table, Grid3x3
+  Table, Grid3x3, KeyRound
 } from "lucide-react";
 import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
 import { AddUserModal } from "@/components/team/AddUserModal";
+import { ResetPasswordModal } from "@/components/team/ResetPasswordModal";
 import { UserFilters, DEFAULT_ROLE_OPTIONS } from "@/components/admin/UserFilters";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -37,6 +38,7 @@ export default function AdminDashboard() {
   const [editModal, setEditModal] = useState<{ open: boolean; user: any }>({ open: false, user: null });
   const [suspendDialog, setSuspendDialog] = useState<{ open: boolean; user: any }>({ open: false, user: null });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; user: any }>({ open: false, user: null });
+  const [resetPasswordDialog, setResetPasswordDialog] = useState<{ open: boolean; user: any }>({ open: false, user: null });
   const [cannotDeleteDialog, setCannotDeleteDialog] = useState<{ open: boolean; user: any; message: string }>({ open: false, user: null, message: "" });
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -473,6 +475,15 @@ const handleDeleteUser = async (user: any) => {
                             <Button
                               variant="ghost"
                               size="sm"
+                              className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
+                              onClick={() => setResetPasswordDialog({ open: true, user })}
+                              title="Resetear contraseña"
+                            >
+                              <KeyRound className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className={`h-7 w-7 p-0 rounded-lg transition-all ${
                                 isActive
                                   ? "hover:bg-amber-100 hover:text-amber-600"
@@ -588,6 +599,15 @@ const handleDeleteUser = async (user: any) => {
                                 onClick={() => handleOpenEdit(user)}
                               >
                                 <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
+                                onClick={() => setResetPasswordDialog({ open: true, user })}
+                                title="Resetear contraseña"
+                              >
+                                <KeyRound className="h-3.5 w-3.5" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -731,6 +751,14 @@ const handleDeleteUser = async (user: any) => {
 
       {/* Modal Nuevo Usuario */}
       <AddUserModal open={addUserOpen} onOpenChange={setAddUserOpen} onSuccess={fetchUsers} />
+
+      {/* Modal Resetear Contraseña */}
+      <ResetPasswordModal
+        open={resetPasswordDialog.open}
+        onOpenChange={(open) => setResetPasswordDialog({ open, user: open ? resetPasswordDialog.user : null })}
+        user={resetPasswordDialog.user}
+        onSuccess={fetchUsers}
+      />
 
       {/* Diálogo Suspender/Activar */}
       <Dialog open={suspendDialog.open} onOpenChange={(open) => setSuspendDialog({ open, user: open ? suspendDialog.user : null })}>
