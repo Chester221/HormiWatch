@@ -19,6 +19,7 @@ import {
 import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
 import { AddUserModal } from "@/components/team/AddUserModal";
 import { ResetPasswordModal } from "@/components/team/ResetPasswordModal";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { UserFilters, DEFAULT_ROLE_OPTIONS } from "@/components/admin/UserFilters";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -463,46 +464,62 @@ const handleDeleteUser = async (user: any) => {
                           </span>
 
                           <div className="flex items-center gap-0.5">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
-                              onClick={() => handleOpenEdit(user)}
-                              title="Editar"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
-                              onClick={() => setResetPasswordDialog({ open: true, user })}
-                              title="Resetear contraseña"
-                            >
-                              <KeyRound className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={`h-7 w-7 p-0 rounded-lg transition-all ${
-                                isActive
-                                  ? "hover:bg-amber-100 hover:text-amber-600"
-                                  : "hover:bg-emerald-100 hover:text-emerald-600"
-                              }`}
-                              onClick={() => setSuspendDialog({ open: true, user })}
-                              title={isActive ? "Desactivar" : "Activar"}
-                            >
-                              {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-500 rounded-lg transition-all"
-                              onClick={() => setDeleteDialog({ open: true, user })}
-                              title="Eliminar"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
+                                  onClick={() => handleOpenEdit(user)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Editar</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg transition-all"
+                                  onClick={() => setResetPasswordDialog({ open: true, user })}
+                                >
+                                  <KeyRound className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Resetear contraseña</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className={`h-7 w-7 p-0 rounded-lg transition-all ${
+                                    isActive
+                                      ? "hover:bg-amber-100 hover:text-amber-600"
+                                      : "hover:bg-emerald-100 hover:text-emerald-600"
+                                  }`}
+                                  onClick={() => setSuspendDialog({ open: true, user })}
+                                >
+                                  {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>{isActive ? "Desactivar" : "Activar"}</TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-500 rounded-lg transition-all"
+                                  onClick={() => setDeleteDialog({ open: true, user })}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Eliminar</TooltipContent>
+                            </Tooltip>
                           </div>
                         </div>
                       </motion.div>
@@ -592,43 +609,62 @@ const handleDeleteUser = async (user: any) => {
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
-                                onClick={() => handleOpenEdit(user)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
-                                onClick={() => setResetPasswordDialog({ open: true, user })}
-                                title="Resetear contraseña"
-                              >
-                                <KeyRound className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className={`h-7 w-7 p-0 rounded-lg ${
-                                  isActive
-                                    ? "hover:bg-amber-100 hover:text-amber-600"
-                                    : "hover:bg-emerald-100 hover:text-emerald-600"
-                                }`}
-                                onClick={() => setSuspendDialog({ open: true, user })}
-                              >
-                                {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-500 rounded-lg"
-                                onClick={() => setDeleteDialog({ open: true, user })}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
+                                    onClick={() => handleOpenEdit(user)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Editar</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] rounded-lg"
+                                    onClick={() => setResetPasswordDialog({ open: true, user })}
+                                  >
+                                    <KeyRound className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Resetear contraseña</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className={`h-7 w-7 p-0 rounded-lg ${
+                                      isActive
+                                        ? "hover:bg-amber-100 hover:text-amber-600"
+                                        : "hover:bg-emerald-100 hover:text-emerald-600"
+                                    }`}
+                                    onClick={() => setSuspendDialog({ open: true, user })}
+                                  >
+                                    {isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>{isActive ? "Desactivar" : "Activar"}</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 hover:bg-red-100 hover:text-red-500 rounded-lg"
+                                    onClick={() => setDeleteDialog({ open: true, user })}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Eliminar</TooltipContent>
+                              </Tooltip>
                             </div>
                           </td>
                         </tr>

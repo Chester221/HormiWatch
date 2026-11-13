@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
-import { AddUserModal } from "@/components/team/AddUserModal";
 import { TeamMemberFormModal } from "@/components/team/TeamMemberFormModal";
 import { MemberDetailModal } from "@/components/team/MemberDetailModal";
 import { TeamMemberCard, type TeamMemberLike } from "@/components/team/TeamMemberCard";
@@ -16,7 +15,7 @@ import { toast } from "sonner";
 import {
   Users, Shield, Wrench, Briefcase, UserCog, Loader2, AlertTriangle,
   Crown, CheckCircle, ChevronLeft, ChevronRight, Table, Grid3x3,
-  Pencil, Trash2, TrendingUp, UserPlus, Ban, Eye,
+  Pencil, Trash2, TrendingUp, Ban, Eye,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTeamMembers, useUpdateTeamMember, useDeleteTeamMember } from "@/hooks/useTeamMembers";
@@ -156,7 +155,6 @@ export default function Team() {
   const [statusFilter, setStatusFilter] = useState("all");
 
   // Modales
-  const [addOpen, setAddOpen] = useState(false);
   const [manageMemberOpen, setManageMemberOpen] = useState(false);
   const [detailMember, setDetailMember] = useState<Member | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -362,14 +360,6 @@ export default function Team() {
           <UserCog className="h-4 w-4" /> Gestionar Rol
         </Button>
       )}
-      {isAdmin && (
-        <Button
-          onClick={() => setAddOpen(true)}
-          className="gap-2 text-white shadow-md hover:shadow-lg transition-all bg-[#0DA2E7] hover:bg-[#0B8BC7]"
-        >
-          <UserPlus className="h-4 w-4" /> Agregar Miembro
-        </Button>
-      )}
     </div>
   </div>
 </div>
@@ -491,7 +481,7 @@ export default function Team() {
           >
             <Users className="h-16 w-16 text-muted-foreground/20 mb-4" />
             <p className="text-lg font-medium text-foreground">No hay miembros</p>
-            <p className="text-sm text-muted-foreground mt-1">Ajusta los filtros o agrega un nuevo miembro</p>
+            <p className="text-sm text-muted-foreground mt-1">Ajusta los filtros para ver más resultados</p>
           </motion.div>
         ) : (
           <AnimatePresence mode="wait" initial={false}>
@@ -568,13 +558,6 @@ export default function Team() {
       </div>
 
       {/* ═══════════ MODALES ═══════════ */}
-
-      {/* Agregar miembro (crea cuenta de usuario) — solo Admin */}
-      <AddUserModal
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onSuccess={() => setAddOpen(false)}
-      />
 
       {/* Gestionar rol */}
       <ManageMemberModal

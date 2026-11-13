@@ -9,7 +9,6 @@ import { useTasks, useCreateTasks } from "@/hooks/useTasks";
 import { useProjects } from "@/hooks/useProjects";
 import { CreateTaskModal } from "@/components/tasks/CreateTaskModal";
 import { CreateProjectModal } from "@/components/projects/CreateProjectModal";
-import { AddUserModal } from "@/components/team/AddUserModal";
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
 import { CreateServiceModal } from "@/components/services/CreateServiceModal";
 import { useServices } from "@/hooks/useServices";
@@ -88,7 +87,6 @@ const TechnicianDashboard = () => {
 
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
   const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
-  const [addUserModalOpen, setAddUserModalOpen] = useState(false);
   const [manageMemberModalOpen, setManageMemberModalOpen] = useState(false);
   const [createServiceModalOpen, setCreateServiceModalOpen] = useState(false);
 
@@ -340,11 +338,6 @@ const TechnicianDashboard = () => {
             open={createProjectModalOpen}
             onOpenChange={(open) => setCreateProjectModalOpen(open)}
             onSuccess={() => { setCreateProjectModalOpen(false); }}
-          />
-          <AddUserModal
-            open={addUserModalOpen}
-            onOpenChange={setAddUserModalOpen}
-            onSuccess={() => { setAddUserModalOpen(false); }}
           />
           <ManageMemberModal
             open={manageMemberModalOpen}

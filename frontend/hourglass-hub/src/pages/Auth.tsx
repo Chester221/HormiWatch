@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Clock, Mail, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle } from "lucide-react";
+import { Clock, Mail, Lock, User, Eye, EyeOff, ArrowRight, CheckCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -289,7 +289,8 @@ const Auth = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex items-center justify-center gap-1.5 pt-1">
+                      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <p className="text-xs text-muted-foreground">
                         ¿Olvidaste tu contraseña? Contacta al Administrador.
                       </p>
