@@ -242,23 +242,29 @@ export function NotificationsBell() {
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-            <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 text-muted-foreground"
-          aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ''}`}
-        >
-          <Bell className="h-5 w-5" />
-          {/* El resto del código del Badge se queda igual... */}
-          {unread > 0 && (
-            <Badge
-              className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white"
-            >
-              {unread > 99 ? '99+' : unread}
-            </Badge>
-          )}
-        </Button>
+      <PopoverTrigger asChild>
+        <div> {/* ✅ El div contenedor evita que el clic choque con el Tooltip */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9 text-muted-foreground"
+                aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ''}`}
+              >
+                <Bell className="h-5 w-5" />
+                {unread > 0 && (
+                  <Badge
+                    className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white"
+                  >
+                    {unread > 99 ? '99+' : unread}
+                  </Badge>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Notificaciones</TooltipContent>
+          </Tooltip>
+        </div>
       </PopoverTrigger>
 
       <PopoverContent
