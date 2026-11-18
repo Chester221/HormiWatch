@@ -6,6 +6,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // ✅ IMPORTADO
 import { ArrowRight, MoreHorizontal, Pencil, Trash2, DollarSign, Wrench } from "lucide-react";
 import type { Service } from "@/hooks/useServices";
 import { cn } from "@/lib/utils";
@@ -36,15 +37,21 @@ interface ServiceActionsMenuProps {
 export function ServiceActionsMenu({ service, onEdit, onDelete }: ServiceActionsMenuProps) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Opciones</TooltipContent>
+      </Tooltip>
+
       <DropdownMenuContent
         align="end"
         onClick={(e) => e.stopPropagation()}

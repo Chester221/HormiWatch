@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // ✅ IMPORTADO
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 
@@ -138,9 +139,17 @@ export function TaskList({ tasks, onEditTask, onDeleteTask, onTaskClick }: TaskL
                   >
                     {statusInfo.label}
                   </Badge>
-                  <Badge className={`text-[10px] px-2 py-0.5 ${factorTone} border-none font-semibold tracking-wide rounded-full`} title={f.title}>
-                    {f.label}
-                  </Badge>
+                  
+                  {/* ✅ TOOLTIP APLICADO AL FACTOR */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge className={`text-[10px] px-2 py-0.5 ${factorTone} border-none font-semibold tracking-wide rounded-full cursor-help`}>
+                        {f.label}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>{f.title}</TooltipContent>
+                  </Tooltip>
+
                 </div>
 
                 <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
@@ -181,32 +190,47 @@ export function TaskList({ tasks, onEditTask, onDeleteTask, onTaskClick }: TaskL
               {/* Acciones */}
               {(onEditTask || onDeleteTask) && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 flex-shrink-0">
+                  
+                  {/* ✅ TOOLTIP APLICADO AL BOTÓN EDITAR */}
                   {onEditTask && task.canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-lg hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditTask(task);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7] transition-all duration-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditTask(task);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Editar tarea</TooltipContent>
+                    </Tooltip>
                   )}
+
+                  {/* ✅ TOOLTIP APLICADO AL BOTÓN ELIMINAR */}
                   {onDeleteTask && task.canDelete && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-red-500 transition-all duration-200"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onDeleteTask(task);
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-red-500 transition-all duration-200"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteTask(task);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Eliminar tarea</TooltipContent>
+                    </Tooltip>
                   )}
+
                 </div>
               )}
             </div>

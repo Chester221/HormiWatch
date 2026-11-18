@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'; // ✅ IMPORTADO
 import {
   Popover,
   PopoverContent,
@@ -242,21 +243,27 @@ export function NotificationsBell() {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-9 w-9 text-muted-foreground"
-          aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ''}`}
-        >
-          <Bell className="h-5 w-5" />
-          {unread > 0 && (
-            <Badge
-              className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white"
+        {/* ✅ TOOLTIP APLICADO AL BOTÓN DE LA CAMPANITA */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative h-9 w-9 text-muted-foreground"
+              aria-label={`Notificaciones${unread > 0 ? ` (${unread} sin leer)` : ''}`}
             >
-              {unread > 99 ? '99+' : unread}
-            </Badge>
-          )}
-        </Button>
+              <Bell className="h-5 w-5" />
+              {unread > 0 && (
+                <Badge
+                  className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white"
+                >
+                  {unread > 99 ? '99+' : unread}
+                </Badge>
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Notificaciones</TooltipContent>
+        </Tooltip>
       </PopoverTrigger>
 
       <PopoverContent
@@ -454,33 +461,48 @@ export function NotificationsBell() {
                       </div>
 
                       <div className="flex shrink-0 flex-col items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                        
+                        {/* ✅ TOOLTIP APLICADO A MARCAR COMO LEÍDA */}
                         {!n.readAt && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-[#0DA2E7]"
-                            aria-label="Marcar como leída"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              markRead.mutate(n.id);
-                            }}
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-[#0DA2E7]"
+                                aria-label="Marcar como leída"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markRead.mutate(n.id);
+                                }}
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Marcar como leída</TooltipContent>
+                          </Tooltip>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-red-600"
-                          aria-label="Eliminar notificación"
-                          disabled={deleteNotification.isPending}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteNotification.mutate(n.id);
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+
+                        {/* ✅ TOOLTIP APLICADO A ELIMINAR */}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:bg-red-50 hover:text-red-600"
+                              aria-label="Eliminar notificación"
+                              disabled={deleteNotification.isPending}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteNotification.mutate(n.id);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Eliminar notificación</TooltipContent>
+                        </Tooltip>
+
                       </div>
                     </div>
                   );

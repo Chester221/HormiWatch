@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // ✅ IMPORTADO
 import {
   Plus, Package, Layers, DollarSign, TrendingUp,
   ChevronLeft, ChevronRight, Grid3x3, Table, Eye, SearchX, Wrench,
@@ -98,7 +99,6 @@ export default function Services() {
 
   const handleView = (service: Service) => setDetailService(service);
 
-  // Abrir el detalle de un servicio desde la búsqueda global (?service=id)
   useEffect(() => {
     const serviceId = searchParams.get("service");
     if (!serviceId) return;
@@ -244,30 +244,43 @@ export default function Services() {
 
           {/* Toggle de vista */}
           <div className="flex shrink-0 items-center gap-0.5 self-start rounded-lg border border-border/30 bg-card/50 p-0.5 shadow-sm md:self-auto">
-            <button
-              type="button"
-              onClick={() => switchView("grid")}
-              title="Vista de tarjetas"
-              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
-                viewMode === "grid"
-                  ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-              }`}
-            >
-              <Grid3x3 className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => switchView("table")}
-              title="Vista de tabla"
-              className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
-                viewMode === "table"
-                  ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-              }`}
-            >
-              <Table className="h-4 w-4" />
-            </button>
+            
+            {/* ✅ TOOLTIP APLICADO A VISTA DE TARJETAS */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => switchView("grid")}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
+                    viewMode === "grid"
+                      ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                  }`}
+                >
+                  <Grid3x3 className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Vista de tarjetas</TooltipContent>
+            </Tooltip>
+
+            {/* ✅ TOOLTIP APLICADO A VISTA DE TABLA */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => switchView("table")}
+                  className={`flex h-8 w-8 items-center justify-center rounded-md transition-all duration-200 ${
+                    viewMode === "table"
+                      ? "bg-[#0DA2E7]/10 text-[#0DA2E7] shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                  }`}
+                >
+                  <Table className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>Vista de tabla</TooltipContent>
+            </Tooltip>
+
           </div>
         </div>
 
@@ -397,14 +410,20 @@ export default function Services() {
                           <td className="p-4 text-right">
                             {canEdit ? (
                               <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  title="Ver detalle"
-                                  onClick={(e) => { e.stopPropagation(); handleView(service); }}
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
-                                >
-                                  <Eye className="h-3.5 w-3.5" />
-                                </button>
+                                {/* ✅ TOOLTIP APLICADO AL BOTÓN VER DETALLE */}
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); handleView(service); }}
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Ver detalle</TooltipContent>
+                                </Tooltip>
+
                                 <ServiceActionsMenu service={service} onEdit={handleEdit} onDelete={handleDeleteRequest} />
                               </div>
                             ) : (
