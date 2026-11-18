@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"; // ✅ IMPORTADO
 import { ManageMemberModal } from "@/components/team/ManageMemberModal";
 import { TeamMemberFormModal } from "@/components/team/TeamMemberFormModal";
 import { MemberDetailModal } from "@/components/team/MemberDetailModal";
@@ -106,24 +107,39 @@ function TableRow({
       </td>
       <td className="p-4 text-right">
         <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
-            onClick={(e) => { e.stopPropagation(); onOpenDetail(member); }}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
+          
+          {/* ✅ TOOLTIP APLICADO AL BOTÓN VER DETALLE */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
+                onClick={(e) => { e.stopPropagation(); onOpenDetail(member); }}
+              >
+                <Eye className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Ver detalle</TooltipContent>
+          </Tooltip>
+
+          {/* ✅ TOOLTIP APLICADO AL BOTÓN EDITAR */}
           {canEdit && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
-              onClick={(e) => { e.stopPropagation(); onEdit(member); }}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 hover:bg-[#0DA2E7]/10 hover:text-[#0DA2E7]"
+                  onClick={(e) => { e.stopPropagation(); onEdit(member); }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Editar miembro</TooltipContent>
+            </Tooltip>
           )}
+
         </div>
       </td>
     </motion.tr>
