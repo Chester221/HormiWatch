@@ -46,7 +46,7 @@ export class Profile {
   @Column({ type: 'varchar', length: 50, name: 'last_name', nullable: true })
   lastName: string;
 
-  @Column({ type: 'varchar', length: 16, nullable: true })
+  @Column({ type: 'varchar', length: 24, nullable: true })
   phone: string;
 
   @Column({ type: 'varchar', length: 15, nullable: true })

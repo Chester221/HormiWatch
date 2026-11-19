@@ -24,7 +24,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { projectStatusInfo, formatProjectDate } from "@/lib/dashboardUtils";
-import { useClientsWithContacts, useDeleteClient, type ClientWithContacts } from "@/hooks/useClientes";
+import {
+  useClientsWithContacts, useDeleteClient, formatCompanyPhone, companyPhoneHref,
+  type ClientWithContacts,
+} from "@/hooks/useClientes";
 import { toast } from "sonner";
 import { projectsApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -103,14 +106,14 @@ function ClientCard({ client, expandedClients, toggleClient, handleEditClient, h
                           <span className="truncate">{client.address}</span>
                         </span>
                       )}
-                      {client.ruc && (
+                      {client.rif && (
                         <Badge variant="secondary" className="text-xs gap-1 h-5 px-1.5">
                           <FileText className="h-2.5 w-2.5" />
-                          {client.ruc}
+                          {client.rif}
                         </Badge>
                       )}
                     </div>
-                    {(client.email || client.phone) && (
+                    {(client.email || formatCompanyPhone(client)) && (
                       <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-xs text-muted-foreground">
                         {client.email && (
                           <a href={`mailto:${client.email}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-[#0DA2E7] transition-colors">
@@ -118,10 +121,10 @@ function ClientCard({ client, expandedClients, toggleClient, handleEditClient, h
                             <span className="truncate max-w-[160px]">{client.email}</span>
                           </a>
                         )}
-                        {client.phone && (
-                          <a href={`tel:${client.phone}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-[#0DA2E7] transition-colors">
+                        {formatCompanyPhone(client) && (
+                          <a href={`tel:${companyPhoneHref(client)}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1 hover:text-[#0DA2E7] transition-colors">
                             <Phone className="h-3 w-3 shrink-0" />
-                            {client.phone}
+                            {formatCompanyPhone(client)}
                           </a>
                         )}
                       </div>

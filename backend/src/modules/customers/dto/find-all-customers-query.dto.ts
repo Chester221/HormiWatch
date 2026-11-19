@@ -5,7 +5,7 @@ import { PageOptionsDto } from 'src/common/pagination/pagination-options.dto';
 
 export class FindAllCustomersQueryDto extends PageOptionsDto {
   @ApiPropertyOptional({
-    description: 'Search term for name, city, or country',
+    description: 'Search term for name, RIF, city, or country',
   })
   @IsOptional()
   @IsString()

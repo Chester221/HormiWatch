@@ -619,7 +619,7 @@ export function ProjectFormModal({
                                     <CommandItem
                                       key={client.id}
                                       value={`${client.name} ${
-                                        client.ruc || ""
+                                        client.rif || ""
                                       } ${client.id}`}
                                       onSelect={() => {
                                         if (field.value !== client.id) {

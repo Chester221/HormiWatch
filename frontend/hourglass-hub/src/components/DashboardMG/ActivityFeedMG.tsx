@@ -1605,7 +1605,7 @@ const ClientsView = ({ hoursByClient, onViewClient, onViewAllClients, clients, p
         color: clientHours.color || HORMI_BLUE,
         projectCount: clientProjects.length,
         logo: client.logo_url || null,
-        ruc: client.ruc || null,
+        rif: client.rif || null,
         address: client.address || null,
         department: client.department || null,
         is_active: client.is_active !== undefined ? client.is_active : true,
@@ -1629,7 +1629,7 @@ const ClientsView = ({ hoursByClient, onViewClient, onViewAllClients, clients, p
     return enrichedClients.filter((c: any) => {
       const matchesSearch = !searchQuery || 
         c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (c.ruc && c.ruc.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (c.rif && c.rif.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (c.address && c.address.toLowerCase().includes(searchQuery.toLowerCase()));
       
       const matchesStatus = statusFilter === "all" || 
@@ -2011,9 +2011,9 @@ const ClientsView = ({ hoursByClient, onViewClient, onViewAllClients, clients, p
                       </div>
                       <div className="mb-3 relative">
                         <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-[#0DA2E7] transition-colors">{client.name}</h3>
-                        {client.ruc && (
+                        {client.rif && (
                           <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                            <Hash className="h-3 w-3" />{client.ruc}
+                            <Hash className="h-3 w-3" />{client.rif}
                           </p>
                         )}
                       </div>
@@ -2114,7 +2114,7 @@ const ClientsView = ({ hoursByClient, onViewClient, onViewAllClients, clients, p
                           <h3 className="text-sm font-semibold text-foreground truncate group-hover:text-[#0DA2E7] transition-colors">{client.name}</h3>
                           <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${client.is_active ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{client.is_active ? "Activo" : "Inactivo"}</Badge>
                         </div>
-                        {client.ruc && <p className="text-[10px] text-muted-foreground mt-0.5">{client.ruc}</p>}
+                        {client.rif && <p className="text-[10px] text-muted-foreground mt-0.5">{client.rif}</p>}
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-bold text-foreground">{client.hours.toFixed(1)}h</p>

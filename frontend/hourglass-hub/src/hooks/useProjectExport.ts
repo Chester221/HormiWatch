@@ -221,7 +221,7 @@ const buildReport = async (
   // Datos del cliente y de la actividad
   setCell(ws, LAYOUT.cliente.row, LAYOUT.cliente.col, project.client || 'Sin cliente');
   setCell(ws, LAYOUT.contacto.row, LAYOUT.contacto.col, project.clientContact || '');
-  setCell(ws, LAYOUT.codigo.row, LAYOUT.codigo.col, project.codigo || project.ruc || project.clientId || '');
+  setCell(ws, LAYOUT.codigo.row, LAYOUT.codigo.col, project.codigo || project.rif || project.clientId || '');
   setCell(ws, LAYOUT.cargo.row, LAYOUT.cargo.col, project.cargo || '');
   setCell(ws, LAYOUT.departamento.row, LAYOUT.departamento.col, project.departamento || '');
   setCell(ws, LAYOUT.telefono.row, LAYOUT.telefono.col, project.telefono || '');

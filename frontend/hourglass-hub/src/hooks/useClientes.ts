@@ -21,19 +21,50 @@ export interface ClientWithContacts extends Client {
 export interface Client {
     id: string
     name: string
-    ruc: string | null
+    rif: string | null
+    phone_country?: string | null
+    phone_area?: string | null
+    phone_number?: string | null
     address: string | null
     email?: string | null
     logo_url?: string | null
     code?: string | null
     department?: string | null
     position?: string | null
+    /** Legacy: el antiguo phone raíz se inyectaba en el primer contacto. */
     phone?: string | null
     channel?: string | null
     management?: string | null
     created_at?: string
     updated_at?: string
 }
+
+/** Teléfono de empresa compuesto desde sus 3 columnas (ej. +58 212-2384510). */
+export const formatCompanyPhone = (client?: {
+    phone_country?: string | null
+    phone_area?: string | null
+    phone_number?: string | null
+} | null): string => {
+    if (!client) return '';
+    const { phone_country: country, phone_area: area, phone_number: number } = client;
+    // Sin área y número no hay teléfono: el país suelto (+58) no es un teléfono.
+    if (!area || !number) return '';
+    return country ? `${country} ${area}-${number}` : `${area}-${number}`;
+}
+
+export const companyPhoneHref = (client?: {
+    phone_country?: string | null
+    phone_area?: string | null
+    phone_number?: string | null
+} | null): string => formatCompanyPhone(client).replace(/[^\d+]/g, '');
+
+/** Garantiza que el backend reciba SIEMPRE un string en contacts[].phone. */
+const normalizeContactForApi = <T extends { phone?: unknown }>(contact: T) => ({
+    ...contact,
+    phone: contact.phone === null || contact.phone === undefined || contact.phone === ''
+        ? undefined
+        : String(contact.phone).trim() || undefined,
+});
 
 // ✅ Llaves ESTABLES: las listas se cachean una sola vez y el buscador filtra en memoria
 // (antes cada tecleo disparaba un refetch).
@@ -117,7 +148,7 @@ export const useClientsWithContacts = (searchQuery?: string) => {
         return all.filter(c =>
             c.name.toLowerCase().includes(search) ||
             (c.address && c.address.toLowerCase().includes(search)) ||
-            (c.ruc && c.ruc.toLowerCase().includes(search))
+            (c.rif && c.rif.toLowerCase().includes(search))
         );
     }, [query.data, searchQuery]);
 
@@ -151,7 +182,7 @@ export const useClients = (searchQuery?: string) => {
         const search = searchQuery.toLowerCase();
         return all.filter(c =>
             c.name.toLowerCase().includes(search) ||
-            (c.ruc && c.ruc.toLowerCase().includes(search))
+            (c.rif && c.rif.toLowerCase().includes(search))
         );
     }, [query.data, searchQuery]);
 
@@ -174,7 +205,14 @@ export const useClientContacts = (clientId: string | undefined) => {
 export const useCreateClient = () => {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async (data: { name: string; ruc?: string; address?: string }) => {
+        mutationFn: async (data: {
+            name: string;
+            rif?: string;
+            address?: string;
+            phone_country?: string;
+            phone_area?: string;
+            phone_number?: string;
+        }) => {
             const newClient = await customersApi.create(data);
             return newClient as Client
         },
@@ -187,7 +225,10 @@ export const useCreateClient = () => {
             const optimistic = {
                 id: `temp-client-${Date.now()}`,
                 name: data.name,
-                ruc: data.ruc || null,
+                rif: data.rif || null,
+                phone_country: data.phone_country || null,
+                phone_area: data.phone_area || null,
+                phone_number: data.phone_number || null,
                 address: data.address || null,
                 contacts: [] as ClientContact[],
                 created_at: new Date().toISOString(),
@@ -240,7 +281,10 @@ export const useUpdateClient = () => {
                     if (String(c.id) !== String(id)) return c;
                     const patch: any = {};
                     if (data.name !== undefined) patch.name = data.name;
-                    if (data.ruc !== undefined) patch.ruc = data.ruc;
+                    if (data.rif !== undefined) patch.rif = data.rif;
+                    if (data.phone_country !== undefined) patch.phone_country = data.phone_country;
+                    if (data.phone_area !== undefined) patch.phone_area = data.phone_area;
+                    if (data.phone_number !== undefined) patch.phone_number = data.phone_number;
                     if (data.address !== undefined) patch.address = data.address;
                     if (data.email !== undefined) patch.email = data.email;
                     if (data.phone !== undefined) patch.phone = data.phone;
@@ -303,7 +347,7 @@ export const useCreateContact = () => {
     return useMutation({
         mutationFn: async (data: { client_id: string; name: string; email?: string; phone?: string; position?: string; department?: string }) => {
             const client = await customersApi.getById(data.client_id);
-            const contacts = [...(client?.contacts || []), data];
+            const contacts = [...(client?.contacts || []), data].map(normalizeContactForApi);
             await customersApi.update(data.client_id, { contacts });
             return data as ClientContact
         },
@@ -335,17 +379,24 @@ export const useSaveClientWithContacts = () => {
     const queryClient = useQueryClient()
     return useMutation({
         mutationFn: async ({ client, contacts, isEditing }: {
-            client: { id?: string; name: string; ruc?: string; address?: string; email?: string; phone?: string }
-            contacts: { name: string; email?: string; phone?: string; position?: string; department?: string }[]
+            client: {
+                id?: string; name: string; rif?: string; address?: string;
+                email?: string; phone?: string;
+                phone_country?: string; phone_area?: string; phone_number?: string;
+            }
+            contacts: { name: string; email?: string; phone?: string | number | null; position?: string; department?: string }[]
             isEditing: boolean
         }) => {
             const clientData = {
                 name: client.name,
-                ruc: client.ruc,
+                rif: client.rif,
                 address: client.address,
                 email: client.email || undefined,
                 phone: client.phone || undefined,
-                contacts: contacts
+                phone_country: client.phone_country || undefined,
+                phone_area: client.phone_area || undefined,
+                phone_number: client.phone_number || undefined,
+                contacts: contacts.map(normalizeContactForApi),
             };
 
             if (isEditing && client.id) {
@@ -370,11 +421,14 @@ export const useSaveClientWithContacts = () => {
                         if (String(c.id) !== String(client.id)) return c;
                         const patch: any = {};
                         if (client.name !== undefined) patch.name = client.name;
-                        if (client.ruc !== undefined) patch.ruc = client.ruc;
+                        if (client.rif !== undefined) patch.rif = client.rif;
+                        if (client.phone_country !== undefined) patch.phone_country = client.phone_country;
+                        if (client.phone_area !== undefined) patch.phone_area = client.phone_area;
+                        if (client.phone_number !== undefined) patch.phone_number = client.phone_number;
                         if (client.address !== undefined) patch.address = client.address;
                         if (client.email !== undefined) patch.email = client.email;
                         if (client.phone !== undefined) patch.phone = client.phone;
-                        patch.contacts = contacts;
+                        patch.contacts = contacts.map(normalizeContactForApi);
                         return { ...c, ...patch };
                     });
                 });
@@ -384,11 +438,14 @@ export const useSaveClientWithContacts = () => {
                 const optimistic = {
                     id: tempId,
                     name: client.name,
-                    ruc: client.ruc || null,
+                    rif: client.rif || null,
+                    phone_country: client.phone_country || null,
+                    phone_area: client.phone_area || null,
+                    phone_number: client.phone_number || null,
                     address: client.address || null,
                     email: client.email,
                     phone: client.phone,
-                    contacts: contacts,
+                    contacts: contacts.map(normalizeContactForApi),
                     created_at: new Date().toISOString(),
                 };
                 runOnClients(queryClient, (old) => {

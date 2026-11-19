@@ -3,6 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Trash2, User, Loader2, Upload, X, Building2, ImageIcon, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
@@ -29,12 +32,31 @@ interface ClientFormModalProps {
   client?: ClientWithContacts | null;
 }
 
-const rifRegex = /^[JG]-\d{8}-\d$/;
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const validateRif = (rif: string) => {
-  if (!rif) return 'El RIF es obligatorio';
-  if (!rifRegex.test(rif)) return 'Formato: J-12345678-9 o G-12345678-9';
+const RIF_PREFIXES = ['J', 'G'] as const;
+type RifPrefix = (typeof RIF_PREFIXES)[number];
+const COUNTRY_CODES = ['+58', '+54', '+1', '+57', '+56'] as const;
+const COUNTRY_LABELS: Record<string, string> = {
+  '+58': 'Venezuela (+58)',
+  '+54': 'Argentina (+54)',
+  '+1': 'EE.UU. (+1)',
+  '+57': 'Colombia (+57)',
+  '+56': 'Chile (+56)',
+};
+
+const normalizeRifDigits = (value: string) => value.replace(/\D/g, '').slice(0, 9);
+const formatRifDigits = (digits: string) =>
+  digits.length > 8 ? `${digits.slice(0, 8)}-${digits.slice(8)}` : digits;
+const composeRif = (prefix: string, digits: string) =>
+  `${prefix}-${digits.slice(0, 8)}-${digits.slice(8, 9)}`;
+
+const validateRif = (prefix: string, digits: string) => {
+  if (!prefix && !digits) return 'El RIF es obligatorio';
+  if (!RIF_PREFIXES.includes(prefix as RifPrefix)) {
+    return 'El prefijo debe ser J (Jurídico) o G (Gobierno)';
+  }
+  if (digits.length !== 9) return 'Formato: J-12345678-9 o G-12345678-9';
   return null;
 };
 
@@ -49,7 +71,10 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   const saveClientMutation = useSaveClientWithContacts();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [formData, setFormData] = useState({ name: "", rif: "", address: "", email: "", phone: "" });
+  const [formData, setFormData] = useState({
+    name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
+    phoneCountry: "+58", phoneArea: "", phoneNumber: "",
+  });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -60,14 +85,28 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   useEffect(() => {
     if (open) {
       if (client) {
-        setFormData({ name: client.name, rif: client.ruc || "", address: client.address || "", email: client.email || "", phone: client.phone || "" });
+        const rawRif = (client as any).rif || "";
+        const rifMatch = /^([JG])-(\d{8})-(\d)$/.exec(rawRif);
+        setFormData({
+          name: client.name,
+          rifPrefix: rifMatch ? rifMatch[1] : "J",
+          rifDigits: rifMatch ? `${rifMatch[2]}${rifMatch[3]}` : normalizeRifDigits(rawRif),
+          address: client.address || "",
+          email: client.email || "",
+          phoneCountry: (client as any).phone_country || "+58",
+          phoneArea: (client as any).phone_area || "",
+          phoneNumber: (client as any).phone_number || "",
+        });
         setLogoPreview((client as any).logo_url || null);
         setContacts(client.contacts.map(c => ({
           id: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
           position: c.position || "", department: (c as any).department || "",
         })));
       } else {
-        setFormData({ name: "", rif: "", address: "", email: "", phone: "" });
+        setFormData({
+          name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
+          phoneCountry: "+58", phoneArea: "", phoneNumber: "",
+        });
         setLogoPreview(null); setLogoFile(null); setContacts([]);
       }
       setTouched({});
@@ -80,7 +119,15 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
       if (!formData.name.trim()) errs.name = 'El nombre es obligatorio';
       else if (formData.name.trim().length < 2) errs.name = 'Mínimo 2 caracteres';
     }
-    if (touched.rif || formData.rif) { const e = validateRif(formData.rif); if (e) errs.rif = e; }
+    const rifError = validateRif(formData.rifPrefix, formData.rifDigits);
+    if (touched.rif || formData.rifPrefix || formData.rifDigits) {
+      if (rifError) errs.rif = rifError;
+    }
+    if (formData.phoneArea || formData.phoneNumber) {
+      if (!/^\d{1,4}$/.test(formData.phoneArea) || !/^\d{6,10}$/.test(formData.phoneNumber)) {
+        errs.phone = 'Área (1-4 dígitos) y número (6-10 dígitos) requeridos';
+      }
+    }
     if (touched.address || formData.address) { if (!formData.address.trim()) errs.address = 'La dirección es obligatoria'; }
     if (formData.email.trim()) { if (!emailRegex.test(formData.email.trim())) errs.email = 'Email inválido'; }
     contacts.forEach((c, i) => {
@@ -94,7 +141,10 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
 
   const isFormValid = useMemo(() => {
     if (!formData.name.trim() || formData.name.trim().length < 2) return false;
-    if (!rifRegex.test(formData.rif)) return false;
+    if (validateRif(formData.rifPrefix, formData.rifDigits)) return false;
+    if (formData.phoneArea || formData.phoneNumber) {
+      if (!/^\d{1,4}$/.test(formData.phoneArea) || !/^\d{6,10}$/.test(formData.phoneNumber)) return false;
+    }
     if (!formData.address.trim()) return false;
     if (formData.email.trim() && !emailRegex.test(formData.email.trim())) return false;
     const vc = contacts.filter(c => c.name.trim() !== "");
@@ -170,8 +220,23 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
 
     try {
       const result = await saveClientMutation.mutateAsync({
-        client: { id: client?.id, name: formData.name, address: formData.address, ruc: formData.rif, email: formData.email, phone: formData.phone },
-        contacts: validContacts.map(c => ({ name: c.name, email: c.email, phone: c.phone || undefined, position: c.position, department: c.department })),
+        client: {
+          id: client?.id,
+          name: formData.name,
+          rif: composeRif(formData.rifPrefix, formData.rifDigits),
+          address: formData.address,
+          email: formData.email,
+          phone_country: formData.phoneArea && formData.phoneNumber ? formData.phoneCountry : undefined,
+          phone_area: formData.phoneArea || undefined,
+          phone_number: formData.phoneNumber || undefined,
+        },
+        contacts: validContacts.map(c => ({
+          name: c.name,
+          email: c.email,
+          phone: String(c.phone ?? '').trim() || undefined,
+          position: c.position,
+          department: c.department,
+        })),
         isEditing,
       });
 
@@ -196,13 +261,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     } catch (error: any) {
       toast.error(`Error: ${error.message}`);
     }
-  };
-
-  const formatRif = (value: string) => {
-    let cleaned = value.toUpperCase().replace(/[^JG0-9-]/g, '');
-    if (cleaned.length >= 2 && cleaned[1] !== '-') cleaned = cleaned[0] + '-' + cleaned.slice(1);
-    if (cleaned.length >= 11 && cleaned[10] !== '-') cleaned = cleaned.slice(0, 10) + '-' + cleaned.slice(10);
-    return cleaned.slice(0, 12);
   };
 
   return (
@@ -328,17 +386,44 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                   <Label className="text-sm font-medium flex items-center gap-1.5">
                     RIF <span className="text-red-500">*</span>
                   </Label>
-                  <Input
-                    value={formData.rif}
-                    onChange={(e) => { setFormData({ ...formData, rif: formatRif(e.target.value) }); setTouched({ ...touched, rif: true }); }}
-                    placeholder="J-12345678-9"
-                    maxLength={12}
-                    className={cn(
-                      "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
-                      "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
-                      errors.rif ? "border-red-300 focus:border-red-500" : "border-border/60"
-                    )}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={formData.rifPrefix}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, rifPrefix: value });
+                        setTouched({ ...touched, rif: true });
+                      }}
+                    >
+                      <SelectTrigger
+                        className={cn(
+                          "h-11 w-[78px] shrink-0 rounded-xl bg-muted/10 border-2",
+                          errors.rif ? "border-red-300" : "border-border/60"
+                        )}
+                      >
+                        <SelectValue placeholder="J" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="J">J</SelectItem>
+                        <SelectItem value="G">G</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground/60 shrink-0">-</span>
+                    <Input
+                      value={formatRifDigits(formData.rifDigits)}
+                      onChange={(e) => {
+                        setFormData({ ...formData, rifDigits: normalizeRifDigits(e.target.value) });
+                        setTouched({ ...touched, rif: true });
+                      }}
+                      placeholder="12345678-9"
+                      inputMode="numeric"
+                      maxLength={10}
+                      className={cn(
+                        "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
+                        "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
+                        errors.rif ? "border-red-300 focus:border-red-500" : "border-border/60"
+                      )}
+                    />
+                  </div>
                   {errors.rif ? (
                     <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {errors.rif}</p>
                   ) : (
@@ -391,19 +476,60 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                 </div>
                 <div className="space-y-2">
                   <Label className="text-sm font-medium flex items-center gap-1.5">
-                    Teléfono <span className="text-muted-foreground/60">(Opcional)</span>
+                    Teléfono de empresa <span className="text-muted-foreground/60">(Opcional)</span>
                   </Label>
-                  <Input
-                    value={formData.phone}
-                    onChange={(e) => { setFormData({ ...formData, phone: e.target.value }); setTouched({ ...touched, phone: true }); }}
-                    placeholder="+58 212-0000000"
-                    maxLength={20}
-                    className={cn(
-                      "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
-                      "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
-                      "border-border/60"
-                    )}
-                  />
+                  <div className="grid grid-cols-[72px_64px_1fr] gap-2">
+                    <Select
+                      value={formData.phoneCountry}
+                      onValueChange={(value) => setFormData({ ...formData, phoneCountry: value })}
+                    >
+                      <SelectTrigger className="h-11 rounded-xl bg-muted/10 border-2 border-border/60 px-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRY_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>{code}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={formData.phoneArea}
+                      onChange={(e) => {
+                        setFormData({ ...formData, phoneArea: e.target.value.replace(/\D/g, '').slice(0, 4) });
+                        setTouched({ ...touched, phone: true });
+                      }}
+                      placeholder="212"
+                      inputMode="numeric"
+                      maxLength={4}
+                      className={cn(
+                        "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
+                        "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
+                        errors.phone ? "border-red-300 focus:border-red-500" : "border-border/60"
+                      )}
+                    />
+                    <Input
+                      value={formData.phoneNumber}
+                      onChange={(e) => {
+                        setFormData({ ...formData, phoneNumber: e.target.value.replace(/\D/g, '').slice(0, 10) });
+                        setTouched({ ...touched, phone: true });
+                      }}
+                      placeholder="2384510"
+                      inputMode="numeric"
+                      maxLength={10}
+                      className={cn(
+                        "h-11 rounded-xl bg-muted/10 border-2 transition-all duration-200",
+                        "focus:border-[#0DA2E7]/50 focus:bg-white focus:shadow-md focus:shadow-[#0DA2E7]/5",
+                        errors.phone ? "border-red-300 focus:border-red-500" : "border-border/60"
+                      )}
+                    />
+                  </div>
+                  {errors.phone ? (
+                    <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {errors.phone}</p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground/60">
+                      {COUNTRY_LABELS[formData.phoneCountry]} · Área + número
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -525,9 +651,10 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                             <Input
                               value={contact.phone}
                               onChange={(e) => updateContact(contact.id, "phone", e.target.value, index)}
-                              placeholder="+58 000-0000000"
+                              placeholder="+58 412-1234567"
                               className="h-9 text-sm bg-card/50 border-border/60 rounded-lg"
                             />
+                            <p className="text-[10px] text-muted-foreground/60">Formato internacional libre (persona natural)</p>
                           </div>
                         </div>
                       </motion.div>

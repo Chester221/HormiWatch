@@ -7,6 +7,8 @@ import {
   IsUUID,
   IsObject,
   MinLength,
+  MaxLength,
+  Matches,
 } from 'class-validator';
 
 export class UpdateUserDto {
@@ -30,9 +32,16 @@ export class UpdateUserDto {
   @IsString()
   lastName?: string;
 
-  @ApiPropertyOptional({ description: 'User phone number' })
+  @ApiPropertyOptional({
+    description: 'Teléfono en formato internacional libre',
+  })
   @IsOptional()
   @IsString()
+  @MaxLength(24)
+  @Matches(/^[+()\d\s-]+$/, {
+    message:
+      'El teléfono solo puede contener dígitos, +, paréntesis, espacios y guiones',
+  })
   phone?: string;
 
   @ApiPropertyOptional({ description: 'User ID card' })

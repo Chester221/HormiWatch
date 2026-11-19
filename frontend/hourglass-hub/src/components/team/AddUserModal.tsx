@@ -119,15 +119,10 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
   };
   const passwordValid = Object.values(pwChecks).every(Boolean);
 
+  // Personas naturales: formato internacional libre, sin forzar +58 ni
+  // reeditingar lo que el usuario escribe (ej. +54 11 1234-5678 o 0414-1234567).
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value;
-    if (!val.startsWith("+58")) val = "+58 " + val.replace(/[^\d\s]/g, "");
-    const digits = val.slice(3).replace(/\s/g, "");
-    let f = "+58";
-    if (digits.length > 0) f += " " + digits.slice(0, 3);
-    if (digits.length > 3) f += " " + digits.slice(3, 6);
-    if (digits.length > 6) f += " " + digits.slice(6, 10);
-    setPhone(f.trim());
+    setPhone(e.target.value);
   };
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -335,9 +330,10 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
               <Input
                 value={phone}
                 onChange={handlePhoneChange}
-                placeholder="+58 412 413 4891"
+                placeholder="+58 412-1234567 o 0414-1234567"
                 className="mt-1 h-9 rounded-lg bg-muted/20 border-border/60 text-sm font-mono"
               />
+              <p className="mt-1 text-[10px] text-muted-foreground/60">Formato libre con prefijo internacional</p>
             </div>
           </div>
 

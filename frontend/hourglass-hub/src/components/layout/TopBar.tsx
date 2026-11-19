@@ -129,12 +129,12 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
     // ---------- CLIENTES (solo Admin/Manager) ----------
     if (canSearchClients) {
       clients.forEach((c: any) => {
-        if (!c.name?.toLowerCase().includes(q) && !c.ruc?.toLowerCase().includes(q)) return;
+        if (!c.name?.toLowerCase().includes(q) && !c.rif?.toLowerCase().includes(q)) return;
         out.push({
           type: 'Cliente',
           icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Briefcase className="h-4 w-4 text-[#0DA2E7]" /></span>,
           label: c.name,
-          sub: ['RIF:', c.ruc].filter(Boolean).join(' '),
+          sub: ['RIF:', c.rif].filter(Boolean).join(' '),
           path: `/clients?client=${c.id}`
         });
       });
@@ -318,7 +318,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
             <DropdownMenuLabel className="font-normal"><div className="flex flex-col space-y-1"><p className="text-sm font-medium">{userName}</p><p className="text-xs text-muted-foreground">{userEmail}</p></div></DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")}><User className="h-4 w-4 mr-2" />Mi Perfil</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuración</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuraciï¿½n</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive"><LogOut className="h-4 w-4 mr-2" />Cerrar SesiÃ³n</DropdownMenuItem>
           </DropdownMenuContent>

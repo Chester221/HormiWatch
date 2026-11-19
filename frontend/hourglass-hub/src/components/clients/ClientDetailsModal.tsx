@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { taskHours, projectStatusInfo, formatProjectDate } from "@/lib/dashboardUtils";
+import { formatCompanyPhone, companyPhoneHref } from "@/hooks/useClientes";
 
 const HORMI_BLUE = '#0DA2E7';
 const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
@@ -59,6 +60,7 @@ export default function ClientDetailsModal({
 
   const clientData = clients.find((c: any) => c.name === client?.name) || client || {};
   const clientColor = clientData.color || HORMI_BLUE;
+  const companyPhone = formatCompanyPhone(clientData);
 
   const clientProjects = useMemo(() => {
     if (!clientData?.id) return [];
@@ -232,21 +234,21 @@ export default function ClientDetailsModal({
               {activeTab === 'info' && (
                 <div className="space-y-5">
                   {/* Info General */}
-                  {(clientData.ruc || clientData.code || clientData.address || clientData.department || clientData.email || clientData.phone) && (
+                  {(clientData.rif || clientData.code || clientData.address || clientData.department || clientData.email || companyPhone) && (
                     <div>
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
                         <Building2 className="h-3.5 w-3.5 text-[#0DA2E7]" />
                         Información General
                       </h3>
                       <div className="grid grid-cols-2 gap-3">
-                        {(clientData.ruc || clientData.code) && (
+                        {(clientData.rif || clientData.code) && (
                           <div className="p-3 rounded-lg border border-border/40 bg-muted/5">
                             <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mb-0.5">
                               <Hash className="h-3 w-3" />
                               RIF / Código
                             </p>
                             <p className="text-sm font-medium text-foreground">
-                              {clientData.ruc || clientData.code}
+                              {clientData.rif || clientData.code}
                             </p>
                           </div>
                         )}
@@ -275,17 +277,17 @@ export default function ClientDetailsModal({
                             </a>
                           </div>
                         )}
-                        {clientData.phone && (
+                        {companyPhone && (
                           <div className="p-3 rounded-lg border border-border/40 bg-muted/5">
                             <p className="text-[10px] text-muted-foreground flex items-center gap-1.5 mb-0.5">
                               <Phone className="h-3 w-3" />
-                              Teléfono
+                              Teléfono de empresa
                             </p>
                             <a
-                              href={`tel:${clientData.phone}`}
+                              href={`tel:${companyPhoneHref(clientData)}`}
                               className="text-sm font-medium text-foreground hover:text-[#0DA2E7] transition-colors"
                             >
-                              {clientData.phone}
+                              {companyPhone}
                             </a>
                           </div>
                         )}

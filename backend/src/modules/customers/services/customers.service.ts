@@ -33,7 +33,17 @@ interface IncomingContactData {
 }
 
 type CustomerColumns = Partial<
-  Pick<Customer, 'name' | 'ruc' | 'country' | 'city' | 'address'>
+  Pick<
+    Customer,
+    | 'name'
+    | 'rif'
+    | 'country'
+    | 'city'
+    | 'address'
+    | 'phone_country'
+    | 'phone_area'
+    | 'phone_number'
+  >
 >;
 
 /** Los DTOs actuales no declaran country/city, pero la entidad sí los tiene;
@@ -59,18 +69,21 @@ export class CustomersService {
   private sanitizeCustomerData(dto: IncomingCustomerData): CustomerColumns {
     const data: CustomerColumns = {};
     if (dto.name !== undefined) data.name = dto.name;
-    if (dto.ruc !== undefined) data.ruc = dto.ruc;
+    if (dto.rif !== undefined) data.rif = dto.rif;
+    if (dto.phone_country !== undefined) data.phone_country = dto.phone_country;
+    if (dto.phone_area !== undefined) data.phone_area = dto.phone_area;
+    if (dto.phone_number !== undefined) data.phone_number = dto.phone_number;
     if (dto.country !== undefined) data.country = dto.country;
     if (dto.city !== undefined) data.city = dto.city;
     if (dto.address !== undefined) data.address = dto.address;
     return data;
   }
 
-  /** Teléfono E.164: sin espacios, guiones ni paréntesis. */
-  private normalizePhone(value?: string | null): string | undefined {
+  /** Personas naturales: se guarda tal como lo escribió el usuario, solo trim. */
+  private trimPhone(value?: string | null): string | undefined {
     if (typeof value !== 'string') return undefined;
-    const normalized = value.replace(/[\s\-()]/g, '');
-    return normalized.length > 0 ? normalized : undefined;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
 
   /** Solo columnas reales de `customers_contacts`, con lastName por defecto
@@ -86,7 +99,7 @@ export class CustomersService {
       position: contact.position,
       email: contact.email,
     };
-    const phone = this.normalizePhone(contact.phone);
+    const phone = this.trimPhone(contact.phone);
     if (phone !== undefined) data.phone = phone;
     return data;
   }
@@ -104,14 +117,14 @@ export class CustomersService {
       this.sanitizeContact(contact, customerName),
     );
 
-    const normalizedRootPhone = this.normalizePhone(rootPhone);
-    if (rootEmail || normalizedRootPhone) {
+    const rootPhoneTrimmed = this.trimPhone(rootPhone);
+    if (rootEmail || rootPhoneTrimmed) {
       if (!result.length) {
         result.push({ name: customerName, lastName: '' });
       }
       const first = result[0];
       if (rootEmail && !first.email) first.email = rootEmail;
-      if (normalizedRootPhone && !first.phone) first.phone = normalizedRootPhone;
+      if (rootPhoneTrimmed && !first.phone) first.phone = rootPhoneTrimmed;
     }
 
     return result;
@@ -191,7 +204,7 @@ export class CustomersService {
     if (search) {
       const term = `%${search.trim().toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(customer.name) LIKE :term OR LOWER(customer.city) LIKE :term OR LOWER(customer.country) LIKE :term)',
+        '(LOWER(customer.name) LIKE :term OR LOWER(customer.city) LIKE :term OR LOWER(customer.country) LIKE :term OR LOWER(customer.rif) LIKE :term)',
         { term },
       );
     }

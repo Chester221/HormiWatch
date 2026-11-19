@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { FileSpreadsheet, Search, X, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProjectExport } from "@/hooks/useProjectExport";
-import { useClients, useClientContacts } from "@/hooks/useClientes";
+import { useClients, useClientContacts, formatCompanyPhone } from "@/hooks/useClientes";
 import { toast } from "sonner";
 
 interface ProjectExportDialogProps {
@@ -63,11 +63,11 @@ export function ProjectExportDialog({
         clientContact: contact?.name || client?.name || '',
         cargo: contact?.position || client?.position || client?.department || '',
         departamento: contact?.department || client?.department || '',
-        telefono: contact?.phone || client?.phone || '',
+        telefono: contact?.phone || formatCompanyPhone(client) || '',
         canal: client?.channel || '',
         type: projectToExport.type || 'Consultoría',
         gerencia: client?.department || '',
-        codigo: client?.ruc || client?.code || '',
+        codigo: client?.rif || client?.code || '',
         otros: projectToExport.others || '',
         notes: projectToExport.description || '',
       };

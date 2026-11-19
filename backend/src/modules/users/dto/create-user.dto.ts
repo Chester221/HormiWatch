@@ -8,6 +8,7 @@ import {
   IsStrongPassword,
   IsUUID,
   MaxLength,
+  Matches,
 } from 'class-validator';
 
 export class CreateUserDto {
@@ -38,20 +39,18 @@ export class CreateUserDto {
   email: string;
 
   @ApiProperty({
-    description: 'The phone number of the user',
-    example: '+1234567890',
+    description:
+      'Teléfono en formato internacional libre (ej. +54 11 1234-5678 o 0414-1234567)',
+    example: '+58 412-1234567',
     required: false,
   })
   @IsString()
   @IsOptional()
-  @MaxLength(16)
-  /*
-  @Matches(/^\+\d{1,3}\d{10}$/, {
+  @MaxLength(24)
+  @Matches(/^[+()\d\s-]+$/, {
     message:
-      'phone number format: +[country code][local number], without spaces or special characters',
+      'El teléfono solo puede contener dígitos, +, paréntesis, espacios y guiones',
   })
-  */
-  @IsMobilePhone(undefined, { strictMode: true })
   phone?: string;
 
   @ApiProperty({
