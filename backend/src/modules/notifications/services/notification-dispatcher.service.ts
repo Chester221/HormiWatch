@@ -62,8 +62,8 @@ export class NotificationDispatcherService {
       if (webhooks[channel]) {
         await this.discord.sendEvent(webhooks, channel, event);
       } else {
-        this.logger.warn(
-          `Discord webhook no configurado para el canal "${channel}" (evento "${event.key}")`,
+        this.logger.error(
+          `Discord no enviado (evento "${event.key}"): webhook no configurado para el canal "${channel}"`,
         );
       }
     }

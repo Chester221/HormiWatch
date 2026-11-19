@@ -33,8 +33,16 @@ export class DiscordService {
         embeds: message.embeds,
       });
     } catch (e) {
+      const response = axios.isAxiosError(e) ? e.response : undefined;
+      const status = response?.status ?? 'n/a';
+      const statusText = response?.statusText || '';
+      const detail = response?.data
+        ? ` - respuesta: ${JSON.stringify(response.data).slice(0, 300)}`
+        : '';
       this.logger.warn(
-        `Discord webhook fallo (${key}): ${e instanceof Error ? e.message : String(e)}`,
+        `Discord webhook fallo (${key}): HTTP ${status}${
+          statusText ? ` ${statusText}` : ''
+        } - ${e instanceof Error ? e.message : String(e)}${detail}`,
       );
     }
   }

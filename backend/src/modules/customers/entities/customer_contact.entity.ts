@@ -18,7 +18,7 @@ export class CustomerContact extends BaseUuidEntity {
   @Column({ type: 'varchar', name: 'position', length: 100, nullable: true })
   position: string;
 
-  @Column({ type: 'varchar', name: 'phone', length: 16, nullable: true })
+  @Column({ type: 'varchar', name: 'phone', length: 24, nullable: true })
   phone: string;
 
   @Column({ type: 'varchar', name: 'email', length: 100, nullable: true })

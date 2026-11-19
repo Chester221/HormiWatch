@@ -19,6 +19,29 @@ import { NotificationEmitterService } from '../../notifications/services/notific
 import { NotificationCategory } from '../../notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../../notifications/enums/notification-level.enum';
 
+/** Forma normalizada de un contacto entrante (create o update). Los DTOs
+ *  pueden traer campos extra que NO son columnas (department, id, etc.). */
+interface IncomingContactData {
+  id?: string;
+  name?: string;
+  lastName?: string;
+  idCard?: string;
+  id_card?: string;
+  position?: string;
+  phone?: string;
+  email?: string;
+}
+
+type CustomerColumns = Partial<
+  Pick<Customer, 'name' | 'ruc' | 'country' | 'city' | 'address'>
+>;
+
+/** Los DTOs actuales no declaran country/city, pero la entidad sí los tiene;
+ *  se aceptan igualmente si llegan en el payload. */
+type IncomingCustomerData = Partial<CreateCustomerDto> &
+  Partial<UpdateCustomerDto> &
+  Partial<Pick<Customer, 'country' | 'city'>>;
+
 @Injectable()
 export class CustomersService {
   private readonly logger = new Logger(CustomersService.name);
@@ -30,6 +53,69 @@ export class CustomersService {
     private readonly customerContactRepository: Repository<CustomerContact>,
     private readonly notifications: NotificationEmitterService,
   ) {}
+
+  /** Columnas reales de `customers`. Evita que email/phone/logo_url/etc.
+   *  lleguen al QueryBuilder y provoquen "Property X was not found". */
+  private sanitizeCustomerData(dto: IncomingCustomerData): CustomerColumns {
+    const data: CustomerColumns = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.ruc !== undefined) data.ruc = dto.ruc;
+    if (dto.country !== undefined) data.country = dto.country;
+    if (dto.city !== undefined) data.city = dto.city;
+    if (dto.address !== undefined) data.address = dto.address;
+    return data;
+  }
+
+  /** Teléfono E.164: sin espacios, guiones ni paréntesis. */
+  private normalizePhone(value?: string | null): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const normalized = value.replace(/[\s\-()]/g, '');
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  /** Solo columnas reales de `customers_contacts`, con lastName por defecto
+   *  '' (la columna es NOT NULL) y mapeo idCard → id_card. */
+  private sanitizeContact(
+    contact: IncomingContactData,
+    customerName: string,
+  ): Partial<CustomerContact> {
+    const data: Partial<CustomerContact> = {
+      name: contact.name || customerName,
+      lastName: contact.lastName ?? '',
+      id_card: contact.idCard ?? contact.id_card,
+      position: contact.position,
+      email: contact.email,
+    };
+    const phone = this.normalizePhone(contact.phone);
+    if (phone !== undefined) data.phone = phone;
+    return data;
+  }
+
+  /** Construye los contactos a persistir. Si el cliente trae email/teléfono
+   *  en la raíz, los inyecta como fallback en el primer contacto; si no hay
+   *  contactos, crea uno usando el nombre del cliente. */
+  private buildContacts(
+    contacts: IncomingContactData[] | undefined,
+    customerName: string,
+    rootEmail?: string,
+    rootPhone?: string,
+  ): Array<Partial<CustomerContact>> {
+    const result = (contacts ?? []).map((contact) =>
+      this.sanitizeContact(contact, customerName),
+    );
+
+    const normalizedRootPhone = this.normalizePhone(rootPhone);
+    if (rootEmail || normalizedRootPhone) {
+      if (!result.length) {
+        result.push({ name: customerName, lastName: '' });
+      }
+      const first = result[0];
+      if (rootEmail && !first.email) first.email = rootEmail;
+      if (normalizedRootPhone && !first.phone) first.phone = normalizedRootPhone;
+    }
+
+    return result;
+  }
 
   async getDashboardData() {
     const totalCustomers = await this.customerRepository.count();
@@ -44,7 +130,9 @@ export class CustomersService {
   async createCustomer(
     createCustomerDto: CreateCustomerDto,
   ): Promise<Customer> {
-    const { contacts, ...customerData } = createCustomerDto;
+    // email/phone viven en customers_contacts, nunca en customers.
+    const { contacts, email, phone, ...rest } = createCustomerDto;
+    const customerData = this.sanitizeCustomerData(rest);
 
     const result = await this.customerRepository
       .createQueryBuilder()
@@ -55,11 +143,17 @@ export class CustomersService {
 
     const id = result.identifiers[0].id as string;
 
-    if (contacts && contacts.length > 0) {
-      const contactEntities = contacts.map((contact) =>
+    const contactData = this.buildContacts(
+      contacts as IncomingContactData[] | undefined,
+      customerData.name || '',
+      email,
+      phone,
+    );
+    if (contactData.length > 0) {
+      const contactEntities = contactData.map((contact) =>
         this.customerContactRepository.create({
           ...contact,
-          customer: { id: id },
+          customer: { id },
         }),
       );
       await this.customerContactRepository.save(contactEntities);
@@ -136,28 +230,48 @@ export class CustomersService {
     id: string,
     updateCustomerDto: UpdateCustomerDto,
   ): Promise<Customer> {
-    const { contacts, ...customerData } = updateCustomerDto;
+    const { contacts, email, phone, ...rest } = updateCustomerDto;
+    const customerData = this.sanitizeCustomerData(rest);
 
-    const result = await this.customerRepository
-      .createQueryBuilder()
-      .update(Customer)
-      .set(customerData)
-      .where('id = :id', { id })
-      .andWhere('deleted_at IS NULL')
-      .execute();
+    // Un PATCH que solo trae contactos no debe ejecutar un UPDATE vacío.
+    if (Object.keys(customerData).length > 0) {
+      const result = await this.customerRepository
+        .createQueryBuilder()
+        .update(Customer)
+        .set(customerData)
+        .where('id = :id', { id })
+        .andWhere('deleted_at IS NULL')
+        .execute();
 
-    if (result.affected === 0) {
-      throw new NotFoundException(`Customer with ID "${id}" not found`);
+      if (result.affected === 0) {
+        throw new NotFoundException(`Customer with ID "${id}" not found`);
+      }
     }
 
     if (contacts !== undefined) {
+      // El nombre del cliente se usa si un contacto no trae el suyo.
+      let customerName = customerData.name;
+      if (!customerName) {
+        const existing = await this.customerRepository.findOne({
+          where: { id },
+          select: ['name'],
+        });
+        customerName = existing?.name ?? '';
+      }
+
       await this.customerContactRepository.delete({ customer: { id } });
 
-      if (contacts.length > 0) {
-        const contactEntities = contacts.map((contact) =>
+      const contactData = this.buildContacts(
+        contacts as IncomingContactData[],
+        customerName,
+        email,
+        phone,
+      );
+      if (contactData.length > 0) {
+        const contactEntities = contactData.map((contact) =>
           this.customerContactRepository.create({
             ...contact,
-            customer: { id: id },
+            customer: { id },
           }),
         );
         await this.customerContactRepository.save(contactEntities);
