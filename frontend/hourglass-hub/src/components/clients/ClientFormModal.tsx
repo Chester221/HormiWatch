@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, User, Loader2, Upload, X, Building2, ImageIcon, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
+import { Plus, Trash2, User, Loader2, Building2, Sparkles, Pencil, CheckCircle, AlertCircle } from "lucide-react";
 import { useSaveClientWithContacts, type ClientWithContacts } from "@/hooks/useClientes";
-import { customersApi, storageApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -60,27 +59,16 @@ const validateRif = (prefix: string, digits: string) => {
   return null;
 };
 
-const validateEmail = (email: string) => {
-  if (!email) return 'El email es obligatorio';
-  if (!emailRegex.test(email)) return 'Email inválido';
-  return null;
-};
-
 export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalProps) {
   const isEditing = !!client;
   const saveClientMutation = useSaveClientWithContacts();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
     phoneCountry: "+58", phoneArea: "", phoneNumber: "",
   });
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const [contacts, setContacts] = useState<LocalContact[]>([]);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
-  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -97,7 +85,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
           phoneArea: (client as any).phone_area || "",
           phoneNumber: (client as any).phone_number || "",
         });
-        setLogoPreview((client as any).logo_url || null);
         setContacts(client.contacts.map(c => ({
           id: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
           position: c.position || "", department: (c as any).department || "",
@@ -107,7 +94,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
           name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
           phoneCountry: "+58", phoneArea: "", phoneNumber: "",
         });
-        setLogoPreview(null); setLogoFile(null); setContacts([]);
+        setContacts([]);
       }
       setTouched({});
     }
@@ -132,9 +119,8 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     if (formData.email.trim()) { if (!emailRegex.test(formData.email.trim())) errs.email = 'Email inválido'; }
     contacts.forEach((c, i) => {
       if (touched[`contact_name_${i}`] || c.name) { if (!c.name.trim()) errs[`contact_name_${i}`] = 'Requerido'; }
-      if (touched[`contact_position_${i}`] || c.position) { if (!c.position.trim()) errs[`contact_position_${i}`] = 'Requerido'; }
-      if (touched[`contact_department_${i}`] || c.department) { if (!c.department.trim()) errs[`contact_department_${i}`] = 'Requerido'; }
-      if (touched[`contact_email_${i}`] || c.email) { const e = validateEmail(c.email); if (e) errs[`contact_email_${i}`] = e; }
+      // Email opcional: solo se valida si el usuario escribió algo.
+      if (c.email.trim() && !emailRegex.test(c.email.trim())) errs[`contact_email_${i}`] = 'Email inválido';
     });
     return errs;
   }, [formData, contacts, touched]);
@@ -150,7 +136,9 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     const vc = contacts.filter(c => c.name.trim() !== "");
     if (vc.length === 0) return false;
     for (const c of vc) {
-      if (!c.name.trim() || !c.position.trim() || !c.department.trim() || validateEmail(c.email)) return false;
+      // Alineado con la API: el contacto solo requiere nombre; el email se
+      // valida únicamente si tiene contenido.
+      if (c.email.trim() && !emailRegex.test(c.email.trim())) return false;
     }
     return true;
   }, [formData, contacts]);
@@ -163,51 +151,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     return val !== undefined && val !== null && val !== '';
   });
 
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Solo imágenes'); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Máx 2MB'); return; }
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
-  };
-
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
-  const handleDragLeave = () => setIsDragging(false);
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) { toast.error('Solo imágenes'); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Máx 2MB'); return; }
-    setLogoFile(file);
-    setLogoPreview(URL.createObjectURL(file));
-  };
-
-  const removeLogo = () => { setLogoFile(null); setLogoPreview(null); if (fileInputRef.current) fileInputRef.current.value = ''; };
-
-  const uploadLogo = async (clientId: string): Promise<string | null> => {
-    if (!logoFile) return logoPreview;
-    setUploading(true);
-    try {
-      const fileExt = logoFile.name.split('.').pop();
-      const fileName = `${clientId}.${fileExt}`;
-      const result = await storageApi.upload(logoFile, fileName);
-      if (result?.publicUrl) {
-        setUploading(false);
-        return result.publicUrl;
-      }
-      setUploading(false);
-      return null;
-    } catch (error: any) {
-      toast.error(`Error: ${error.message}`);
-      setUploading(false);
-      return null;
-    }
-  };
-
-  const addContact = () => setContacts([...contacts, { id: `new-${Date.now()}`, name: "", email: "", phone: "", position: "", department: "" }]);
+  const addContact = () => setContacts([...contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "", position: "", department: "" }]);
   const updateContact = (id: string, field: keyof LocalContact, value: string, index: number) => {
     setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
     setTouched({ ...touched, [`contact_${field}_${index}`]: true });
@@ -221,7 +165,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     const validContacts = contacts.filter(c => c.name.trim() !== "");
 
     try {
-      const result = await saveClientMutation.mutateAsync({
+      await saveClientMutation.mutateAsync({
         client: {
           id: client?.id,
           name: formData.name,
@@ -241,22 +185,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
         })),
         isEditing,
       });
-
-      let clientId = client?.id;
-      if (!clientId && result) {
-        clientId = (result as any)?.clientId || (result as any)?.id || (result as any)?.[0]?.id;
-      }
-
-      if (clientId && logoFile) {
-        const logoUrl = await uploadLogo(clientId);
-        if (logoUrl) {
-          try {
-            await customersApi.update(clientId, { logo_url: logoUrl });
-          } catch (updateError) {
-            console.error('Error updating logo:', updateError);
-          }
-        }
-      }
 
       toast.success(isEditing ? "Cliente actualizado" : "Cliente creado");
       onOpenChange(false);
@@ -319,43 +247,6 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
-            <div className="flex items-center gap-5 p-4 rounded-xl bg-muted/10 border border-border/40 hover:border-[#0DA2E7]/20 transition-colors">
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={cn(
-                  "relative w-16 h-16 rounded-xl overflow-hidden cursor-pointer transition-all duration-200 flex-shrink-0",
-                  isDragging ? 'ring-2 ring-[#0DA2E7] scale-105' : 'hover:ring-1 hover:ring-[#0DA2E7]/50',
-                  logoPreview ? 'bg-white border border-border' : 'border-2 border-dashed border-border/60 bg-transparent'
-                )}
-              >
-                {logoPreview ? (
-                  <>
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-contain p-1.5" />
-                    <div
-                      onClick={(e) => { e.stopPropagation(); removeLogo(); }}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600 transition-colors cursor-pointer shadow-sm"
-                    >
-                      <X className="h-3 w-3" />
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full">
-                    <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleLogoSelect} className="hidden" />
-                <p className="text-sm font-medium text-foreground">Logo de la empresa</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  {logoPreview ? 'Haz clic para cambiar' : 'Clic o arrastra una imagen · PNG, JPG · Máx 2MB'}
-                </p>
-              </div>
-            </div>
-
             <div className="space-y-4">
               <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                 <Building2 className="h-3.5 w-3.5 text-[#0DA2E7]" />
@@ -609,33 +500,25 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                             {errors[`contact_name_${index}`] && <p className="text-xs text-red-500">{errors[`contact_name_${index}`]}</p>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-sm font-medium">Cargo <span className="text-red-500">*</span></Label>
+                            <Label className="text-sm font-medium">Cargo <span className="text-muted-foreground/60">(Opcional)</span></Label>
                             <Input
                               value={contact.position}
                               onChange={(e) => updateContact(contact.id, "position", e.target.value, index)}
                               placeholder="Ej: Gerente General"
-                              className={cn(
-                                "h-9 text-sm bg-card/50 border-border/60 rounded-lg",
-                                errors[`contact_position_${index}`] && "border-red-300 focus:border-red-500"
-                              )}
+                              className="h-9 text-sm bg-card/50 border-border/60 rounded-lg"
                             />
-                            {errors[`contact_position_${index}`] && <p className="text-xs text-red-500">{errors[`contact_position_${index}`]}</p>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-sm font-medium">Departamento <span className="text-red-500">*</span></Label>
+                            <Label className="text-sm font-medium">Departamento <span className="text-muted-foreground/60">(Opcional)</span></Label>
                             <Input
                               value={contact.department}
                               onChange={(e) => updateContact(contact.id, "department", e.target.value, index)}
                               placeholder="Ej: Ventas"
-                              className={cn(
-                                "h-9 text-sm bg-card/50 border-border/60 rounded-lg",
-                                errors[`contact_department_${index}`] && "border-red-300 focus:border-red-500"
-                              )}
+                              className="h-9 text-sm bg-card/50 border-border/60 rounded-lg"
                             />
-                            {errors[`contact_department_${index}`] && <p className="text-xs text-red-500">{errors[`contact_department_${index}`]}</p>}
                           </div>
                           <div className="space-y-1.5">
-                            <Label className="text-sm font-medium">Email <span className="text-red-500">*</span></Label>
+                            <Label className="text-sm font-medium">Email <span className="text-muted-foreground/60">(Opcional)</span></Label>
                             <Input
                               type="email"
                               value={contact.email}
@@ -674,7 +557,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
                 variant="outline" 
                 size="default" 
                 onClick={() => onOpenChange(false)} 
-                disabled={saveClientMutation.isPending || uploading}
+                disabled={saveClientMutation.isPending}
                 className="flex-1 rounded-xl h-11 text-sm font-medium border-2 border-border/50 hover:border-[#0DA2E7]/30 hover:bg-[#0DA2E7]/5 transition-all"
               >
                 Cancelar
@@ -682,14 +565,14 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
               <Button 
                 type="submit" 
                 size="default" 
-                disabled={!isFormValid || saveClientMutation.isPending || uploading}
+                disabled={!isFormValid || saveClientMutation.isPending}
                 className="flex-1 rounded-xl h-11 gap-2 text-white font-medium shadow-md hover:shadow-lg transition-all"
                 style={{ 
-                  background: (isFormValid && !saveClientMutation.isPending && !uploading) ? HORMI_GRADIENT : "#94a3b8",
-                  cursor: (isFormValid && !saveClientMutation.isPending && !uploading) ? 'pointer' : 'not-allowed'
+                  background: (isFormValid && !saveClientMutation.isPending) ? HORMI_GRADIENT : "#94a3b8",
+                  cursor: (isFormValid && !saveClientMutation.isPending) ? 'pointer' : 'not-allowed'
                 }}
               >
-                {(saveClientMutation.isPending || uploading) ? (
+                {saveClientMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     {isEditing ? "Guardando..." : "Creando..."}

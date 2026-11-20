@@ -1,25 +1,23 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Camera, Loader2, Mail, UserRound, UserCircle, ContactRound, ShieldCheck, LifeBuoy, Save, CheckCircle, Phone } from "lucide-react";
+import { Loader2, Mail, UserRound, UserCircle, ContactRound, ShieldCheck, LifeBuoy, Save, CheckCircle, Phone } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usersApi } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
 export default function Profile() {
-    const { user, profile, updateProfile, uploadAvatar, isManager, refreshProfile } = useAuth();
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { user, profile, updateProfile, isManager, refreshProfile } = useAuth();
 
     const [fullName, setFullName] = useState("");
     const [whatsappPhone, setWhatsappPhone] = useState("");
-    const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     // ✅ Sincronizar fullName cuando profile carga
@@ -40,38 +38,6 @@ export default function Profile() {
         .join("")
         .toUpperCase()
         .slice(0, 2);
-
-    // Manejar selección de archivo
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith("image/")) {
-            toast.error("Por favor selecciona una imagen válida");
-            return;
-        }
-
-        if (file.size > 2 * 1024 * 1024) {
-            toast.error("La imagen no debe superar los 2MB");
-            return;
-        }
-
-        setIsUploading(true);
-
-        try {
-            const { error } = await uploadAvatar(file);
-            if (error) {
-                toast.error(`Error al subir la imagen: ${error.message}`);
-            } else {
-                toast.success("Foto de perfil actualizada correctamente");
-                await refreshProfile();
-            }
-        } catch (error: any) {
-            toast.error(`Error: ${error.message}`);
-        }
-
-        setIsUploading(false);
-    };
 
     // ✅ Guardar cambios del perfil - enviar full_name correctamente
     const handleSaveProfile = async () => {
@@ -151,7 +117,7 @@ export default function Profile() {
                             </h1>
                             <p className="mt-0.5 text-sm text-muted-foreground">{fullName || profile?.full_name || "No configurado"}</p>
                             <p className="text-sm text-muted-foreground">
-                                Gestiona tu información personal y foto de perfil
+                                Gestiona tu información personal
                             </p>
                         </div>
                     </div>
@@ -168,56 +134,16 @@ export default function Profile() {
                                 Información Personal
                             </CardTitle>
                             <CardDescription className="text-sm">
-                                Actualiza tu foto y nombre de perfil
+                                Actualiza tu nombre de perfil
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            {/* Avatar Section */}
-                            <div className="flex items-center gap-6">
-                                <div className="relative">
-                                    <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
-                                        <AvatarImage src={profile?.avatar_url || undefined} />
-                                        <AvatarFallback className="bg-[#0DA2E7]/10 text-[#0DA2E7] text-2xl font-bold">
-                                            {userInitials}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <Button
-                                        size="icon"
-                                        variant="secondary"
-                                        className="absolute bottom-0 right-0 h-8 w-8 rounded-full shadow-md hover:bg-[#0DA2E7] hover:text-white transition-colors duration-200"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
-                                    >
-                                        {isUploading ? (
-                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                            <Camera className="h-4 w-4" />
-                                        )}
-                                    </Button>
-                                    <input
-                                        ref={fileInputRef}
-                                        type="file"
-                                        accept="image/*"
-                                        className="hidden"
-                                        onChange={handleFileSelect}
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="font-medium text-foreground">Foto de Perfil</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        JPG, PNG o GIF. Máximo 2MB.
-                                    </p>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="hover:border-[#0DA2E7]/30 hover:text-[#0DA2E7] transition-colors duration-200"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        disabled={isUploading}
-                                    >
-                                        {isUploading ? "Subiendo..." : "Cambiar foto"}
-                                    </Button>
-                                </div>
-                            </div>
+                            {/* Avatar por defecto con las iniciales */}
+                            <Avatar className="h-24 w-24 border-4 border-background shadow-lg">
+                                <AvatarFallback className="bg-[#0DA2E7]/10 text-[#0DA2E7] text-2xl font-bold">
+                                    {userInitials}
+                                </AvatarFallback>
+                            </Avatar>
 
                             <Separator className="bg-border/30" />
 
