@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 
 import { Customer } from '../entities/customer.entity';
 import { CustomerContact } from '../entities/customer_contact.entity';
@@ -87,18 +87,28 @@ export class CustomersService {
   }
 
   /** Solo columnas reales de `customers_contacts`, con lastName por defecto
-   *  '' (la columna es NOT NULL) y mapeo idCard → id_card. */
+   *  '' (la columna es NOT NULL) y mapeo idCard → id_card.
+   *  En updates solo se incluyen los campos enviados, para no borrar valores
+   *  existentes (por ejemplo lastName) con un PATCH parcial del contacto. */
   private sanitizeContact(
     contact: IncomingContactData,
     customerName: string,
+    isUpdate = false,
   ): Partial<CustomerContact> {
     const data: Partial<CustomerContact> = {
       name: contact.name || customerName,
-      lastName: contact.lastName ?? '',
-      id_card: contact.idCard ?? contact.id_card,
-      position: contact.position,
-      email: contact.email,
     };
+
+    if (!isUpdate || contact.lastName !== undefined) {
+      data.lastName = contact.lastName ?? '';
+    }
+    if (contact.idCard !== undefined || contact.id_card !== undefined) {
+      data.id_card = contact.idCard ?? contact.id_card;
+    }
+    if (contact.position !== undefined) data.position = contact.position;
+    if (contact.email !== undefined) data.email = contact.email;
+    if (contact.id) data.id = contact.id;
+
     const phone = this.trimPhone(contact.phone);
     if (phone !== undefined) data.phone = phone;
     return data;
@@ -128,6 +138,73 @@ export class CustomersService {
     }
 
     return result;
+  }
+
+  /** Sincroniza la lista completa de contactos de un cliente sin recrearlos:
+   *  - con ID propio → UPDATE (conserva el ID y sus relaciones con proyectos)
+   *  - sin ID (o ID ajeno al cliente) → INSERT
+   *  - existentes que ya no vienen en la lista → DELETE (el usuario los quitó)
+   *  Si `contacts` no viene en el payload no se llama a este método, de modo
+   *  que un PATCH parcial (logo_url, etc.) nunca borra contactos.
+   */
+  private async syncCustomerContacts(
+    customerId: string,
+    contacts: IncomingContactData[],
+    customerName: string,
+  ): Promise<void> {
+    const existing = await this.customerContactRepository.find({
+      where: { customer: { id: customerId } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((contact) => contact.id));
+
+    const toUpdate: Array<{ id: string; changes: Partial<CustomerContact> }> = [];
+    const toCreate: Array<Partial<CustomerContact>> = [];
+
+    for (const incoming of contacts) {
+      // Solo es UPDATE si el ID pertenece a este cliente. Un ID ajeno (o
+      // ausente) se trata como contacto nuevo y se inserta sin ese ID: nunca
+      // se secuestra un contacto de otro cliente. Los contactos nuevos se
+      // sanitizan con isUpdate=false para que reciban lastName: '' (NOT NULL).
+      const isUpdate = Boolean(incoming.id && existingIds.has(incoming.id));
+      const sanitized = this.sanitizeContact(incoming, customerName, isUpdate);
+      const { id, ...changes } = sanitized;
+
+      if (isUpdate && id) {
+        toUpdate.push({ id, changes });
+      } else {
+        toCreate.push(changes);
+      }
+    }
+
+    for (const { id, changes } of toUpdate) {
+      await this.customerContactRepository.update(
+        { id, customer: { id: customerId } },
+        changes,
+      );
+    }
+
+    if (toCreate.length > 0) {
+      const contactEntities = toCreate.map((contact) =>
+        this.customerContactRepository.create({
+          ...contact,
+          customer: { id: customerId },
+        }),
+      );
+      await this.customerContactRepository.save(contactEntities);
+    }
+
+    const keptIds = new Set(toUpdate.map(({ id }) => id));
+    const toDeleteIds = existing
+      .map((contact) => contact.id)
+      .filter((id) => !keptIds.has(id));
+
+    if (toDeleteIds.length > 0) {
+      await this.customerContactRepository.delete({
+        id: In(toDeleteIds),
+        customer: { id: customerId },
+      });
+    }
   }
 
   async getDashboardData() {
@@ -243,7 +320,7 @@ export class CustomersService {
     id: string,
     updateCustomerDto: UpdateCustomerDto,
   ): Promise<Customer> {
-    const { contacts, email, phone, ...rest } = updateCustomerDto;
+    const { contacts, email: _email, phone: _phone, ...rest } = updateCustomerDto;
     const customerData = this.sanitizeCustomerData(rest);
 
     // Un PATCH que solo trae contactos no debe ejecutar un UPDATE vacío.
@@ -262,33 +339,21 @@ export class CustomersService {
     }
 
     if (contacts !== undefined) {
-      // El nombre del cliente se usa si un contacto no trae el suyo.
-      let customerName = customerData.name;
-      if (!customerName) {
-        const existing = await this.customerRepository.findOne({
-          where: { id },
-          select: ['name'],
-        });
-        customerName = existing?.name ?? '';
+      // Validamos existencia y obtenemos el nombre para el fallback de los
+      // contactos que no traigan el suyo.
+      const existing = await this.customerRepository.findOne({
+        where: { id },
+        select: ['name'],
+      });
+      if (!existing) {
+        throw new NotFoundException(`Customer with ID "${id}" not found`);
       }
 
-      await this.customerContactRepository.delete({ customer: { id } });
-
-      const contactData = this.buildContacts(
+      await this.syncCustomerContacts(
+        id,
         contacts as IncomingContactData[],
-        customerName,
-        email,
-        phone,
+        customerData.name || existing.name,
       );
-      if (contactData.length > 0) {
-        const contactEntities = contactData.map((contact) =>
-          this.customerContactRepository.create({
-            ...contact,
-            customer: { id },
-          }),
-        );
-        await this.customerContactRepository.save(contactEntities);
-      }
     }
 
     return this.findCustomerById(id);

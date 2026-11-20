@@ -18,6 +18,8 @@ const HORMI_GRADIENT = "linear-gradient(135deg, #0DA2E7 0%, #0B8BC7 100%)";
 
 interface LocalContact {
   id: string;
+  /** ID real en BD (undefined en contactos recién agregados). */
+  existingId?: string;
   name: string;
   email: string;
   phone: string;
@@ -86,7 +88,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
           phoneNumber: (client as any).phone_number || "",
         });
         setContacts(client.contacts.map(c => ({
-          id: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
+          id: c.id, existingId: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
           position: c.position || "", department: (c as any).department || "",
         })));
       } else {
@@ -151,7 +153,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     return val !== undefined && val !== null && val !== '';
   });
 
-  const addContact = () => setContacts([...contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "", position: "", department: "" }]);
+  const addContact = () => setContacts([...contacts, { id: crypto.randomUUID(), existingId: undefined, name: "", email: "", phone: "", position: "", department: "" }]);
   const updateContact = (id: string, field: keyof LocalContact, value: string, index: number) => {
     setContacts(contacts.map(c => c.id === id ? { ...c, [field]: value } : c));
     setTouched({ ...touched, [`contact_${field}_${index}`]: true });
@@ -177,8 +179,11 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
           phone_number: formData.phoneNumber || undefined,
         },
         contacts: validContacts.map(c => ({
+          // El ID real permite al backend hacer UPDATE en vez de borrar y
+          // reinsertar (lo que rompía las relaciones con proyectos).
+          id: c.existingId || undefined,
           name: c.name,
-          email: c.email,
+          email: c.email.trim() || undefined,
           phone: String(c.phone ?? '').trim() || undefined,
           position: c.position,
           department: c.department,

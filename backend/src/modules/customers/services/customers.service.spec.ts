@@ -9,7 +9,13 @@ describe('CustomersService - saneamiento de payload', () => {
   let service: CustomersService;
   let qb: Record<string, jest.Mock>;
   let customerRepo: { createQueryBuilder: jest.Mock; findOne: jest.Mock };
-  let contactRepo: { create: jest.Mock; save: jest.Mock; delete: jest.Mock };
+  let contactRepo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    delete: jest.Mock;
+    update: jest.Mock;
+    find: jest.Mock;
+  };
   let notifications: { toAdmins: jest.Mock };
 
   beforeEach(() => {
@@ -38,6 +44,8 @@ describe('CustomersService - saneamiento de payload', () => {
       create: jest.fn((data) => data),
       save: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      find: jest.fn().mockResolvedValue([]),
     };
     notifications = { toAdmins: jest.fn() };
 
@@ -133,6 +141,149 @@ describe('CustomersService - saneamiento de payload', () => {
     expect(qb.update).not.toHaveBeenCalled();
     expect(customerRepo.findOne).toHaveBeenCalled();
     expect(contactRepo.save).toHaveBeenCalled();
+  });
+});
+
+describe('CustomersService - sincronización diferencial de contactos', () => {
+  let service: CustomersService;
+  let qb: Record<string, jest.Mock>;
+  let customerRepo: { createQueryBuilder: jest.Mock; findOne: jest.Mock };
+  let contactRepo: {
+    create: jest.Mock;
+    save: jest.Mock;
+    delete: jest.Mock;
+    update: jest.Mock;
+    find: jest.Mock;
+  };
+
+  beforeEach(() => {
+    qb = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      cache: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({ id: 'customer-1', name: 'Acme' }),
+    };
+    customerRepo = {
+      createQueryBuilder: jest.fn().mockReturnValue(qb),
+      findOne: jest.fn().mockResolvedValue({ id: 'customer-1', name: 'Acme' }),
+    };
+    contactRepo = {
+      create: jest.fn((data) => data),
+      save: jest.fn().mockResolvedValue([]),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      find: jest.fn().mockResolvedValue([]),
+    };
+    service = new CustomersService(
+      customerRepo as never,
+      contactRepo as never,
+      { toAdmins: jest.fn() } as never,
+    );
+  });
+
+  it('hace UPDATE de los existentes, INSERT de los nuevos y DELETE de los eliminados', async () => {
+    contactRepo.find.mockResolvedValue([
+      { id: 'contact-1' },
+      { id: 'contact-2' },
+      { id: 'contact-3' },
+    ]);
+
+    await service.updateCustomer('customer-1', {
+      contacts: [
+        { id: 'contact-1', name: 'Juan Actualizado', email: 'juan@acme.com' },
+        { id: 'contact-2', name: 'María' },
+        { name: 'Nuevo Contacto' },
+      ],
+    } as never);
+
+    expect(contactRepo.update).toHaveBeenCalledTimes(2);
+    expect(contactRepo.update).toHaveBeenCalledWith(
+      { id: 'contact-1', customer: { id: 'customer-1' } },
+      expect.objectContaining({
+        name: 'Juan Actualizado',
+        email: 'juan@acme.com',
+      }),
+    );
+    expect(contactRepo.update).toHaveBeenCalledWith(
+      { id: 'contact-2', customer: { id: 'customer-1' } },
+      expect.objectContaining({ name: 'María' }),
+    );
+
+    const inserted = contactRepo.save.mock.calls[0][0];
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0]).toMatchObject({
+      name: 'Nuevo Contacto',
+      lastName: '',
+      customer: { id: 'customer-1' },
+    });
+    expect(inserted[0]).not.toHaveProperty('id');
+
+    expect(contactRepo.delete).toHaveBeenCalledTimes(1);
+    expect(contactRepo.delete.mock.calls[0][0].customer).toEqual({
+      id: 'customer-1',
+    });
+    expect(contactRepo.delete.mock.calls[0][0].id.value).toEqual(['contact-3']);
+  });
+
+  it('no toca los contactos si el payload no trae contacts', async () => {
+    await service.updateCustomer('customer-1', { name: 'Acme SA' } as never);
+
+    expect(contactRepo.find).not.toHaveBeenCalled();
+    expect(contactRepo.update).not.toHaveBeenCalled();
+    expect(contactRepo.save).not.toHaveBeenCalled();
+    expect(contactRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('no actualiza contactos de otro cliente: los trata como nuevos sin su ID', async () => {
+    contactRepo.find.mockResolvedValue([{ id: 'contact-1' }]);
+
+    await service.updateCustomer('customer-1', {
+      contacts: [
+        { id: 'contact-ajeno', name: 'Infiltrado' },
+        { id: 'contact-1', name: 'Juan' },
+      ],
+    } as never);
+
+    expect(contactRepo.update).toHaveBeenCalledTimes(1);
+    expect(contactRepo.update.mock.calls[0][0].id).toBe('contact-1');
+
+    const inserted = contactRepo.save.mock.calls[0][0];
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].name).toBe('Infiltrado');
+    expect(inserted[0]).not.toHaveProperty('id');
+    expect(contactRepo.delete).not.toHaveBeenCalled();
+  });
+
+  it('no sobrescribe lastName ni id del contacto al actualizarlo', async () => {
+    contactRepo.find.mockResolvedValue([{ id: 'contact-1' }]);
+
+    await service.updateCustomer('customer-1', {
+      contacts: [{ id: 'contact-1', name: 'Juan' }],
+    } as never);
+
+    const [, changes] = contactRepo.update.mock.calls[0];
+    expect(changes).not.toHaveProperty('lastName');
+    expect(changes).not.toHaveProperty('id');
+  });
+
+  it('borra todos los contactos cuando el array viene vacío', async () => {
+    contactRepo.find.mockResolvedValue([
+      { id: 'contact-1' },
+      { id: 'contact-2' },
+    ]);
+
+    await service.updateCustomer('customer-1', { contacts: [] } as never);
+
+    expect(contactRepo.update).not.toHaveBeenCalled();
+    expect(contactRepo.save).not.toHaveBeenCalled();
+    expect(contactRepo.delete.mock.calls[0][0].id.value).toEqual([
+      'contact-1',
+      'contact-2',
+    ]);
   });
 });
 

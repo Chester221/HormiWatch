@@ -384,7 +384,7 @@ export const useSaveClientWithContacts = () => {
                 email?: string; phone?: string;
                 phone_country?: string; phone_area?: string; phone_number?: string;
             }
-            contacts: { name: string; email?: string; phone?: string | number | null; position?: string; department?: string }[]
+            contacts: { id?: string; name: string; email?: string; phone?: string | number | null; position?: string; department?: string }[]
             isEditing: boolean
         }) => {
             const clientData = {
