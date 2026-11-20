@@ -120,7 +120,7 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
       else if (formData.name.trim().length < 2) errs.name = 'Mínimo 2 caracteres';
     }
     const rifError = validateRif(formData.rifPrefix, formData.rifDigits);
-    if (touched.rif || formData.rifPrefix || formData.rifDigits) {
+    if (touched.rif || formData.rifDigits) {
       if (rifError) errs.rif = rifError;
     }
     if (formData.phoneArea || formData.phoneNumber) {
@@ -156,7 +156,9 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   }, [formData, contacts]);
 
   const requiredFields = ['name', 'rif', 'address'];
+  const rifComplete = !validateRif(formData.rifPrefix, formData.rifDigits);
   const filledFields = requiredFields.filter(f => {
+    if (f === 'rif') return rifComplete;
     const val = formData[f as keyof typeof formData];
     return val !== undefined && val !== null && val !== '';
   });

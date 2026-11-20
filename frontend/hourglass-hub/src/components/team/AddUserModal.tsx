@@ -74,7 +74,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
   const [fullName, setFullName] = useState("");
   const [roleName, setRoleName] = useState("Technician");
   const [roleUuid, setRoleUuid] = useState("");
-  const [phone, setPhone] = useState("+58 ");
+  const [phone, setPhone] = useState("");
   const [cedulaType, setCedulaType] = useState("V");
   const [cedula, setCedula] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -104,7 +104,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
 
   const reset = () => {
     setEmail(""); setPassword(""); setFullName(""); setRoleName("Technician");
-    setPhone("+58 "); setCedulaType("V"); setCedula("");
+    setPhone(""); setCedulaType("V"); setCedula("");
     setAvatarPreview(null); setAvatarFile(null); setErrors({});
   };
 
@@ -118,12 +118,6 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
     symbol: /[^A-Za-z0-9]/.test(password),
   };
   const passwordValid = Object.values(pwChecks).every(Boolean);
-
-  // Personas naturales: formato internacional libre, sin forzar +58 ni
-  // reeditingar lo que el usuario escribe (ej. +54 11 1234-5678 o 0414-1234567).
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPhone(e.target.value);
-  };
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,8 +145,9 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
 
     setIsSubmitting(true);
     try {
-      const phoneDigits = phone.replace(/[^\d]/g, "");
-      const hasPhone = phoneDigits.length >= 10;
+      // Teléfono en formato libre: se envía tal como lo escribió el usuario,
+      // sin forzar +58 ni reconstruir el prefijo (el backend lo valida).
+      const phoneValue = phone.trim();
       // ✅ CREATE OPTIMISTA: el miembro aparece al instante en el listado
       const created: any = await createMember.mutateAsync({
         name: fullName.split(" ")[0] || fullName,
@@ -161,7 +156,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
         password,
         roleId: roleUuid,
         roleName,
-        phone: hasPhone ? `+${phoneDigits}` : undefined,
+        phone: phoneValue || undefined,
         idCard: cedula ? `${cedulaType}-${cedula}` : undefined,
         _fullName: fullName,
         _role: roleName,
@@ -329,11 +324,11 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
               <Label className="text-[11px] font-medium text-muted-foreground">Teléfono</Label>
               <Input
                 value={phone}
-                onChange={handlePhoneChange}
+                onChange={(e) => setPhone(e.target.value)}
                 placeholder="+58 412-1234567 o 0414-1234567"
                 className="mt-1 h-9 rounded-lg bg-muted/20 border-border/60 text-sm font-mono"
               />
-              <p className="mt-1 text-[10px] text-muted-foreground/60">Formato libre con prefijo internacional</p>
+              <p className="mt-1 text-[10px] text-muted-foreground/60">Formato internacional libre (sin forzar +58)</p>
             </div>
           </div>
 
