@@ -51,6 +51,7 @@ class UpdateContactDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Length(0, 100)
   department?: string;
 }
 

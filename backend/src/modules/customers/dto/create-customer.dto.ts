@@ -62,11 +62,11 @@ class CreateContactDto {
   @Length(0, 100)
   position?: string;
 
-  /** Aceptado por compatibilidad con el front; no existe como columna en
-   *  CustomerContact y es descartado por el servicio antes de persistir. */
+  /** Departamento del contacto (columna real en customers_contacts). */
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @Length(0, 100)
   department?: string;
 }
 

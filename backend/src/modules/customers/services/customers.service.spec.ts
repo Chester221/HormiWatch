@@ -106,7 +106,7 @@ describe('CustomersService - saneamiento de payload', () => {
     ]);
   });
 
-  it('descarta department, mapea idCard a id_card y conserva el teléfono libre', async () => {
+  it('conserva department, mapea idCard a id_card y conserva el teléfono libre', async () => {
     await service.createCustomer({
       name: 'Acme',
       rif: 'G-12345678-9',
@@ -127,9 +127,9 @@ describe('CustomersService - saneamiento de payload', () => {
       lastName: '',
       id_card: '1712345678',
       position: 'Gerente',
+      department: 'Ventas',
       phone: '+54 11 1234-5678',
     });
-    expect(contact).not.toHaveProperty('department');
     expect(contact).not.toHaveProperty('idCard');
   });
 
@@ -194,9 +194,9 @@ describe('CustomersService - sincronización diferencial de contactos', () => {
 
     await service.updateCustomer('customer-1', {
       contacts: [
-        { id: 'contact-1', name: 'Juan Actualizado', email: 'juan@acme.com' },
+        { id: 'contact-1', name: 'Juan Actualizado', email: 'juan@acme.com', department: 'Ventas' },
         { id: 'contact-2', name: 'María' },
-        { name: 'Nuevo Contacto' },
+        { name: 'Nuevo Contacto', department: 'Soporte' },
       ],
     } as never);
 
@@ -206,6 +206,7 @@ describe('CustomersService - sincronización diferencial de contactos', () => {
       expect.objectContaining({
         name: 'Juan Actualizado',
         email: 'juan@acme.com',
+        department: 'Ventas',
       }),
     );
     expect(contactRepo.update).toHaveBeenCalledWith(
@@ -218,6 +219,7 @@ describe('CustomersService - sincronización diferencial de contactos', () => {
     expect(inserted[0]).toMatchObject({
       name: 'Nuevo Contacto',
       lastName: '',
+      department: 'Soporte',
       customer: { id: 'customer-1' },
     });
     expect(inserted[0]).not.toHaveProperty('id');

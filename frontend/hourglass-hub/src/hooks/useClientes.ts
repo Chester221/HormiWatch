@@ -66,6 +66,40 @@ const normalizeContactForApi = <T extends { phone?: unknown }>(contact: T) => ({
         : String(contact.phone).trim() || undefined,
 });
 
+type ContactPayload = {
+    id?: string;
+    name: string;
+    email?: string;
+    phone?: string | number | null;
+    position?: string;
+    department?: string;
+};
+
+/** Compara cada contacto contra el snapshot de apertura. Los campos intactos
+ *  se omiten: el backend los deja tal cual en vez de sobrescribirlos con "".
+ *  El array completo se envía igual para que el diff INSERT/UPDATE/DELETE
+ *  siga funcionando (los IDs viajan en todos los casos). */
+const buildContactsPayload = (
+    contacts: ContactPayload[],
+    initial?: ContactPayload[] | null,
+): ContactPayload[] => {
+    const keyOf = (c: ContactPayload, i: number) => c.id ?? `__new_${i}`;
+    const before = new Map((initial ?? []).map((c, i) => [keyOf(c, i), c]));
+
+    return contacts.map((contact, index) => {
+        const payload = normalizeContactForApi(contact);
+        const prev = before.get(keyOf(contact, index));
+        if (!prev) return payload;
+
+        const previous = normalizeContactForApi(prev);
+        const result: Record<string, any> = { id: payload.id, name: payload.name };
+        (['email', 'phone', 'position', 'department'] as const).forEach(key => {
+            if (payload[key] !== previous[key]) result[key] = payload[key];
+        });
+        return result as ContactPayload;
+    });
+};
+
 // ✅ Llaves ESTABLES: las listas se cachean una sola vez y el buscador filtra en memoria
 // (antes cada tecleo disparaba un refetch).
 // IMPORTANTE: la página de Clientes consume CLIENTS_WITH_CONTACTS_KEY, pero otras
@@ -378,25 +412,27 @@ export const useDeleteContact = () => {
 export const useSaveClientWithContacts = () => {
     const queryClient = useQueryClient()
     return useMutation({
-        mutationFn: async ({ client, contacts, isEditing }: {
+        mutationFn: async ({ client, contacts, initialContacts, isEditing }: {
             client: {
-                id?: string; name: string; rif?: string; address?: string;
-                email?: string; phone?: string;
+                id?: string; name?: string; rif?: string; address?: string;
+                phone?: string;
                 phone_country?: string; phone_area?: string; phone_number?: string;
             }
-            contacts: { id?: string; name: string; email?: string; phone?: string | number | null; position?: string; department?: string }[]
+            contacts: ContactPayload[]
+            initialContacts?: ContactPayload[] | null
             isEditing: boolean
         }) => {
+            // El email NO va en la raíz: customers no tiene esa columna y el
+            // backend lo ignoraba en PATCH. Vive en contacts[].email.
             const clientData = {
                 name: client.name,
                 rif: client.rif,
                 address: client.address,
-                email: client.email || undefined,
                 phone: client.phone || undefined,
                 phone_country: client.phone_country || undefined,
                 phone_area: client.phone_area || undefined,
                 phone_number: client.phone_number || undefined,
-                contacts: contacts.map(normalizeContactForApi),
+                contacts: buildContactsPayload(contacts, initialContacts),
             };
 
             if (isEditing && client.id) {
@@ -426,7 +462,6 @@ export const useSaveClientWithContacts = () => {
                         if (client.phone_area !== undefined) patch.phone_area = client.phone_area;
                         if (client.phone_number !== undefined) patch.phone_number = client.phone_number;
                         if (client.address !== undefined) patch.address = client.address;
-                        if (client.email !== undefined) patch.email = client.email;
                         if (client.phone !== undefined) patch.phone = client.phone;
                         patch.contacts = contacts.map(normalizeContactForApi);
                         return { ...c, ...patch };
@@ -443,7 +478,6 @@ export const useSaveClientWithContacts = () => {
                     phone_area: client.phone_area || null,
                     phone_number: client.phone_number || null,
                     address: client.address || null,
-                    email: client.email,
                     phone: client.phone,
                     contacts: contacts.map(normalizeContactForApi),
                     created_at: new Date().toISOString(),

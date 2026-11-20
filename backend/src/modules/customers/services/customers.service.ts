@@ -20,7 +20,7 @@ import { NotificationCategory } from '../../notifications/enums/notification-cat
 import { NotificationLevel } from '../../notifications/enums/notification-level.enum';
 
 /** Forma normalizada de un contacto entrante (create o update). Los DTOs
- *  pueden traer campos extra que NO son columnas (department, id, etc.). */
+ *  pueden traer campos extra que NO son columnas (id, etc.). */
 interface IncomingContactData {
   id?: string;
   name?: string;
@@ -28,6 +28,7 @@ interface IncomingContactData {
   idCard?: string;
   id_card?: string;
   position?: string;
+  department?: string;
   phone?: string;
   email?: string;
 }
@@ -106,6 +107,7 @@ export class CustomersService {
       data.id_card = contact.idCard ?? contact.id_card;
     }
     if (contact.position !== undefined) data.position = contact.position;
+    if (contact.department !== undefined) data.department = contact.department;
     if (contact.email !== undefined) data.email = contact.email;
     if (contact.id) data.id = contact.id;
 

@@ -71,35 +71,50 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
   });
   const [contacts, setContacts] = useState<LocalContact[]>([]);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  /** Valores originales al abrir el modal. Se usan en handleSubmit para no
+   *  reenviar (y potencialmente borrar) campos que el usuario no tocó. */
+  const [initialFormData, setInitialFormData] = useState<typeof formData | null>(null);
+  const [initialContacts, setInitialContacts] = useState<LocalContact[] | null>(null);
 
   useEffect(() => {
-    if (open) {
-      if (client) {
-        const rawRif = (client as any).rif || "";
-        const rifMatch = /^([JG])-(\d{8})-(\d)$/.exec(rawRif);
-        setFormData({
-          name: client.name,
-          rifPrefix: rifMatch ? rifMatch[1] : "J",
-          rifDigits: rifMatch ? `${rifMatch[2]}${rifMatch[3]}` : normalizeRifDigits(rawRif),
-          address: client.address || "",
-          email: client.email || "",
-          phoneCountry: (client as any).phone_country || "+58",
-          phoneArea: (client as any).phone_area || "",
-          phoneNumber: (client as any).phone_number || "",
-        });
-        setContacts(client.contacts.map(c => ({
-          id: c.id, existingId: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
-          position: c.position || "", department: (c as any).department || "",
-        })));
-      } else {
-        setFormData({
-          name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
-          phoneCountry: "+58", phoneArea: "", phoneNumber: "",
-        });
-        setContacts([]);
-      }
-      setTouched({});
+    if (!open) return;
+
+    let nextFormData: typeof formData;
+    let nextContacts: LocalContact[];
+
+    if (client) {
+      const rawRif = (client as any).rif || "";
+      const rifMatch = /^([JG])-(\d{8})-(\d)$/.exec(rawRif);
+      nextFormData = {
+        name: client.name,
+        rifPrefix: rifMatch ? rifMatch[1] : "J",
+        rifDigits: rifMatch ? `${rifMatch[2]}${rifMatch[3]}` : normalizeRifDigits(rawRif),
+        address: client.address || "",
+        // `customers` no tiene columna email: el valor real vive en el primer
+        // contacto. El root se usa solo como fallback de datos legacy.
+        email: client.contacts?.[0]?.email ?? client.email ?? "",
+        phoneCountry: (client as any).phone_country || "+58",
+        phoneArea: (client as any).phone_area || "",
+        phoneNumber: (client as any).phone_number || "",
+      };
+      nextContacts = (client.contacts ?? []).map(c => ({
+        id: c.id, existingId: c.id, name: c.name, email: c.email || "", phone: c.phone || "",
+        position: c.position || "", department: (c as any).department || "",
+      }));
+    } else {
+      nextFormData = {
+        name: "", rifPrefix: "J", rifDigits: "", address: "", email: "",
+        phoneCountry: "+58", phoneArea: "", phoneNumber: "",
+      };
+      nextContacts = [];
     }
+
+    setFormData(nextFormData);
+    setContacts(nextContacts);
+    // Copias separadas: el snapshot no debe compartir referencias con el estado.
+    setInitialFormData({ ...nextFormData });
+    setInitialContacts(nextContacts.map(c => ({ ...c })));
+    setTouched({});
   }, [client, open]);
 
   const errors = useMemo(() => {
@@ -164,30 +179,60 @@ export function ClientFormModal({ open, onOpenChange, client }: ClientFormModalP
     e.preventDefault();
     if (!isFormValid) return;
 
-    const validContacts = contacts.filter(c => c.name.trim() !== "");
+    // Misma forma de construir el payload para el estado actual y para el
+    // snapshot: así la comparación es manzanas con manzanas.
+    const buildCustomerPayload = (f: typeof formData) => ({
+      name: f.name,
+      rif: composeRif(f.rifPrefix, f.rifDigits),
+      address: f.address,
+      phone_country: f.phoneArea && f.phoneNumber ? f.phoneCountry : undefined,
+      phone_area: f.phoneArea || undefined,
+      phone_number: f.phoneNumber || undefined,
+    });
+    const buildContactPayload = (c: LocalContact) => ({
+      // El ID real permite al backend hacer UPDATE en vez de borrar y
+      // reinsertar (lo que rompía las relaciones con proyectos).
+      id: c.existingId || undefined,
+      name: c.name,
+      email: c.email.trim() || undefined,
+      phone: String(c.phone ?? '').trim() || undefined,
+      position: c.position,
+      department: c.department,
+    });
+
+    const finalContacts = contacts
+      .filter(c => c.name.trim() !== "")
+      .map(buildContactPayload);
+
+    // `customers` no tiene columna email: la casilla superior es un alias del
+    // email del primer contacto. Solo se aplica si el usuario la cambió, para
+    // no sobrescribir el valor que ya tenía el contacto.
+    const rootEmailChanged = !initialFormData || formData.email !== initialFormData.email;
+    if (rootEmailChanged && finalContacts.length > 0) {
+      finalContacts[0] = {
+        ...finalContacts[0],
+        email: formData.email.trim() || undefined,
+      };
+    }
+
+    // Solo se envían los campos del cliente que cambiaron. Si no se tocaron,
+    // se omiten y el backend conserva su valor (nada se borra por omisión).
+    const nextCustomer = buildCustomerPayload(formData);
+    const prevCustomer = initialFormData ? buildCustomerPayload(initialFormData) : null;
+    const customerPayload: Record<string, any> = { id: client?.id };
+    (Object.keys(nextCustomer) as (keyof typeof nextCustomer)[]).forEach(key => {
+      if (!prevCustomer || nextCustomer[key] !== prevCustomer[key]) {
+        customerPayload[key] = nextCustomer[key];
+      }
+    });
+
+    const originalContacts = (initialContacts ?? []).map(buildContactPayload);
 
     try {
       await saveClientMutation.mutateAsync({
-        client: {
-          id: client?.id,
-          name: formData.name,
-          rif: composeRif(formData.rifPrefix, formData.rifDigits),
-          address: formData.address,
-          email: formData.email,
-          phone_country: formData.phoneArea && formData.phoneNumber ? formData.phoneCountry : undefined,
-          phone_area: formData.phoneArea || undefined,
-          phone_number: formData.phoneNumber || undefined,
-        },
-        contacts: validContacts.map(c => ({
-          // El ID real permite al backend hacer UPDATE en vez de borrar y
-          // reinsertar (lo que rompía las relaciones con proyectos).
-          id: c.existingId || undefined,
-          name: c.name,
-          email: c.email.trim() || undefined,
-          phone: String(c.phone ?? '').trim() || undefined,
-          position: c.position,
-          department: c.department,
-        })),
+        client: customerPayload,
+        contacts: finalContacts,
+        initialContacts: originalContacts,
         isEditing,
       });
 
