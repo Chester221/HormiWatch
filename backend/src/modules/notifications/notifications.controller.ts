@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Body,
   Param,
   Patch,
@@ -14,6 +15,10 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { NotificationsService } from './services/notifications.service';
 import { NotificationSettingsService } from './services/notification-settings.service';
 import { UpdateNotificationSettingsDto } from './dto/update-notification-settings.dto';
+import { NotificationEmitterService } from './services/notification-emitter.service';
+import { NotificationEvent } from './events/notification.event';
+import { NotificationCategory } from './enums/notification-category.enum';
+import { NotificationLevel } from './enums/notification-level.enum';
 import { CurrentUser } from '../auth/decorator/current-user.decorator';
 import type { IActiveUser } from '../auth/interface/payload.interface';
 import { Roles } from '../auth/decorator/roles.decorator';
@@ -27,6 +32,7 @@ export class NotificationsController {
   constructor(
     private readonly notifications: NotificationsService,
     private readonly settings: NotificationSettingsService,
+    private readonly emitter: NotificationEmitterService,
   ) {}
 
   @Get()
@@ -73,5 +79,41 @@ export class NotificationsController {
   @UseGuards(RolesGuard)
   async updateSettings(@Body() dto: UpdateNotificationSettingsDto) {
     return this.settings.update(dto);
+  }
+
+  /**
+   * Prueba real del pipeline: settings -> dispatcher -> DiscordService.
+   * No crea notificaciones in-app, emails ni WhatsApp (testOnly).
+   */
+  @Post('test-discord')
+  @Roles(Role.admin)
+  @UseGuards(RolesGuard)
+  async testDiscord() {
+    const event = new NotificationEvent(
+      'system.test.discord',
+      NotificationCategory.SYSTEM,
+      NotificationLevel.INFO,
+      'Prueba de Discord',
+      'Si ves este mensaje, las notificaciones automáticas están llegando correctamente.',
+      { type: 'roles', roles: ['admin'] },
+      {
+        path: '/api/v1/notifications/test-discord',
+        method: 'POST',
+        description: 'Prueba manual del pipeline de notificaciones',
+        testOnly: true,
+      },
+      null,
+    );
+
+    const [result] = await this.emitter.emitAsync(event);
+    return (
+      result ?? {
+        ok: false,
+        eventKey: event.key,
+        category: event.category,
+        discordSent: false,
+        error: 'El dispatcher no devolvió resultado',
+      }
+    );
   }
 }

@@ -8,6 +8,7 @@ import { NotificationSettingsService } from './notification-settings.service';
 import { Task } from 'src/modules/tasks/entities/task.entity';
 import { Holiday } from 'src/modules/tasks/entities/holiday.entity';
 import { User } from 'src/modules/users/entities/user.entity';
+import { Project } from 'src/modules/projects/entities/project.entity';
 import { TaskStatus } from 'src/modules/tasks/enums/task-status.enum';
 import {
   countBusinessDays,
@@ -62,12 +63,14 @@ describe('StaleDetectionService', () => {
   let service: StaleDetectionService;
   let taskRepo: any;
   let userRepo: any;
+  let projectRepo: any;
   let holidayRepo: any;
   let emitter: any;
 
   beforeEach(async () => {
-    taskRepo = { createQueryBuilder: jest.fn() };
-    userRepo = { createQueryBuilder: jest.fn() };
+    taskRepo = { createQueryBuilder: jest.fn().mockReturnValue(qbMock([])) };
+    userRepo = { createQueryBuilder: jest.fn().mockReturnValue(qbMock([])) };
+    projectRepo = { createQueryBuilder: jest.fn().mockReturnValue(qbMock([])) };
     holidayRepo = { find: jest.fn(async () => []) };
     emitter = { toAdmins: jest.fn(), toUsers: jest.fn(), emit: jest.fn() };
 
@@ -76,6 +79,7 @@ describe('StaleDetectionService', () => {
         StaleDetectionService,
         { provide: getRepositoryToken(Task), useValue: taskRepo },
         { provide: getRepositoryToken(User), useValue: userRepo },
+        { provide: getRepositoryToken(Project), useValue: projectRepo },
         { provide: getRepositoryToken(Holiday), useValue: holidayRepo },
         { provide: NotificationEmitterService, useValue: emitter },
         {
@@ -212,6 +216,37 @@ describe('StaleDetectionService', () => {
       ['user-1'],
       expect.anything(),
       expect.stringContaining('inactive:user:user-1:'),
+    );
+  });
+
+  it('emite projects.inactive para proyectos sin actualizaciones ni tareas', async () => {
+    const updatedAt = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+    projectRepo.createQueryBuilder.mockReturnValue(
+      qbMock([
+        {
+          id: 'project-1',
+          title: 'Proyecto quieto',
+          status: 'IN_PROGRESS',
+          updatedAt,
+          tasks: [],
+        },
+      ]),
+    );
+
+    await service.detectAndNotify();
+
+    const inactiveEvent = emitter.toAdmins.mock.calls
+      .map((call: any[]) => call[0])
+      .find((key: string) => key === 'projects.inactive');
+    expect(inactiveEvent).toBe('projects.inactive');
+    expect(emitter.toAdmins).toHaveBeenCalledWith(
+      'projects.inactive',
+      expect.anything(),
+      expect.anything(),
+      expect.stringContaining('proyecto(s) sin actividad'),
+      expect.stringContaining('Proyecto quieto'),
+      expect.objectContaining({ staleDays: 3 }),
+      expect.stringContaining('inactive:projects:'),
     );
   });
 });

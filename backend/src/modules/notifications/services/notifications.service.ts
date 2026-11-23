@@ -39,9 +39,12 @@ export class NotificationsService {
       });
       return await this.notificationRepo.save(entity);
     } catch (err: any) {
-      // ignore unique violation
+      // Deduplicate: ya existe una notificación con el mismo eventKey/usuario.
       if (err?.code === '23505') return null;
-      this.logger.warn(`Failed to create notification: ${err?.message}`);
+      this.logger.error(
+        `No se pudo crear la notificación: ${err?.message ?? String(err)}`,
+        err instanceof Error ? err.stack : undefined,
+      );
       return null;
     }
   }

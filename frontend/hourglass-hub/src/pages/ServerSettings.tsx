@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useGlobalNotificationSettings,
+  useTestDiscordNotification,
   useUpdateNotificationSettings,
 } from "@/hooks/useNotifications";
 import { motion } from "framer-motion";
@@ -89,6 +90,7 @@ export default function ServerSettings() {
 
   const { data: settings, isLoading } = useGlobalNotificationSettings(isAdmin);
   const updateSettings = useUpdateNotificationSettings();
+  const testDiscord = useTestDiscordNotification();
   const [draft, setDraft] = useState<any>(null);
 
   useEffect(() => {
@@ -127,22 +129,10 @@ export default function ServerSettings() {
         },
         discordWebhookUrl: (settings as any).discordWebhookUrl || "",
         digestHour: settings.digestHour ?? 8,
-        digestEnabled: settings.digestEnabled ?? true,
         dailySummary: {
           enabled: true,
           startHour: 8,
           endHour: 17,
-          include: {
-            created: true,
-            deleted: true,
-            expired: true,
-            expiring: true,
-            inactive: true,
-            started: true,
-            paused: true,
-            completed: true,
-            updated: true,
-          },
           ...((settings as any).dailySummary || {}),
           include: {
             created: true,
@@ -157,7 +147,6 @@ export default function ServerSettings() {
             ...(((settings as any).dailySummary || {}).include || {}),
           },
         },
-        notifyProjectStarted: (settings as any).notifyProjectStarted ?? true,
       });
     }
   }, [settings, draft]);
@@ -186,14 +175,12 @@ export default function ServerSettings() {
       discord: draft.discord,
       discordWebhookUrl: draft.discordWebhookUrl || null,
       digestHour: Number(draft.digestHour) || 8,
-      digestEnabled: !!draft.digestEnabled,
       dailySummary: {
         enabled: !!draft.dailySummary?.enabled,
         startHour: Number(draft.dailySummary?.startHour) || 8,
         endHour: Number(draft.dailySummary?.endHour) || 17,
         include: draft.dailySummary?.include || {},
       },
-      notifyProjectStarted: !!draft.notifyProjectStarted,
     });
   };
 
@@ -235,7 +222,7 @@ export default function ServerSettings() {
                 </span>
                 <div className="min-w-0">
                   <h2 className="text-[15px] font-semibold leading-tight text-foreground">Webhook de Discord</h2>
-                  <p className="text-xs text-muted-foreground">Un solo webhook para el canal #notificaciones</p>
+                  <p className="text-xs text-muted-foreground">El webhook global tiene prioridad sobre los individuales</p>
                 </div>
               </div>
               <div className="px-6 py-5 space-y-3">
@@ -263,6 +250,21 @@ export default function ServerSettings() {
                       />
                     </div>
                   ))}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-4">
+                  <p className="text-xs text-muted-foreground">
+                    La prueba usa el mismo pipeline que las notificaciones automáticas.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => testDiscord.mutate()}
+                    disabled={testDiscord.isPending}
+                    className="gap-2 shrink-0"
+                  >
+                    <Webhook className="h-4 w-4" />
+                    {testDiscord.isPending ? "Probando..." : "Probar Discord"}
+                  </Button>
                 </div>
               </div>
             </Card>
@@ -348,21 +350,6 @@ export default function ServerSettings() {
                     ))}
                   </div>
                 </div>
-              </div>
-            </Card>
-
-            <Card className="rounded-2xl border-border/60 bg-card shadow-sm">
-              <div className="flex items-center gap-3 border-b border-border/50 px-6 pb-4 pt-5">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10 text-red-500">
-                  <Server className="h-[18px] w-[18px]" />
-                </span>
-                <div className="min-w-0">
-                  <h2 className="text-[15px] font-semibold leading-tight text-foreground">Eventos de proyectos</h2>
-                  <p className="text-xs text-muted-foreground">Notificaciones por cambio de estado</p>
-                </div>
-              </div>
-              <div className="px-6 py-5">
-                <ToggleRow label="Proyectos iniciados" description="Notificar cuando un proyecto pasa de PENDING a IN_PROGRESS" checked={!!draft.notifyProjectStarted} onChange={(v) => setDraft((d: any) => ({ ...d, notifyProjectStarted: v }))} />
               </div>
             </Card>
 

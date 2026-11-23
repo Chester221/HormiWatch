@@ -358,6 +358,16 @@ export class CustomersService {
       );
     }
 
+    // Notificación multicanal: cliente actualizado
+    this.notifications.toAdmins(
+      'customer.updated',
+      NotificationCategory.CUSTOMERS,
+      NotificationLevel.INFO,
+      'Cliente actualizado',
+      `Se actualizó el cliente "${customerData.name || id}" en el sistema.`,
+      { customerId: id, name: customerData.name },
+    );
+
     return this.findCustomerById(id);
   }
 

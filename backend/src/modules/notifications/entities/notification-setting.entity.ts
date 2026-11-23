@@ -70,7 +70,4 @@ export class NotificationSetting extends BaseUuidEntity {
       `'{"enabled": true, "startHour": 8, "endHour": 17, "include": {"created": true, "deleted": true, "expired": true, "expiring": true, "inactive": true, "started": true, "paused": true, "completed": true, "updated": true}}'`,
   })
   dailySummary: DailySummaryConfig;
-
-  @Column({ type: 'boolean', name: 'notify_project_started', default: true })
-  notifyProjectStarted: boolean;
 }

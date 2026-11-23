@@ -447,6 +447,10 @@ export const notificationsApi = {
 
   updateSettings: (data: any) =>
     apiClient('/notifications/settings', { method: 'PUT', body: JSON.stringify(data) }),
+
+  // Prueba real del pipeline settings -> dispatcher -> Discord (solo admin)
+  testDiscord: () =>
+    apiClient('/notifications/test-discord', { method: 'POST' }),
 };
 
 // ============================================================

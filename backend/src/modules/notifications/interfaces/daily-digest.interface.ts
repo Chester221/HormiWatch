@@ -41,6 +41,14 @@ export interface DigestInactiveTechnicianRow {
   daysIdle: number;
 }
 
+export interface DigestInactiveProjectRow {
+  id: string;
+  title: string;
+  status: string;
+  daysIdle: number;
+  lastUpdate: string;
+}
+
 export interface DailyDigestReport {
   expiringContracts: DigestContractRow[];
   thresholdContracts: DigestContractRow[];

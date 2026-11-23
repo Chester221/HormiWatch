@@ -55,6 +55,7 @@ const EVENT_TYPES: Record<string, string> = {
   'system.error': 'Error interno del sistema',
   'auth.login.failed': 'Intento de login fallido',
   'customer.created': 'Cliente creado',
+  'customer.updated': 'Cliente actualizado',
   'customer.deleted': 'Cliente eliminado',
   'contract.expiring': 'Contrato por vencer',
   'project.created': 'creado',
@@ -78,6 +79,7 @@ const EVENT_TYPES: Record<string, string> = {
   'auth.password.changed': 'contraseña actualizada',
   'tasks.stale': 'tareas estancadas',
   'users.inactiveTechnician': 'técnicos sin registrar horas',
+  'projects.inactive': 'Proyectos inactivos',
 };
 
 interface ResolvedContext {
@@ -437,6 +439,27 @@ export class DiscordEmbedBuilder {
     ctx: ResolvedContext,
   ): { content: string; embeds: DiscordEmbed[] } {
     const { data, project } = ctx;
+
+    // Evento agregado: proyectos sin movimiento
+    if (Array.isArray(data.projects)) {
+      const projects = this.list(data.projects);
+      return {
+        content: '📁 **Actualización de proyecto**',
+        embeds: [
+          this.embed(
+            '📁 Proyectos sin actividad',
+            `**${projects.length}** proyecto(s) sin actualizaciones ni tareas durante más de **${this.value(data.staleDays)}** día(s).`,
+            COLORS.proyectos,
+            projects.slice(0, 10).map((item) => ({
+              name: `📁 ${this.value(item.title, 250)}`,
+              value: `Estado: ${this.value(item.status)}\nDías sin cambios: ${this.value(item.daysIdle)}`,
+              inline: false,
+            })),
+          ),
+        ],
+      };
+    }
+
     const type = this.eventType(event);
     const title = this.text(data.title) || project?.title || EMPTY;
     const customerName =

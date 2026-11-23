@@ -169,6 +169,40 @@ export const useUpdateNotificationSettings = () => {
   });
 };
 
+/** Envía un evento de prueba por el mismo pipeline que las alertas automáticas. */
+export const useTestDiscordNotification = () => {
+  return useMutation({
+    mutationFn: async () =>
+      (await notificationsApi.testDiscord()) as {
+        discordSent?: boolean;
+        skippedReason?: string;
+        error?: string;
+        webhook?: string;
+      },
+    onSuccess: (result) => {
+      if (result?.discordSent) {
+        toast.success('Mensaje de prueba enviado a Discord', {
+          description: result.webhook ? `Destino ${result.webhook}` : undefined,
+        });
+        return;
+      }
+      const reason =
+        result?.error ||
+        (result?.skippedReason === 'webhookMissing'
+          ? 'No hay webhook configurado para el canal'
+          : result?.skippedReason === 'discordDisabled'
+            ? 'El canal Discord está deshabilitado'
+            : result?.skippedReason === 'eventToggles'
+              ? 'El evento está deshabilitado en eventToggles'
+              : 'Revisa los logs del backend');
+      toast.warning('Discord no recibió la prueba', { description: reason });
+    },
+    onError: (error: Error) => {
+      toast.error(`Error: ${error.message}`);
+    },
+  });
+};
+
 // IDs ya toasteados a nivel de sesión (evita duplicados entre re-mounts).
 const toastedIds = new Set<string>();
 

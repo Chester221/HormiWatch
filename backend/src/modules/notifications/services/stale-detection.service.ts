@@ -6,6 +6,8 @@ import { Task } from 'src/modules/tasks/entities/task.entity';
 import { TaskStatus } from 'src/modules/tasks/enums/task-status.enum';
 import { Holiday } from 'src/modules/tasks/entities/holiday.entity';
 import { User } from 'src/modules/users/entities/user.entity';
+import { Project } from 'src/modules/projects/entities/project.entity';
+import { ProjectStatus } from 'src/modules/projects/enums/project-status.enum';
 import { Role } from 'src/modules/auth/enums/roles.enum';
 import { NotificationCategory } from '../enums/notification-category.enum';
 import { NotificationLevel } from '../enums/notification-level.enum';
@@ -13,6 +15,7 @@ import { NotificationEvent } from '../events/notification.event';
 import { NotificationEmitterService } from './notification-emitter.service';
 import { NotificationSettingsService } from './notification-settings.service';
 import {
+  DigestInactiveProjectRow,
   DigestInactiveTechnicianRow,
   DigestStaleTaskRow,
 } from '../interfaces/daily-digest.interface';
@@ -24,6 +27,7 @@ import {
 /** Claves de evento (para el toggle por evento) */
 export const STALE_TASKS_EVENT_KEY = 'tasks.stale';
 export const INACTIVE_TECHNICIANS_EVENT_KEY = 'users.inactiveTechnician';
+export const INACTIVE_PROJECTS_EVENT_KEY = 'projects.inactive';
 
 /** Prefijos de dedupe: las notificaciones con estos prefijos ya aparecen en
  *  las tablas del reporte, por eso se excluyen de la lista personal. */
@@ -36,6 +40,8 @@ export class StaleDetectionService {
   constructor(
     @InjectRepository(Task) private readonly taskRepo: Repository<Task>,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(Project)
+    private readonly projectRepo: Repository<Project>,
     @InjectRepository(Holiday)
     private readonly holidayRepo: Repository<Holiday>,
     private readonly emitter: NotificationEmitterService,
@@ -173,6 +179,81 @@ export class StaleDetectionService {
   }
 
   /**
+   * Proyectos activos sin actualización propia ni de tareas en `staleDays`
+   * días naturales (reutiliza el umbral taskStaleDays).
+   */
+  async findInactiveProjects(
+    staleDays: number,
+  ): Promise<DigestInactiveProjectRow[]> {
+    const days = Math.max(1, staleDays);
+    const today = this.today();
+    const cutoffInstant = this.startOfDay(today.subtract({ days }));
+
+    const projects = await this.projectRepo
+      .createQueryBuilder('project')
+      .leftJoinAndSelect('project.tasks', 'task')
+      .where('project.status NOT IN (:...statuses)', {
+        statuses: [ProjectStatus.COMPLETED, ProjectStatus.CANCELLED],
+      })
+      .andWhere('project.deleted_at IS NULL')
+      .getMany();
+
+    return projects
+      .map((project) => {
+        const dates = [
+          project.updatedAt,
+          ...(project.tasks || []).map((task) => task.updatedAt),
+        ].filter((value): value is Date => value instanceof Date);
+
+        if (!dates.length) return null;
+        const lastActivity = dates.reduce((max, date) =>
+          date > max ? date : max,
+        );
+        const lastInstant = Temporal.Instant.from(lastActivity.toISOString());
+        if (Temporal.Instant.compare(lastInstant, cutoffInstant) >= 0) {
+          return null;
+        }
+
+        const plainDate = lastInstant
+          .toZonedDateTimeISO(this.timeZone)
+          .toPlainDate();
+        return {
+          id: project.id,
+          title: project.title || 'Proyecto sin título',
+          status: String(project.status || '—'),
+          daysIdle: Math.max(0, today.since(plainDate).days),
+          lastUpdate: plainDate.toString(),
+        };
+      })
+      .filter((row): row is DigestInactiveProjectRow => row !== null);
+  }
+
+  private async notifyInactiveProjects(
+    staleDays: number,
+  ): Promise<DigestInactiveProjectRow[]> {
+    const projects = await this.findInactiveProjects(staleDays);
+    if (!projects.length) return projects;
+
+    const today = this.today().toString();
+    this.emitter.toAdmins(
+      INACTIVE_PROJECTS_EVENT_KEY,
+      NotificationCategory.PROJECTS,
+      NotificationLevel.WARNING,
+      `${projects.length} proyecto(s) sin actividad`,
+      projects
+        .map(
+          (project) =>
+            `${project.title} (${project.status}) - ${project.daysIdle} día(s) sin cambios`,
+        )
+        .join(' | '),
+      { projects, staleDays },
+      `inactive:projects:${today}`,
+    );
+
+    return projects;
+  }
+
+  /**
    * Detecta y notifica a los administradores. Devuelve lo detectado para
    * reutilizarlo en el reporte del resumen diario.
    */
@@ -283,9 +364,13 @@ export class StaleDetectionService {
       }
     }
 
-    if (staleTasks.length || inactiveTechnicians.length) {
+    const inactiveProjects = await this.notifyInactiveProjects(
+      t.taskStaleDays,
+    );
+
+    if (staleTasks.length || inactiveTechnicians.length || inactiveProjects.length) {
       this.logger.log(
-        `Deteccion: ${staleTasks.length} tarea(s) estancada(s), ${inactiveTechnicians.length} tecnico(s) inactivo(s)`,
+        `Deteccion: ${staleTasks.length} tarea(s) estancada(s), ${inactiveTechnicians.length} tecnico(s) inactivo(s), ${inactiveProjects.length} proyecto(s) inactivo(s)`,
       );
     }
 

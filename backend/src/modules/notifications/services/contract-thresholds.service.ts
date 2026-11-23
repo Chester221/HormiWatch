@@ -119,6 +119,29 @@ export class ContractThresholdsService {
     }
   }
 
+  /**
+   * Cron diario: recorre todos los contratos activos y emite las alertas que
+   * correspondan. Un fallo en un proyecto no impide evaluar los demás.
+   */
+  async checkAllAndNotify(): Promise<void> {
+    const contexts = await this.listActiveContexts();
+    for (const ctx of contexts) {
+      try {
+        await this.checkAndNotify(ctx.projectId);
+      } catch (e) {
+        this.logger.error(
+          `No se pudo evaluar el contrato del proyecto "${ctx.projectId}": ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+          e instanceof Error ? e.stack : undefined,
+        );
+      }
+    }
+    this.logger.log(
+      `Contratos evaluados: ${contexts.length} proyecto(s) activo(s)`,
+    );
+  }
+
   /** Texto de contacto del cliente (telefono / correo) para los mensajes */
   private contactSuffix(ctx: ContractThresholdContext): string {
     const phone = ctx.customerPhone || null;
@@ -140,7 +163,16 @@ export class ContractThresholdsService {
     if (!context) return null;
 
     project.hoursConsumed = context.hoursConsumed;
-    await this.projectRepo.save(project).catch(() => undefined);
+    try {
+      await this.projectRepo.save(project);
+    } catch (e) {
+      this.logger.error(
+        `No se pudo persistir horasConsumed del proyecto "${projectId}": ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        e instanceof Error ? e.stack : undefined,
+      );
+    }
 
     return context;
   }
@@ -203,7 +235,13 @@ export class ContractThresholdsService {
       const now = Temporal.Now.plainDateISO(this.timeZone);
       const diff = now.until(end).days;
       return diff <= days && diff >= 0;
-    } catch {
+    } catch (e) {
+      this.logger.error(
+        `No se pudo interpretar la fecha de vencimiento "${endDateStr}": ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        e instanceof Error ? e.stack : undefined,
+      );
       return false;
     }
   }

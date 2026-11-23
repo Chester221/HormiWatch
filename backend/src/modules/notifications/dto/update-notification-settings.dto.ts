@@ -61,8 +61,4 @@ export class UpdateNotificationSettingsDto {
     endHour?: number;
     include?: Record<string, boolean>;
   };
-
-  @IsOptional()
-  @IsBoolean()
-  notifyProjectStarted?: boolean;
 }

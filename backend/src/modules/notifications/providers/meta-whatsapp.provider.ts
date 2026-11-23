@@ -34,7 +34,10 @@ export class MetaWhatsAppProvider implements IWhatsAppProvider {
       );
       return true;
     } catch (e) {
-      this.logger.warn('Meta WhatsApp send failed');
+      this.logger.error(
+        `Meta WhatsApp send failed: ${e instanceof Error ? e.message : String(e)}`,
+        e instanceof Error ? e.stack : undefined,
+      );
       return false;
     }
   }

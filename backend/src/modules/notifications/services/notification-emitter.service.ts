@@ -7,6 +7,7 @@ import {
 } from '../events/notification.event';
 import { NotificationCategory } from '../enums/notification-category.enum';
 import { NotificationLevel } from '../enums/notification-level.enum';
+import type { DiscordDispatchResult } from '../interfaces/dispatch-result.interface';
 
 export interface TaskAudienceOptions {
   includeAdmins?: boolean;
@@ -22,6 +23,14 @@ export class NotificationEmitterService {
 
   emit(event: NotificationEvent): void {
     this.emitter.emit(NOTIFICATION_DISPATCH_EVENT, event);
+  }
+
+  /** Igual que emit(), pero espera al dispatcher y devuelve su resultado. */
+  async emitAsync(event: NotificationEvent): Promise<DiscordDispatchResult[]> {
+    return this.emitter.emitAsync(
+      NOTIFICATION_DISPATCH_EVENT,
+      event,
+    ) as Promise<DiscordDispatchResult[]>;
   }
 
   projectChanged(

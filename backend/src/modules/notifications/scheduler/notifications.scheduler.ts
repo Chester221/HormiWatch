@@ -12,6 +12,7 @@ import {
   StaleDetectionService,
 } from '../services/stale-detection.service';
 import { DailyDigestService } from '../services/daily-digest.service';
+import { ContractThresholdsService } from '../services/contract-thresholds.service';
 import {
   DailyDigestReport,
   DailyDigestReportFlags,
@@ -29,6 +30,7 @@ export class NotificationsScheduler {
     private readonly settings: NotificationSettingsService,
     private readonly staleDetection: StaleDetectionService,
     private readonly digest: DailyDigestService,
+    private readonly contractThresholds: ContractThresholdsService,
     private mail: MailService,
   ) {}
 
@@ -56,12 +58,29 @@ export class NotificationsScheduler {
     try {
       detection = await this.staleDetection.detectAndNotify();
     } catch (e) {
-      this.logger.warn(
-        `Deteccion de tareas/tecnicos fallo: ${e instanceof Error ? e.message : String(e)}`,
+      this.logger.error(
+        `Deteccion de tareas/tecnicos/proyectos fallo: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        e instanceof Error ? e.stack : undefined,
       );
     }
 
-    if (!s.digestEnabled) return;
+    // ── 1b. Contratos por vencer y umbrales de consumo ──
+    // Se evalúa una vez al día, con independencia de que el correo esté
+    // habilitado: las alertas deben llegar a Discord de todos modos.
+    try {
+      await this.contractThresholds.checkAllAndNotify();
+    } catch (e) {
+      this.logger.error(
+        `Evaluacion diaria de contratos fallo: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        e instanceof Error ? e.stack : undefined,
+      );
+    }
+
+    if (s.digestEnabled === false) return;
 
     // El resumen diario se entrega por correo. Mientras el canal de email
     // este deshabilitado ("Muy pronto") no se envia nada; la hora y los
@@ -159,8 +178,9 @@ export class NotificationsScheduler {
         });
         sentIds.push(...items.map((i) => i.id));
       } catch (e) {
-        this.logger.warn(
+        this.logger.error(
           `Digest email fallo para ${r.email}: ${e instanceof Error ? e.message : String(e)}`,
+          e instanceof Error ? e.stack : undefined,
         );
       }
     }

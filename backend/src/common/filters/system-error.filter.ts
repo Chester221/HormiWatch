@@ -63,7 +63,14 @@ export class SystemErrorFilter implements ExceptionFilter {
             `system.error:${request.method}:${request.url}:${hourBucket}`,
           ),
         );
-      } catch (e) {}
+      } catch (e) {
+        this.logger.error(
+          `No se pudo emitir la alerta de error del sistema: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+          e instanceof Error ? e.stack : undefined,
+        );
+      }
     }
 
     if (exception instanceof HttpException) {

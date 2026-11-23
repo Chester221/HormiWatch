@@ -238,4 +238,35 @@ describe('DiscordEmbedBuilder', () => {
     expect(fields['👤 Cliente']).toBe('Cliente C');
     expect(fields['📊 Estado']).toBe('IN_PROGRESS');
   });
+
+  it('lista los proyectos inactivos en un solo embed', async () => {
+    const message = await builder.build(
+      event('projects.inactive', NotificationCategory.PROJECTS, {
+        staleDays: 3,
+        projects: [
+          {
+            title: 'Proyecto quieto',
+            status: 'IN_PROGRESS',
+            daysIdle: 6,
+          },
+        ],
+      }),
+      'proyectos',
+    );
+
+    expect(message.embeds[0].title).toBe('📁 Proyectos sin actividad');
+    expect(message.embeds[0].fields[0].value).toContain('Días sin cambios: 6');
+  });
+
+  it('etiqueta el evento customer.updated en el canal de alertas', async () => {
+    const message = await builder.build(
+      event('customer.updated', NotificationCategory.CUSTOMERS),
+      'alertas',
+    );
+
+    const fields = Object.fromEntries(
+      message.embeds[0].fields.map((f) => [f.name, f.value]),
+    );
+    expect(fields['📌 Tipo de evento']).toBe('Cliente actualizado');
+  });
 });
