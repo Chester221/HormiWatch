@@ -381,6 +381,7 @@ export class TasksService {
 
     queryBuilder
       .leftJoinAndSelect('task.technician', 'technician')
+      .leftJoin('technician.profile', 'techProfile')
       .leftJoinAndSelect('task.project', 'project')
       .leftJoinAndSelect('task.service', 'service');
 
@@ -423,10 +424,19 @@ export class TasksService {
     }
 
     if (filterDto.q) {
-      queryBuilder.andWhere(
-        '(task.description ILIKE :q OR task.title ILIKE :q)',
-        { q: `%${filterDto.q}%` },
-      );
+      const q = `%${filterDto.q}%`;
+      if (filterDto.matchRelations) {
+        // El buscador global debe encontrar tareas por el nombre del
+        // técnico asignado o por el proyecto al que pertenecen.
+        queryBuilder.andWhere(
+          '(task.title ILIKE :q OR task.description ILIKE :q OR techProfile.full_name ILIKE :q OR techProfile.name ILIKE :q OR techProfile.lastName ILIKE :q OR project.title ILIKE :q)',
+          { q },
+        );
+      } else {
+        queryBuilder.andWhere('(task.description ILIKE :q OR task.title ILIKE :q)', {
+          q,
+        });
+      }
     }
 
     queryBuilder

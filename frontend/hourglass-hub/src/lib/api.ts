@@ -461,6 +461,13 @@ export const searchApi = {
       method: 'GET',
       signal,
     }),
+
+  // Catálogo ligero para el filtrado fuzzy local (se cachea en el hook)
+  candidates: (signal?: AbortSignal) =>
+    apiClient('/search/candidates', {
+      method: 'GET',
+      signal,
+    }),
 };
 
 // ============================================================

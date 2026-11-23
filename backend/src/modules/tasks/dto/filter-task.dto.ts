@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 import { PageOptionsDto } from '../../../common/pagination/pagination-options.dto';
 import { TaskStatus } from '../enums/task-status.enum';
 
@@ -41,4 +42,11 @@ export class FilterTaskDto extends PageOptionsDto {
   @IsISO8601()
   @IsOptional()
   endDateTime?: string;
+
+  /** Solo lo activa el buscador global: amplía `q` a relaciones (técnico, proyecto). */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  matchRelations?: boolean;
 }

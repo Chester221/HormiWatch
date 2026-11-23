@@ -363,9 +363,17 @@ export class ProjectsService {
     }
 
     if (pageOptionsDto.q) {
-      queryBuilder.andWhere('project.title ILIKE :q', {
-        q: `%${pageOptionsDto.q}%`,
-      });
+      const q = `%${pageOptionsDto.q}%`;
+      if (pageOptionsDto.matchRelations) {
+        // El buscador global debe encontrar también proyectos por el nombre
+        // de su líder o de su cliente (joins ya presentes más arriba).
+        queryBuilder.andWhere(
+          '(project.title ILIKE :q OR leaderProfile.full_name ILIKE :q OR leaderProfile.name ILIKE :q OR leaderProfile.lastName ILIKE :q OR customer.name ILIKE :q)',
+          { q },
+        );
+      } else {
+        queryBuilder.andWhere('project.title ILIKE :q', { q });
+      }
     }
 
     queryBuilder

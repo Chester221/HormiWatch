@@ -13,6 +13,15 @@ import { SearchService } from '../services/search.service';
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
+  @Get('candidates')
+  @ApiOperation({
+    summary: 'Catálogo ligero para búsqueda fuzzy en el frontend',
+  })
+  @ApiOkResponse({ description: 'Hasta 50 ítems por categoría, sin término de búsqueda.' })
+  candidates(@CurrentUser() user: IActiveUser): Promise<GlobalSearchResult> {
+    return this.searchService.candidates(user);
+  }
+
   @Get()
   @ApiOperation({
     summary:

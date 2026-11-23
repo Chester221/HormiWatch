@@ -115,11 +115,11 @@ describe('SearchService', () => {
     ]);
 
     expect(projects.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3 }),
+      expect.objectContaining({ q: 'andres', take: 3, matchRelations: true }),
       user,
     );
     expect(tasks.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3 }),
+      expect.objectContaining({ q: 'andres', take: 3, matchRelations: true }),
       user,
     );
     expect(customers.findAllCustomers).toHaveBeenCalledWith(
@@ -201,6 +201,47 @@ describe('SearchService', () => {
       expect.stringContaining('"tasks"'),
       expect.anything(),
     );
+  });
+
+  it('devuelve el catálogo para fuzzy con 50 por categoría y orden DESC', async () => {
+    const user = { userId: 'u1', role: 'Admin' };
+
+    const result = await service.candidates(user);
+
+    expect(result.projects).toHaveLength(1);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.customers).toHaveLength(1);
+    expect(result.users).toHaveLength(1);
+    expect(result.services).toHaveLength(1);
+    expect(projects.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, order: 'DESC' }),
+      user,
+    );
+    expect(tasks.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, order: 'DESC' }),
+      user,
+    );
+    expect(customers.findAllCustomers).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, order: 'DESC', includeContacts: false }),
+    );
+    expect(users.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, order: 'DESC' }),
+    );
+    expect(services.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 50, order: 'DESC' }),
+    );
+  });
+
+  it('aplica las mismas reglas de rol al catálogo', async () => {
+    const result = await service.candidates({ userId: 'u1', role: 'Technician' });
+
+    expect(result.customers).toEqual([]);
+    expect(result.users).toEqual([]);
+    expect(customers.findAllCustomers).not.toHaveBeenCalled();
+    expect(users.findAll).not.toHaveBeenCalled();
+    expect(result.projects).toHaveLength(1);
+    expect(result.tasks).toHaveLength(1);
+    expect(result.services).toHaveLength(1);
   });
 
   it('valida longitud del término y rango del límite', async () => {
