@@ -54,11 +54,13 @@ function ThresholdInput({
   label,
   value,
   suffix,
+  help,
   onChange,
 }: {
   label: string;
   value: number | "";
   suffix?: string;
+  help?: string;
   onChange: (v: number | "") => void;
 }) {
   return (
@@ -70,7 +72,7 @@ function ThresholdInput({
           min={0}
           value={value}
           onChange={(e) => onChange(e.target.value === "" ? "" : Number(e.target.value))}
-          className="h-9 pr-10 text-sm"
+          className={`h-9 text-sm ${suffix ? "pr-16" : ""}`}
         />
         {suffix && (
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
@@ -78,6 +80,7 @@ function ThresholdInput({
           </span>
         )}
       </div>
+      {help && <p className="text-[11px] leading-tight text-muted-foreground">{help}</p>}
     </div>
   );
 }
@@ -116,7 +119,7 @@ export default function ServerSettings() {
           red: 100,
           expiringDays: 15,
           inactivityDays: 3,
-          taskStaleDays: 5,
+          taskStaleDays: 3,
           ...(settings.thresholds || {}),
         },
         discord: {
@@ -302,8 +305,20 @@ export default function ServerSettings() {
                 <ThresholdInput label="Consumo naranja" suffix="%" value={draft.thresholds.orange} onChange={(v) => setThreshold("orange", v)} />
                 <ThresholdInput label="Consumo rojo (crítico)" suffix="%" value={draft.thresholds.red} onChange={(v) => setThreshold("red", v)} />
                 <ThresholdInput label="Contrato por vencer" suffix="d" value={draft.thresholds.expiringDays} onChange={(v) => setThreshold("expiringDays", v)} />
-                <ThresholdInput label="Proyectos inactivos" suffix="d" value={draft.thresholds.inactivityDays} onChange={(v) => setThreshold("inactivityDays", v)} />
-                <ThresholdInput label="Tareas inactivas/estancadas" suffix="d" value={draft.thresholds.taskStaleDays} onChange={(v) => setThreshold("taskStaleDays", v)} />
+                <ThresholdInput
+                  label="Días para considerar un técnico inactivo"
+                  suffix="d hábiles"
+                  help="Técnicos sin horas registradas; no cuenta fines de semana ni feriados."
+                  value={draft.thresholds.inactivityDays}
+                  onChange={(v) => setThreshold("inactivityDays", v)}
+                />
+                <ThresholdInput
+                  label="Tareas y proyectos inactivos"
+                  suffix="d"
+                  help="Días naturales sin cambios: tareas estancadas y proyectos sin movimiento."
+                  value={draft.thresholds.taskStaleDays}
+                  onChange={(v) => setThreshold("taskStaleDays", v)}
+                />
               </div>
             </Card>
 

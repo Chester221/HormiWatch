@@ -258,15 +258,54 @@ describe('DiscordEmbedBuilder', () => {
     expect(message.embeds[0].fields[0].value).toContain('Días sin cambios: 6');
   });
 
-  it('etiqueta el evento customer.updated en el canal de alertas', async () => {
+  it('usa el embed azul de clientes para customer.updated', async () => {
     const message = await builder.build(
-      event('customer.updated', NotificationCategory.CUSTOMERS),
+      event('customer.updated', NotificationCategory.CUSTOMERS, {
+        customerId: 'customer-1',
+        name: 'Acme SA',
+      }),
       'alertas',
     );
+
+    expect(message.content).not.toContain('ATENCIÓN REQUERIDA');
+    expect(message.embeds[0].title).toBe('Cliente Modificado');
+    expect(message.embeds[0].color).toBe(3447003);
+    expect(message.embeds[0].description).toContain('Mensaje del evento');
 
     const fields = Object.fromEntries(
       message.embeds[0].fields.map((f) => [f.name, f.value]),
     );
-    expect(fields['📌 Tipo de evento']).toBe('Cliente actualizado');
+    expect(fields['👤 Nombre']).toBe('Acme SA');
+    expect(fields['🆔 ID cliente']).toBe('customer-1');
+    expect(fields['📌 Acción']).toBe('Cliente actualizado');
+  });
+
+  it('titula customer.created y customer.deleted como eventos informativos', async () => {
+    const created = await builder.build(
+      event('customer.created', NotificationCategory.CUSTOMERS),
+      'alertas',
+    );
+    expect(created.embeds[0].title).toBe('Cliente Creado');
+    expect(created.embeds[0].color).toBe(3447003);
+    expect(created.content).not.toContain('ATENCIÓN REQUERIDA');
+
+    const deleted = await builder.build(
+      event('customer.deleted', NotificationCategory.CUSTOMERS),
+      'alertas',
+    );
+    expect(deleted.embeds[0].title).toBe('Cliente Eliminado');
+    expect(deleted.embeds[0].color).toBe(3447003);
+    expect(deleted.content).not.toContain('ATENCIÓN REQUERIDA');
+  });
+
+  it('mantiene el embed rojo de ATENCIÓN REQUERIDA para system.error', async () => {
+    const message = await builder.build(
+      event('system.error', NotificationCategory.SYSTEM, { error: 'boom' }),
+      'alertas',
+    );
+
+    expect(message.content).toContain('ATENCIÓN REQUERIDA');
+    expect(message.embeds[0].title).toBe('🔴 Error Crítico del Sistema');
+    expect(message.embeds[0].color).toBe(16711680);
   });
 });

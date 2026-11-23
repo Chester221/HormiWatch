@@ -426,7 +426,7 @@ export class CustomersService {
     this.notifications.toAdmins(
       'customer.deleted',
       NotificationCategory.CUSTOMERS,
-      NotificationLevel.WARNING,
+      NotificationLevel.INFO,
       'Cliente eliminado',
       `El cliente con ID ${id} fue eliminado permanentemente del sistema.`,
       { customerId: id },

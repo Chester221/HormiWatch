@@ -14,9 +14,9 @@ export interface NotificationThresholds {
   red: number;
   /** Días antes del vencimiento para alertar */
   expiringDays: number;
-  /** Días hábiles sin registrar horas para alertar */
+  /** Días hábiles sin registrar horas para considerar un técnico inactivo (no cuenta fines de semana ni feriados) */
   inactivityDays: number;
-  /** Días sin cambios para considerar una tarea estancada */
+  /** Días naturales sin cambios para considerar tareas estancadas y proyectos inactivos */
   taskStaleDays: number;
 }
 

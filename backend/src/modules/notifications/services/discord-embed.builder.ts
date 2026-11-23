@@ -38,6 +38,9 @@ const COLORS: Record<DiscordChannelKey, number> = {
   tareas: 5763719,
 };
 
+/** Azul informativo para eventos que no son alertas (p. ej. clientes). */
+const COLOR_INFO = 3447003;
+
 const FOOTER = {
   text: 'HormiWatch - Sistema de gestión de proyectos',
   icon_url: 'https://hormi-watch.vercel.app/favicon.ico',
@@ -109,6 +112,12 @@ export class DiscordEmbedBuilder {
     channel: DiscordChannelKey,
   ): Promise<{ content: string; embeds: DiscordEmbed[] }> {
     const ctx = await this.resolveContext(event);
+
+    // Los eventos de cliente son informativos: aunque se enrutan al canal
+    // #alertas, no deben usar el formato rojo de "ATENCIÓN REQUERIDA".
+    if (event.key.startsWith('customer.')) {
+      return this.customerMessage(event, ctx);
+    }
 
     switch (channel) {
       case 'contratos':
@@ -217,6 +226,48 @@ export class DiscordEmbedBuilder {
       fields,
       footer: FOOTER,
       timestamp: new Date().toISOString(),
+    };
+  }
+
+  // ── Clientes (informativo, cualquier canal) ──────────────────────────────
+  private customerMessage(
+    event: NotificationEvent,
+    ctx: ResolvedContext,
+  ): { content: string; embeds: DiscordEmbed[] } {
+    const { data } = ctx;
+    const titles: Record<string, string> = {
+      'customer.created': 'Cliente Creado',
+      'customer.updated': 'Cliente Modificado',
+      'customer.deleted': 'Cliente Eliminado',
+    };
+
+    return {
+      content: '👥 **Actualización de cliente**',
+      embeds: [
+        this.embed(
+          titles[event.key] || event.title || this.eventType(event),
+          event.message || 'Se registró un cambio en un cliente del sistema.',
+          COLOR_INFO,
+          [
+            { name: '👤 Nombre', value: this.value(data.name), inline: true },
+            {
+              name: '🆔 ID cliente',
+              value: this.value(data.customerId),
+              inline: true,
+            },
+            {
+              name: '📌 Acción',
+              value: this.value(this.eventType(event)),
+              inline: true,
+            },
+            {
+              name: '📅 Fecha',
+              value: this.value(this.nowLabel()),
+              inline: true,
+            },
+          ],
+        ),
+      ],
     };
   }
 
