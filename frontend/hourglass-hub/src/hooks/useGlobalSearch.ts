@@ -69,10 +69,11 @@ const normalize = (raw: any): GlobalSearchResult => {
 };
 
 /**
- * Búsqueda global híbrida:
- *  - `/search` aporta coincidencias exactas del backend (prioritarias).
- *  - `/search/candidates` se pide una vez y se cachea; Fuse lo rankea en local
- *    para tolerar typos y acentos ("proyt" -> "Proyecto").
+ * Búsqueda incremental:
+ *  - `/search` (ILIKE %término%) es la ÚNICA fuente mientras haya resultados.
+ *  - `/search/candidates` se pide una sola vez (caché de 5 min) y solo cuando
+ *    `/search` no devolvió nada. Fuse actúa como fallback para typos/acentos.
+ *  - Nunca se mezclan resultados exactos con fuzzy: evita ruido entre categorías.
  */
 export function useGlobalSearch(query: string, enabled: boolean) {
   const term = query.trim();
@@ -89,57 +90,69 @@ export function useGlobalSearch(query: string, enabled: boolean) {
     retry: false,
   });
 
+  const exact = useMemo(() => normalize(exactQuery.data), [exactQuery.data]);
+
+  const hasExactResults = CATEGORIES.some(
+    (category) => exact[category].length > 0,
+  );
+
+  // `isPlaceholderData` indica que `data` aún pertenece al término anterior.
+  // Sin esta guardia, un resultado viejo impediría o dispararía el fallback.
+  const exactSettled =
+    shouldFetch &&
+    !exactQuery.isFetching &&
+    !exactQuery.isPlaceholderData &&
+    !exactQuery.isError;
+  const needsFallback = exactSettled && !hasExactResults;
+
   const candidatesQuery = useQuery({
     queryKey: ['global-search-candidates'],
     queryFn: ({ signal }) => searchApi.candidates(signal),
-    enabled: enabled && hasMinLength,
+    enabled: needsFallback,
     staleTime: CANDIDATE_TTL_MS,
     retry: false,
   });
 
-  const exact = useMemo(() => normalize(exactQuery.data), [exactQuery.data]);
-  const candidates = useMemo(
-    () => normalize(candidatesQuery.data),
-    [candidatesQuery.data],
-  );
-
-  const indexes = useMemo(() => {
+  const fallbackIndexes = useMemo(() => {
+    if (!needsFallback || !candidatesQuery.data) return null;
+    const catalog = normalize(candidatesQuery.data);
     const result = {} as Record<Category, Fuse<GlobalSearchItem> | null>;
     CATEGORIES.forEach((category) => {
-      const items = candidates[category];
+      const items = catalog[category];
       result[category] = items.length ? new Fuse(items, FUSE_OPTIONS) : null;
     });
     return result;
-  }, [candidates]);
+  }, [needsFallback, candidatesQuery.data]);
 
   const data = useMemo(() => {
-    const result = { ...EMPTY_RESULT };
+    if (!shouldFetch) return EMPTY_RESULT;
+
+    // Hay coincidencias parciales reales: se muestran tal cual, sin Fuse.
+    if (!fallbackIndexes) return exact;
+
     const needle = stripAccents(debouncedTerm);
-
+    const result = { ...EMPTY_RESULT };
     CATEGORIES.forEach((category) => {
-      const exactItems = exact[category];
-      const seen = new Set(exactItems.map((item) => item.id));
-      const merged = [...exactItems];
-      const index = indexes[category];
-
-      if (index && needle.length >= 2 && merged.length < RESULT_LIMIT) {
-        index.search(needle).forEach(({ item }) => {
-          if (seen.has(item.id)) return;
-          seen.add(item.id);
-          merged.push(item);
-        });
-      }
-
-      result[category] = merged.slice(0, RESULT_LIMIT);
+      result[category] = (fallbackIndexes[category]?.search(needle) ?? [])
+        .slice(0, RESULT_LIMIT)
+        .map(({ item }) => item);
     });
-
     return result;
-  }, [exact, indexes, debouncedTerm]);
+  }, [shouldFetch, exact, fallbackIndexes, debouncedTerm]);
+
+  // Mantiene el estado "Buscando…" desde que /search termina con 0 resultados
+  // hasta que el catálogo llega, para no mostrar un "No hay resultados" falso.
+  const fallbackPending =
+    needsFallback && !candidatesQuery.isError && !candidatesQuery.data;
 
   return {
     data,
     isFetching:
-      shouldFetch && (exactQuery.isFetching || candidatesQuery.isFetching),
+      shouldFetch &&
+      (exactQuery.isFetching ||
+        exactQuery.isPlaceholderData ||
+        (needsFallback &&
+          (candidatesQuery.isFetching || fallbackPending))),
     isError: shouldFetch && exactQuery.isError,
     term: debouncedTerm,
     hasMinLength,

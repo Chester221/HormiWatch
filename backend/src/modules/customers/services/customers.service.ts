@@ -281,9 +281,11 @@ export class CustomersService {
     }
 
     if (search) {
-      const term = `%${search.trim().toLowerCase()}%`;
+      // Coincidencia parcial e insensible a mayúsculas. Una sola palabra
+      // ("ju") encuentra "Juan"; una frase se busca completa ("Juan Alberto").
+      const term = `%${search.trim()}%`;
       qb.andWhere(
-        '(LOWER(customer.name) LIKE :term OR LOWER(customer.city) LIKE :term OR LOWER(customer.country) LIKE :term OR LOWER(customer.rif) LIKE :term)',
+        '(customer.name ILIKE :term OR customer.city ILIKE :term OR customer.country ILIKE :term OR customer.rif ILIKE :term OR customer.address ILIKE :term)',
         { term },
       );
     }

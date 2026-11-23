@@ -353,6 +353,39 @@ describe('CreateCustomerDto - validación de RIF y teléfono de empresa', () => 
   });
 });
 
+describe('CustomersService - búsqueda parcial', () => {
+  it('usa ILIKE %término% para palabras sueltas y frases completas', async () => {
+    const qb: Record<string, jest.Mock> = {
+      andWhere: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    const service = new CustomersService(
+      { createQueryBuilder: jest.fn().mockReturnValue(qb) } as never,
+      {} as never,
+      {} as never,
+    );
+
+    await service.findAllCustomers({ search: ' ju ', skip: 0, take: 5 } as never);
+
+    expect(qb.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('customer.name ILIKE :term'),
+      { term: '%ju%' },
+    );
+
+    await service.findAllCustomers(
+      { search: 'Juan Alberto', skip: 0, take: 5 } as never,
+    );
+
+    expect(qb.andWhere).toHaveBeenLastCalledWith(
+      expect.stringContaining('ILIKE :term'),
+      { term: '%Juan Alberto%' },
+    );
+  });
+});
+
 describe('CreateUserDto - teléfono libre de personas naturales', () => {
   it.each(['+54 11 1234-5678', '0414-1234567', '+58 (412) 1234567'])(
     'acepta el formato libre %s',

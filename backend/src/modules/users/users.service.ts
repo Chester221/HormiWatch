@@ -363,9 +363,15 @@ export class UsersService {
             .orWhere('profile.lastName ILIKE :q', {
               q: `%${pageOptionsDto.q}%`,
             })
+            // `full_name` es lo que muestra la UI: buscar solo name/lastName
+            // dejaba fuera a usuarios cuyo título visible coincide con q.
+            .orWhere('profile.full_name ILIKE :q', {
+              q: `%${pageOptionsDto.q}%`,
+            })
             .orWhere('profile.idCard ILIKE :q', {
               q: `%${pageOptionsDto.q}%`,
-            });
+            })
+            .orWhere('role.name ILIKE :q', { q: `%${pageOptionsDto.q}%` });
         }),
       );
     }

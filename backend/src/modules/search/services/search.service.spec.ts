@@ -133,6 +133,31 @@ describe('SearchService', () => {
     );
   });
 
+  it('pasa términos parciales y frases completas sin dividirlos', async () => {
+    const user = { userId: 'u1', role: 'Admin' };
+
+    await service.search({ q: 'ju' } as never, user);
+    expect(projects.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'ju', matchRelations: true }),
+      user,
+    );
+    expect(users.findAll).toHaveBeenCalledWith(
+      expect.objectContaining({ q: 'ju' }),
+    );
+    expect(customers.findAllCustomers).toHaveBeenCalledWith(
+      expect.objectContaining({ search: 'ju' }),
+    );
+
+    await service.search({ q: 'Juan Alberto' } as never, user);
+    expect(projects.findAll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'Juan Alberto', matchRelations: true }),
+      user,
+    );
+    expect(users.findAll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ q: 'Juan Alberto' }),
+    );
+  });
+
   it('oculta clientes y usuarios a técnicos', async () => {
     const user = { userId: 'u1', role: 'Technician' };
 
@@ -229,6 +254,10 @@ describe('SearchService', () => {
     );
     expect(services.findAll).toHaveBeenCalledWith(
       expect.objectContaining({ take: 50, order: 'DESC' }),
+    );
+    expect(projects.findAll).toHaveBeenCalledWith(
+      expect.not.objectContaining({ q: expect.anything() }),
+      user,
     );
   });
 

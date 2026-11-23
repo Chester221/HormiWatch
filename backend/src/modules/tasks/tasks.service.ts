@@ -429,7 +429,7 @@ export class TasksService {
         // El buscador global debe encontrar tareas por el nombre del
         // técnico asignado o por el proyecto al que pertenecen.
         queryBuilder.andWhere(
-          '(task.title ILIKE :q OR task.description ILIKE :q OR techProfile.full_name ILIKE :q OR techProfile.name ILIKE :q OR techProfile.lastName ILIKE :q OR project.title ILIKE :q)',
+          '(task.title ILIKE :q OR task.description ILIKE :q OR techProfile.full_name ILIKE :q OR techProfile.name ILIKE :q OR techProfile.lastName ILIKE :q OR project.title ILIKE :q OR service.name ILIKE :q)',
           { q },
         );
       } else {

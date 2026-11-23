@@ -368,7 +368,7 @@ export class ProjectsService {
         // El buscador global debe encontrar también proyectos por el nombre
         // de su líder o de su cliente (joins ya presentes más arriba).
         queryBuilder.andWhere(
-          '(project.title ILIKE :q OR leaderProfile.full_name ILIKE :q OR leaderProfile.name ILIKE :q OR leaderProfile.lastName ILIKE :q OR customer.name ILIKE :q)',
+          '(project.title ILIKE :q OR project.description ILIKE :q OR leaderProfile.full_name ILIKE :q OR leaderProfile.name ILIKE :q OR leaderProfile.lastName ILIKE :q OR customer.name ILIKE :q)',
           { q },
         );
       } else {
