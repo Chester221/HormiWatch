@@ -424,7 +424,7 @@ export class TasksService {
 
     if (filterDto.q) {
       queryBuilder.andWhere(
-        '(task.description LIKE :q OR task.title LIKE :q)',
+        '(task.description ILIKE :q OR task.title ILIKE :q)',
         { q: `%${filterDto.q}%` },
       );
     }

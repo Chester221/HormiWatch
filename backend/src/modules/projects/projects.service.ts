@@ -363,7 +363,7 @@ export class ProjectsService {
     }
 
     if (pageOptionsDto.q) {
-      queryBuilder.andWhere('project.title LIKE :q', {
+      queryBuilder.andWhere('project.title ILIKE :q', {
         q: `%${pageOptionsDto.q}%`,
       });
     }

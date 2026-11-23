@@ -1,60 +1,55 @@
-import { useState, useEffect, useMemo } from "react";
-import { Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban, Users, Briefcase, Wrench, Menu, X, ArrowRight, Server } from "lucide-react";
-import { projectStatusInfo } from "@/lib/dashboardUtils";
+import { useState, useEffect, useRef } from "react";
+import {
+  Search, ChevronDown, LogOut, User, Settings, CheckSquare, FolderKanban,
+  Users, Briefcase, Wrench, Menu, X, ArrowRight,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { useTasks } from "@/hooks/useTasks";
-import { useProjects } from "@/hooks/useProjects";
-import { useTeamMembers } from "@/hooks/useTeamMembers";
-import { useClientsWithContacts } from "@/hooks/useClientes";
-import { useServices } from "@/hooks/useServices";
 import { NotificationsBell } from "@/components/notifications/NotificationsBell";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { useGlobalSearch } from "@/hooks/useGlobalSearch";
 
 export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
   const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: tasks = [] } = useTasks();
-  const { data: projects = [] } = useProjects();
-  const { data: members = [] } = useTeamMembers();
-  const { data: clients = [] } = useClientsWithContacts();
-  const { data: services = [] } = useServices();
+  const { data: searchData, isFetching, isError, hasMinLength } =
+    useGlobalSearch(searchQuery, searchOpen);
 
   const userName = profile?.full_name || user?.email?.split('@')[0] || 'Usuario';
   const userEmail = user?.email || '';
 
-  // ✅ CORREGIDO: Obtener el nombre del rol (objeto o string)
-  const roleName = typeof profile?.role === 'string' 
-    ? profile.role 
+  const roleName = typeof profile?.role === 'string'
+    ? profile.role
     : profile?.role?.name || 'Technician';
-  const userRole = roleName;
+  const normalizedRole = roleName.toLowerCase();
+  const isTechnician = normalizedRole === 'technician' || normalizedRole === 'employee';
+  const canSearchClients = ['admin', 'manager', 'leader'].includes(normalizedRole);
+  const canSearchUsers = canSearchClients;
 
   const userInitials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  // ✅ BÚSQUEDA EN TIEMPO REAL: filtra en memoria mientras escribes (datos ya cacheados)
-  const q = searchQuery.trim().toLowerCase();
-
   const getRoleLabel = (role: string) => {
-    switch (role) { 
-      case 'Admin': return 'Administrador'; 
-      case 'Manager': return 'Líder'; 
-      case 'Technician': return 'Técnico'; 
-      default: return role; 
+    switch (role.toLowerCase()) {
+      case 'admin': return 'Administrador';
+      case 'manager': return 'Líder';
+      case 'leader': return 'Líder';
+      case 'technician': return 'Técnico';
+      case 'employee': return 'Empleado';
+      default: return role;
     }
   };
 
@@ -64,135 +59,77 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); setSearchOpen(o => !o); }
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((open) => !open);
+      }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
   }, []);
 
-  // ✅ Permisos por rol
-  const isAdmin = userRole === 'Admin';
-  const isManager = userRole === 'Manager';
-  const isTechnician = userRole === 'Technician';
-  const canSearchUsers = isAdmin || isManager;
-  const canSearchClients = isAdmin || isManager;
+  const groups: {
+    key: string;
+    label: string;
+    icon: LucideIcon;
+    items: typeof searchData.projects;
+    to: (id: string) => string;
+  }[] = [
+    {
+      key: 'projects',
+      label: 'Proyectos',
+      icon: FolderKanban,
+      items: searchData.projects,
+      to: (id) => `/projects?project=${id}`,
+    },
+    {
+      key: 'tasks',
+      label: 'Tareas',
+      icon: CheckSquare,
+      items: searchData.tasks,
+      to: (id) => `/tasks?task=${id}`,
+    },
+    {
+      key: 'customers',
+      label: 'Clientes',
+      icon: Briefcase,
+      items: searchData.customers,
+      to: (id) => `/clients?client=${id}`,
+    },
+    {
+      key: 'services',
+      label: 'Servicios',
+      icon: Wrench,
+      items: searchData.services,
+      to: (id) => `/services?service=${id}`,
+    },
+    {
+      key: 'users',
+      label: 'Usuarios',
+      icon: Users,
+      items: searchData.users,
+      to: (id) => `/team?member=${id}`,
+    },
+  ];
 
-  // ✅ Etiqueta legible de estado de tarea
-  const taskStatusLabel = (status?: any): string => {
-    const s = String(status || '').toUpperCase();
-    if (s.includes('COMPLET')) return 'Completada';
-    if (s.includes('INPROGRESS') || s.includes('IN PROGRESS')) return 'En progreso';
-    if (s.includes('CANCELL')) return 'Cancelada';
-    return 'Pendiente';
-  };
-
-  // ✅ Un técnico solo ve tareas/proyectos/servicios que le corresponden.
-  const visibleTasks = isTechnician ? tasks.filter((t: any) => t.technician_id === user?.id) : tasks;
-  const visibleProjects = isTechnician
-    ? projects.filter((p: any) =>
-        p.technicians?.some((m: any) => m.id === user?.id) ||
-        p.technician_id === user?.id ||
-        p.project_leader_id === user?.id
-      )
-    : projects;
-
-  const results = useMemo(() => {
-    if (!q) return [];
-
-    const out: any[] = [];
-
-    // ---------- TAREAS ----------
-    visibleTasks.forEach((t: any) => {
-      const title = t.description || t.title || 'Sin descripción';
-      if (!title.toLowerCase().includes(q) && !t.projects?.name?.toLowerCase().includes(q)) return;
-      out.push({
-        type: 'Tarea',
-        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><CheckSquare className="h-4 w-4 text-[#0DA2E7]" /></span>,
-        label: title,
-        sub: [t.projects?.name || t.projectName, taskStatusLabel(t.status)].filter(Boolean).join(' · ') || 'Sin proyecto',
-        path: `/tasks?task=${t.id}`
-      });
-    });
-
-    // ---------- PROYECTOS ----------
-    visibleProjects.forEach((p: any) => {
-      if (!p.name?.toLowerCase().includes(q) && !p.clients?.name?.toLowerCase().includes(q) && !(p.customer_name || '').toLowerCase().includes(q)) return;
-      out.push({
-        type: 'Proyecto',
-        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><FolderKanban className="h-4 w-4 text-[#0DA2E7]" /></span>,
-        label: p.name,
-        sub: `${p.clients?.name || p.customer_name || 'Sin cliente'} · ${projectStatusInfo(p.status).label}`,
-        path: `/projects?project=${p.id}`
-      });
-    });
-
-    // ---------- CLIENTES (solo Admin/Manager) ----------
-    if (canSearchClients) {
-      clients.forEach((c: any) => {
-        if (!c.name?.toLowerCase().includes(q) && !c.rif?.toLowerCase().includes(q)) return;
-        out.push({
-          type: 'Cliente',
-          icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Briefcase className="h-4 w-4 text-[#0DA2E7]" /></span>,
-          label: c.name,
-          sub: ['RIF:', c.rif].filter(Boolean).join(' '),
-          path: `/clients?client=${c.id}`
-        });
-      });
-    }
-
-    // ---------- SERVICIOS ----------
-    services.forEach((s: any) => {
-      const categoryName = s.categories?.name || s.category?.name || 'Sin categoría';
-      if (!s.name?.toLowerCase().includes(q) && !categoryName.toLowerCase().includes(q)) return;
-      out.push({
-        type: 'Servicio',
-        icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Wrench className="h-4 w-4 text-[#0DA2E7]" /></span>,
-        label: s.name,
-        sub: categoryName,
-        path: `/services?service=${s.id}`
-      });
-    });
-
-    // ---------- USUARIOS (solo Admin/Manager) ----------
-    if (canSearchUsers) {
-      members.forEach((m: any) => {
-        const name = m.full_name || m.email || 'Sin nombre';
-        const role = typeof m.role === 'string' ? m.role : m.role?.name;
-        // Manager no ve administradores
-        if (isManager && role === 'Admin') return;
-        if (!name.toLowerCase().includes(q) && !(m.email || '').toLowerCase().includes(q)) return;
-        out.push({
-          type: 'Usuario',
-          icon: <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10"><Users className="h-4 w-4 text-[#0DA2E7]" /></span>,
-          label: name,
-          sub: getRoleLabel(role || 'Technician'),
-          path: `/team?member=${m.id}`
-        });
-      });
-    }
-
-    return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, visibleTasks, visibleProjects, clients, services, members, isTechnician, canSearchClients, canSearchUsers]);
-
-  const uniqueResults = results.filter((item, index, self) => 
-    index === self.findIndex((t) => t.label === item.label && t.type === item.type)
-  );
-
-  const MAX_PER_GROUP = 5;
-  // item.type es singular ("Tarea"), el label del grupo es plural ("Tareas")
-  const grouped = ["Proyectos", "Tareas", "Clientes", "Servicios", "Usuarios"]
-    .map((label) => ({
-      label,
-      items: uniqueResults.filter((item) => `${item.type}s` === label).slice(0, MAX_PER_GROUP),
-    }))
-    .filter((g) => g.items.length > 0);
+  const visibleGroups = groups.filter((group) => group.items.length > 0);
+  const totalResults = visibleGroups.reduce((sum, group) => sum + group.items.length, 0);
 
   const suggestionText = isTechnician
     ? 'Prueba con el nombre de una tarea, proyecto o servicio según tus permisos.'
-    : isManager
+    : canSearchClients && canSearchUsers
       ? 'Prueba con el nombre de una tarea, proyecto, cliente, servicio o usuario.'
-      : 'Prueba con el nombre de una tarea, proyecto, cliente, servicio o usuario.';
+      : 'Prueba con el nombre de una tarea, proyecto o servicio según tus permisos.';
+
+  const closeSearch = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  };
+
+  const handleSelect = (path: string) => {
+    navigate(path);
+    closeSearch();
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-4 border-b border-border bg-card/80 px-4 backdrop-blur-sm lg:px-6">
@@ -209,100 +146,115 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
           </Button>
         )}
         <div className="relative w-full max-w-md min-w-0">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-          onClick={() => setSearchOpen(true)}
-          className="flex w-full items-center pl-10 pr-3 py-2 text-sm text-muted-foreground bg-muted/50 border border-transparent rounded-lg hover:border-primary hover:bg-card hover:shadow-sm hover:text-foreground transition-all text-left"
-        >
-          <span className="truncate">Buscar en todo el sistema...</span>
-          <kbd className="ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">Ctrl K</kbd>
-        </motion.button>
-      </div>
-      </div>
-
-      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
-        <DialogContent hideCloseButton className="w-full max-w-[calc(100vw-2rem)] gap-0 border-border bg-card p-0 sm:max-w-lg">
-          {/* ✅ AGREGADO: DialogHeader con sr-only para accesibilidad */}
-          <DialogHeader className="sr-only">
-            <DialogTitle>Buscador de HormiWatch</DialogTitle>
-          </DialogHeader>
-          
-          <div className="relative flex items-center border-b border-border px-3">
-            <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Escribe para buscar..."
-              aria-label="Buscar"
-              className="h-12 w-full flex-1 bg-transparent pl-2.5 pr-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
-              autoFocus
-            />
-            {searchQuery && (
+          <Popover open={searchOpen} onOpenChange={(open) => { if (!open) setSearchQuery(''); setSearchOpen(open); }}>
+            <PopoverTrigger asChild>
               <button
                 type="button"
-                aria-label="Limpiar búsqueda"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                aria-label="Buscar en todo el sistema"
+                className="flex w-full items-center rounded-lg border border-transparent bg-muted/50 py-2 pl-10 pr-3 text-left text-sm text-muted-foreground transition-all hover:border-primary hover:bg-card hover:text-foreground hover:shadow-sm"
               >
-                <X className="h-3.5 w-3.5" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <span className="truncate">Buscar en todo el sistema...</span>
+                <kbd className="ml-auto hidden h-5 shrink-0 items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">Ctrl K</kbd>
               </button>
-            )}
-          </div>
-          <div className="max-h-[300px] overflow-y-auto p-2">
-            <AnimatePresence mode="wait">
-              {!q && (
-                <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="py-10 text-center text-sm text-muted-foreground">
-                  <Search className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                  <p className="font-medium">Buscar en HormiWatch</p>
-                  <p className="text-xs mt-1">Escribe cualquier letra para ver resultados</p>
-                </motion.div>
-              )}
-              {q && uniqueResults.length === 0 && (
-                <motion.div key="no-results" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-4 py-10 text-center">
-                  <Search className="h-8 w-8 mx-auto mb-2 text-muted-foreground opacity-30" />
-                  <p className="text-sm font-medium">No se encontraron resultados para <strong>"{searchQuery}"</strong></p>
-                  <p className="text-xs text-muted-foreground mt-1">{suggestionText}</p>
-                </motion.div>
-              )}
-              {uniqueResults.length > 0 && (
-                <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <p className="px-2.5 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Resultados ({uniqueResults.length})
-                  </p>
-                  <div className="max-h-[300px] overflow-y-auto p-1.5 pt-0.5">
-                    {grouped.map((group, gi) => (
-                      <div key={group.label} className={gi > 0 ? "mt-1.5 border-t border-border/60 pt-1.5" : ""}>
-                        <p className="px-2 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                          {group.label}
-                        </p>
-                        {group.items.map((item, i) => (
-                          <motion.div
-                            key={item.label + item.type}
-                            initial={{ opacity: 0, x: -8 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: i * 0.03 }}
-                            onClick={() => { navigate(item.path); setSearchOpen(false); setSearchQuery(""); }}
-                            className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-muted"
-                          >
-                            {item.icon}
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-medium text-foreground">{item.label}</p>
-                              {item.sub && <p className="truncate text-xs text-muted-foreground">{item.sub}</p>}
-                            </div>
-                            <ArrowRight className="h-3.5 w-3.5 shrink-0 -translate-x-0.5 text-[#0DA2E7] opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
-                          </motion.div>
-                        ))}
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                searchInputRef.current?.focus();
+              }}
+              className="w-[calc(100vw-2rem)] max-w-lg gap-0 border-border bg-card p-0 shadow-lg"
+            >
+              <div className="relative">
+                <Command shouldFilter={false} className="bg-card text-foreground">
+                  <CommandInput
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                    placeholder="Escribe para buscar en todo el sistema..."
+                    aria-label="Buscar"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      aria-label="Limpiar búsqueda"
+                      onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                      className="absolute right-2.5 top-2.5 z-10 flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  <CommandList className="max-h-[340px]">
+                    {!hasMinLength && (
+                      <div className="py-10 text-center text-sm text-muted-foreground">
+                        <Search className="mx-auto mb-3 h-10 w-10 opacity-20" />
+                        <p className="font-medium">Buscar en HormiWatch</p>
+                        <p className="mt-1 text-xs">Escribe al menos 2 caracteres para ver resultados</p>
                       </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </DialogContent>
-      </Dialog>
+                    )}
+
+                    {hasMinLength && isFetching && totalResults === 0 && (
+                      <div className="py-10 text-center text-sm text-muted-foreground">
+                        <Search className="mx-auto mb-3 h-8 w-8 animate-pulse opacity-40" />
+                        <p>Buscando...</p>
+                      </div>
+                    )}
+
+                    {hasMinLength && isError && !isFetching && (
+                      <div className="px-4 py-10 text-center">
+                        <p className="text-sm font-medium">No se pudo completar la búsqueda</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Intenta de nuevo en unos segundos.</p>
+                      </div>
+                    )}
+
+                    {hasMinLength && !isFetching && !isError && totalResults === 0 && (
+                      <div className="px-4 py-10 text-center">
+                        <Search className="mx-auto mb-2 h-8 w-8 text-muted-foreground opacity-30" />
+                        <p className="text-sm font-medium">No se encontraron resultados para <strong>"{searchQuery}"</strong></p>
+                        <p className="mt-1 text-xs text-muted-foreground">{suggestionText}</p>
+                      </div>
+                    )}
+
+                    {visibleGroups.map((group) => {
+                      const Icon = group.icon;
+                      return (
+                        <CommandGroup key={group.key} heading={group.label}>
+                          {group.items.map((item) => (
+                            <CommandItem
+                              key={`${group.key}-${item.id}`}
+                              value={`${group.key}-${item.id}`}
+                              onSelect={() => handleSelect(group.to(item.id))}
+                              className="group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#0DA2E7]/10">
+                                <Icon className="h-4 w-4 text-[#0DA2E7]" />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                                {(item.subtitle || item.meta) && (
+                                  <p className="truncate text-xs text-muted-foreground">
+                                    {[item.subtitle, item.meta].filter(Boolean).join(' · ')}
+                                  </p>
+                                )}
+                              </div>
+                              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#0DA2E7] opacity-0 transition-opacity group-hover:opacity-100" />
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      );
+                    })}
+                  </CommandList>
+                </Command>
+              </div>
+              <div className="flex items-center justify-between border-t border-border px-3 py-1.5 text-[10px] text-muted-foreground">
+                <span>{hasMinLength && totalResults > 0 ? `${totalResults} resultado(s)` : 'Búsqueda global'}</span>
+                {isFetching && <span>Buscando…</span>}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
 
       <div className="flex items-center gap-4">
         <NotificationsBell />
@@ -310,7 +262,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="flex items-center gap-2 pl-2 pr-3 hover:bg-accent">
               <Avatar className="h-8 w-8"><AvatarImage src={profile?.avatar_url || undefined} /><AvatarFallback className="bg-primary text-primary-foreground text-sm">{userInitials}</AvatarFallback></Avatar>
-              <div className="hidden md:block text-left"><p className="text-sm font-medium text-foreground">{userName}</p><p className="text-xs text-muted-foreground">{getRoleLabel(userRole)}</p></div>
+              <div className="hidden md:block text-left"><p className="text-sm font-medium text-foreground">{userName}</p><p className="text-xs text-muted-foreground">{getRoleLabel(roleName)}</p></div>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
@@ -318,7 +270,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
             <DropdownMenuLabel className="font-normal"><div className="flex flex-col space-y-1"><p className="text-sm font-medium">{userName}</p><p className="text-xs text-muted-foreground">{userEmail}</p></div></DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate("/profile")}><User className="h-4 w-4 mr-2" />Mi Perfil</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuraci�n</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="h-4 w-4 mr-2" />Configuración</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive"><LogOut className="h-4 w-4 mr-2" />Cerrar Sesión</DropdownMenuItem>
           </DropdownMenuContent>

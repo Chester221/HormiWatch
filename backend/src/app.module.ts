@@ -22,6 +22,7 @@ import { ServicesModule } from './modules/services/services.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { MailsModule } from './mails/mails.module';
 import { JwtAuthGuard } from './modules/auth/guard/jwt-auth.guard';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { JwtAuthGuard } from './modules/auth/guard/jwt-auth.guard';
     AuditModule,
     RoleModule,
     ServicesModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [

@@ -453,6 +453,16 @@ export const notificationsApi = {
     apiClient('/notifications/test-discord', { method: 'POST' }),
 };
 
+// ---------- GLOBAL SEARCH ----------
+export const searchApi = {
+  // El agregador devuelve { projects, tasks, customers, users, services }
+  global: (q: string, signal?: AbortSignal) =>
+    apiClient(`/search?q=${encodeURIComponent(q)}&limit=5`, {
+      method: 'GET',
+      signal,
+    }),
+};
+
 // ============================================================
 // 4. EXPORTACIÓN PREDETERMINADA
 // ============================================================
@@ -470,4 +480,5 @@ export default {
   storage: storageApi,
   audit: auditApi,
   notifications: notificationsApi,
+  search: searchApi,
 };
