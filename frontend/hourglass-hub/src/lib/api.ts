@@ -151,6 +151,9 @@ export const usersApi = {
 
   getTechnicians: () =>
     apiClient('/users/technicians'),
+
+  getStats: () =>
+    apiClient('/users/stats'),
 };
 
 // ---------- ROLES ----------

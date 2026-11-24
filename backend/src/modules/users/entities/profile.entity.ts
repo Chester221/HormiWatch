@@ -58,6 +58,10 @@ export class Profile {
   @Column({ type: 'varchar', length: 50, nullable: true })
   deparment: string;
 
+  /** Alias legible de `deparment` (el nombre de la columna queda intacto). */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  company: string;
+
   @Column({ type: 'varchar', nullable: true })
   profilePicture: string;
 

@@ -17,10 +17,16 @@ import { FileValidationService } from '../storage/services/storage-validations.s
 import { Express } from 'express';
 import { HashingService } from '../../common/hashing/hashing.service';
 import { v4 as uuidv4 } from 'uuid';
-import { UserPageOptionsDto, UserOrderBy } from './dto/user-page-options.dto';
+import {
+  UserPageOptionsDto,
+  UserOrderBy,
+  UserStatusFilter,
+} from './dto/user-page-options.dto';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from '../../common/pagination/metadata';
+import { buildRelevance } from '../../common/search/relevance';
 import { UserResponseDto } from './dto/user-response.dto';
+import { UserStatsDto } from './dto/user-stats.dto';
 import { plainToInstance } from 'class-transformer';
 import { Brackets, Not } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -33,6 +39,8 @@ import { NotificationCategory } from '../notifications/enums/notification-catego
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
 
 const MAX_ACTIVE_ADMINS = 3;
+const DEFAULT_INACTIVITY_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class UsersService {
@@ -51,6 +59,27 @@ export class UsersService {
     private readonly eventEmitter: EventEmitter2,
     private readonly notifications: NotificationEmitterService,
   ) {}
+
+  /** Usuarios activos sin conexión en este lapso cuentan como inactivos. */
+  private getInactivityCutoff(): Date {
+    const configured = Number(process.env.USER_INACTIVITY_DAYS ?? 30);
+    const days =
+      Number.isFinite(configured) && configured > 0
+        ? configured
+        : DEFAULT_INACTIVITY_DAYS;
+    return new Date(Date.now() - days * MS_PER_DAY);
+  }
+
+  /** Expone `department` como alias legible de la columna histórica `deparment`. */
+  private toResponseDtos(users: User[]): UserResponseDto[] {
+    const normalized = users.map((user) => ({
+      ...user,
+      profile: user.profile
+        ? { ...user.profile, department: user.profile.deparment }
+        : user.profile,
+    }));
+    return plainToInstance(UserResponseDto, normalized);
+  }
 
   async findOneByEmailForAuth(email: string): Promise<User | null> {
     const user = await this.userRepository.findOne({
@@ -255,6 +284,9 @@ export class UsersService {
           idCard: userData.idCard,
           position: userData.position,
           deparment: userData.deparment,
+          company: userData.company,
+          whatsappPhone:
+            userData.whatsappPhone ?? userData.whatsapp_phone ?? undefined,
           profilePicture: profilePictureUrl,
           user: { id: savedUser.id },
           avatar_url: undefined,
@@ -324,6 +356,7 @@ export class UsersService {
       'user.email',
       'user.isActive',
       'user.lastConnection',
+      'user.preferences',
       'user.createdAt',
       'user.updatedAt',
       'profile.name',
@@ -332,9 +365,11 @@ export class UsersService {
       'profile.idCard',
       'profile.position',
       'profile.deparment',
+      'profile.company',
       'profile.profilePicture',
       'profile.full_name',
       'profile.avatar_url',
+      'profile.whatsappPhone',
       'role.id',
       'role.name',
     ]);
@@ -343,6 +378,17 @@ export class UsersService {
       queryBuilder.andWhere('user.isActive = :isActive', {
         isActive: pageOptionsDto.isActive,
       });
+    }
+
+    if (pageOptionsDto.status === UserStatusFilter.ACTIVE) {
+      queryBuilder.andWhere('user.isActive = :isActive', { isActive: true });
+    } else if (pageOptionsDto.status === UserStatusFilter.SUSPENDED) {
+      queryBuilder.andWhere('user.isActive = :isActive', { isActive: false });
+    } else if (pageOptionsDto.status === UserStatusFilter.INACTIVE) {
+      queryBuilder.andWhere(
+        '(user.isActive = :isActive AND (user.lastConnection IS NULL OR user.lastConnection < :inactiveBefore))',
+        { isActive: true, inactiveBefore: this.getInactivityCutoff() },
+      );
     }
 
     if (pageOptionsDto.roleName) {
@@ -398,17 +444,97 @@ export class UsersService {
         break;
     }
 
-    queryBuilder
-      .orderBy(orderField, pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+    if (pageOptionsDto.q && pageOptionsDto.rankByPrefix) {
+      const relevance = buildRelevance(pageOptionsDto.q, {
+        primary:
+          "COALESCE(profile.full_name, CONCAT_WS(' ', profile.name, profile.lastName), user.email)",
+        related: ['user.email', 'role.name'],
+      });
+      queryBuilder
+        .addSelect(relevance.expression, 'search_relevance')
+        .setParameters(relevance.params);
+    }
+
+    if (pageOptionsDto.rankByPrefix) {
+      queryBuilder
+        .orderBy('search_relevance', 'ASC')
+        .addOrderBy(orderField, pageOptionsDto.order);
+    } else {
+      queryBuilder.orderBy(orderField, pageOptionsDto.order);
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const [entities, itemCount] = await queryBuilder.getManyAndCount();
 
     const pageMetaDto = new PageMeta(pageOptionsDto, itemCount);
-    const dtos = plainToInstance(UserResponseDto, entities);
+    const dtos = this.toResponseDtos(entities);
 
     return new PageDto(dtos, pageMetaDto);
+  }
+
+  /**
+   * Métricas agregadas del módulo de usuarios. Un Manager ve el mismo scope
+   * que en el listado (sin Administradores); un Admin ve todos los roles.
+   */
+  async getStats(requesterRole?: string): Promise<UserStatsDto> {
+    const role = String(requesterRole ?? '').toLowerCase();
+    const inactiveBefore = this.getInactivityCutoff();
+    const adminRole = Role.admin.toLowerCase();
+    const managerRole = Role.manager.toLowerCase();
+    const technicianRole = Role.technician.toLowerCase();
+    const employeeRole = Role.employee.toLowerCase();
+    const leaderRole = 'leader';
+
+    const queryBuilder = this.userRepository
+      .createQueryBuilder('u')
+      .leftJoin('u.role', 'r')
+      .select([
+        'CAST(COUNT(*) AS integer) AS total',
+        `CAST(COUNT(*) FILTER (WHERE "u"."is_active" = true) AS integer) AS active`,
+        `CAST(COUNT(*) FILTER (WHERE "u"."is_active" = false) AS integer) AS suspended`,
+        `CAST(COUNT(*) FILTER (WHERE "u"."is_active" = true AND ("u"."lastConnection" IS NULL OR "u"."lastConnection" < :inactiveBefore)) AS integer) AS inactive`,
+        `CAST(COUNT(*) FILTER (WHERE LOWER("r"."name") = :adminRole) AS integer) AS admins`,
+        `CAST(COUNT(*) FILTER (WHERE LOWER("r"."name") = :managerRole) AS integer) AS managers`,
+        `CAST(COUNT(*) FILTER (WHERE LOWER("r"."name") IN (:technicianRole, :employeeRole)) AS integer) AS technicians`,
+        `CAST(COUNT(*) FILTER (WHERE LOWER("r"."name") = :leaderRole) AS integer) AS leaders`,
+        `CAST(COUNT(*) FILTER (WHERE LOWER(COALESCE("r"."name", '')) NOT IN (:...knownRoles)) AS integer) AS other`,
+      ])
+      .where('"u"."deleted_at" IS NULL')
+      .setParameters({
+        inactiveBefore,
+        adminRole,
+        managerRole,
+        technicianRole,
+        employeeRole,
+        leaderRole,
+        knownRoles: [
+          adminRole,
+          managerRole,
+          technicianRole,
+          employeeRole,
+          leaderRole,
+        ],
+      });
+
+    if (role !== adminRole) {
+      queryBuilder.andWhere('LOWER("r"."name") <> :adminRole');
+    }
+
+    const raw = await queryBuilder.getRawOne();
+
+    return new UserStatsDto({
+      total: Number(raw?.total ?? 0),
+      active: Number(raw?.active ?? 0),
+      inactive: Number(raw?.inactive ?? 0),
+      suspended: Number(raw?.suspended ?? 0),
+      admins: Number(raw?.admins ?? 0),
+      managers: Number(raw?.managers ?? 0),
+      technicians: Number(raw?.technicians ?? 0),
+      leaders: Number(raw?.leaders ?? 0),
+      other: Number(raw?.other ?? 0),
+      generatedAt: new Date().toISOString(),
+    });
   }
 
   async findAllList(): Promise<UserResponseDto[]> {
@@ -443,7 +569,7 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
 
-    return plainToInstance(UserResponseDto, user);
+    return this.toResponseDtos([user])[0];
   }
 
   async findOneById(id: string): Promise<User> {
@@ -592,6 +718,7 @@ export class UsersService {
         user.profile.idCard = userData.idCard ?? user.profile.idCard;
         user.profile.position = userData.position ?? user.profile.position;
         user.profile.deparment = userData.deparment ?? user.profile.deparment;
+        user.profile.company = userData.company ?? user.profile.company;
         // ✅ AGREGAR avatar_url y full_name al perfil
         user.profile.avatar_url =
           userData.avatar_url ?? user.profile.avatar_url;
@@ -669,7 +796,7 @@ export class UsersService {
       );
     }
 
-    return plainToInstance(UserResponseDto, user);
+    return this.toResponseDtos([user])[0];
   }
 
   async remove(id: string): Promise<void> {

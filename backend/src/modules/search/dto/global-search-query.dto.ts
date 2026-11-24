@@ -4,16 +4,16 @@ import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'cla
 
 export class GlobalSearchQueryDto {
   @ApiProperty({
-    description: 'Término a buscar (mínimo 2 caracteres)',
-    example: 'andres',
-    minLength: 2,
+    description: 'Término a buscar (mínimo 1 carácter)',
+    example: 'a',
+    minLength: 1,
     maxLength: 100,
   })
   @IsString()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
-  @MinLength(2)
+  @MinLength(1)
   @MaxLength(100)
   q: string;
 

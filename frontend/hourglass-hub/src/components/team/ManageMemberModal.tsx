@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ const getRoleName = (role: any) => {
 };
 
 export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isManager }: ManageMemberModalProps) {
+  const queryClient = useQueryClient();
   const updateMember = useUpdateTeamMember();
   const [users, setUsers] = useState<any[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<any[]>([]);
@@ -163,6 +165,8 @@ export function ManageMemberModal({ open, onOpenChange, onSuccess, isAdmin, isMa
     }
     try {
       await usersApi.update(userId, { isActive: !currentActive });
+      queryClient.invalidateQueries({ queryKey: ['users', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['team_members'] });
       toast.success(`Usuario ${!currentActive ? 'activado' : 'desactivado'}`);
       loadUsers();
     } catch (error: any) {

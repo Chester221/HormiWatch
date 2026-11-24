@@ -1,6 +1,6 @@
 import { PageOptionsDto } from '../../../common/pagination/pagination-options.dto';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { Transform } from 'class-transformer';
 
 export enum ServiceOrderBy {
@@ -67,4 +67,11 @@ export class ServicePageOptionsDto extends PageOptionsDto {
   @IsUUID('4', { each: true })
   @Transform(({ value }) => (Array.isArray(value) ? value : [value]))
   readonly taskIds?: string[];
+
+  /** Solo lo activa el buscador global: ordena por coincidencia de prefijo. */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  readonly rankByPrefix?: boolean;
 }

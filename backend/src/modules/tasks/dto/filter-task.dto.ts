@@ -49,4 +49,11 @@ export class FilterTaskDto extends PageOptionsDto {
   @IsBoolean()
   @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
   matchRelations?: boolean;
+
+  /** Solo lo activa el buscador global: ordena por coincidencia de prefijo. */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  rankByPrefix?: boolean;
 }

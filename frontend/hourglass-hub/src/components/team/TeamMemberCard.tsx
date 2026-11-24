@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Crown, Briefcase, Wrench, Mail, Phone, Eye, Pencil, ArrowRight, MoreVertical,
+  Building2, MapPin,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,13 @@ export interface TeamMemberLike {
   isActive?: boolean;
   phone?: string | null;
   cedula?: string | null;
+  idCard?: string | null;
+  position?: string | null;
+  department?: string | null;
+  deparment?: string | null;
+  company?: string | null;
+  whatsappPhone?: string | null;
+  lastConnection?: string | null;
   role?: string | { name?: string };
   name?: string;
   profile?: {
@@ -30,6 +38,11 @@ export interface TeamMemberLike {
     lastName?: string;
     phone?: string;
     idCard?: string;
+    position?: string;
+    deparment?: string;
+    department?: string;
+    company?: string;
+    whatsappPhone?: string;
     profilePicture?: string;
     createdAt?: string;
   };
@@ -47,6 +60,15 @@ const getRoleName = (role: string | { name?: string } | null | undefined) =>
 const getIsActive = (m?: TeamMemberLike | null) => m?.isActive !== false && m?.is_active !== false;
 
 const getPhone = (m?: TeamMemberLike | null) => m?.phone || m?.profile?.phone || null;
+
+const getPosition = (m?: TeamMemberLike | null) =>
+  m?.position || m?.profile?.position || null;
+
+const getDepartment = (m?: TeamMemberLike | null) =>
+  m?.department || m?.profile?.department || m?.profile?.deparment || m?.deparment || null;
+
+const getCompany = (m?: TeamMemberLike | null) =>
+  m?.company || m?.profile?.company || null;
 
 const getAvatar = (m?: TeamMemberLike | null) =>
   m?.avatar_url || m?.profile?.profilePicture || null;
@@ -81,6 +103,9 @@ export function TeamMemberCard({
   const fullName = getFullName(member);
   const email = member?.email;
   const phone = getPhone(member);
+  const position = getPosition(member);
+  const department = getDepartment(member);
+  const company = getCompany(member);
   const avatar = getAvatar(member);
 
   return (
@@ -182,7 +207,31 @@ export function TeamMemberCard({
             <span className="truncate font-medium">{phone}</span>
           </div>
         )}
-        {!email && !phone && (
+        {position && (
+          <div className="flex items-center gap-2.5 text-xs text-muted-foreground/80">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#0DA2E7]/8">
+              <Briefcase className="h-3 w-3 text-[#0DA2E7]" />
+            </span>
+            <span className="truncate font-medium">{position}</span>
+          </div>
+        )}
+        {department && (
+          <div className="flex items-center gap-2.5 text-xs text-muted-foreground/80">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#0DA2E7]/8">
+              <MapPin className="h-3 w-3 text-[#0DA2E7]" />
+            </span>
+            <span className="truncate font-medium">{department}</span>
+          </div>
+        )}
+        {company && (
+          <div className="flex items-center gap-2.5 text-xs text-muted-foreground/80">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#0DA2E7]/8">
+              <Building2 className="h-3 w-3 text-[#0DA2E7]" />
+            </span>
+            <span className="truncate font-medium">{company}</span>
+          </div>
+        )}
+        {!email && !phone && !position && !department && !company && (
           <p className="text-xs italic text-muted-foreground/40">Sin información de contacto</p>
         )}
       </div>

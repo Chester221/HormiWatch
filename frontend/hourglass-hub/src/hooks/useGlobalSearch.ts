@@ -6,6 +6,7 @@ import { searchApi } from '@/lib/api';
 import { useDebounce } from './useDebounce';
 
 const SEARCH_DEBOUNCE_MS = 150;
+const MIN_TERM_LENGTH = 1;
 const RESULT_LIMIT = 5;
 const CANDIDATE_TTL_MS = 5 * 60_000;
 
@@ -78,8 +79,8 @@ const normalize = (raw: any): GlobalSearchResult => {
 export function useGlobalSearch(query: string, enabled: boolean) {
   const term = query.trim();
   const debouncedTerm = useDebounce(term, SEARCH_DEBOUNCE_MS);
-  const hasMinLength = term.length >= 2;
-  const shouldFetch = enabled && debouncedTerm.length >= 2;
+  const hasMinLength = term.length >= MIN_TERM_LENGTH;
+  const shouldFetch = enabled && debouncedTerm.length >= MIN_TERM_LENGTH;
 
   const exactQuery = useQuery({
     queryKey: ['global-search', debouncedTerm],

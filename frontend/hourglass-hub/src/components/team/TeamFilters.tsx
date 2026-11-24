@@ -6,10 +6,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import {
-  SlidersHorizontal, Check, ChevronDown, Users, CheckCircle, Ban, X,
+  SlidersHorizontal, Check, ChevronDown, Users, CheckCircle, Ban, Clock, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { UserStatusFilterValue } from "@/hooks/useTeamMembers";
 
 export interface TeamFilterOption {
   value: string;
@@ -22,8 +23,8 @@ interface TeamFiltersProps {
   roleOptions: TeamFilterOption[];
   roleFilter: string;
   onRoleChange: (value: string) => void;
-  statusFilter: string;
-  onStatusChange: (value: string) => void;
+  statusFilter: UserStatusFilterValue;
+  onStatusChange: (value: UserStatusFilterValue) => void;
   resultCount: number;
   activeCount: number;
   onClear: () => void;
@@ -34,6 +35,7 @@ interface TeamFiltersProps {
 const STATUS_OPTIONS: TeamFilterOption[] = [
   { value: "all", label: "Todos", icon: Users, color: "text-muted-foreground" },
   { value: "active", label: "Activos", icon: CheckCircle, color: "text-emerald-500" },
+  { value: "inactive", label: "Inactivos", icon: Clock, color: "text-amber-500" },
   { value: "suspended", label: "Suspendidos", icon: Ban, color: "text-rose-500" },
 ];
 

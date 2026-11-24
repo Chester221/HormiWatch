@@ -15,6 +15,7 @@ import { Temporal } from 'temporal-polyfill';
 import { Holiday } from './entities/holiday.entity';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from 'src/common/pagination/metadata';
+import { buildRelevance } from '../../common/search/relevance';
 import { Project } from '../projects/entities/project.entity';
 import { UsersService } from '../users/users.service';
 import { ServicesService } from '../services/services/services.service';
@@ -439,10 +440,32 @@ export class TasksService {
       }
     }
 
-    queryBuilder
-      .orderBy('task.createdAt', filterDto.order)
-      .skip(filterDto.skip)
-      .take(filterDto.take);
+    if (filterDto.q && filterDto.rankByPrefix) {
+      const relevance = buildRelevance(filterDto.q, {
+        primary: "COALESCE(NULLIF(task.title, ''), task.description)",
+        related: [
+          'task.description',
+          'techProfile.full_name',
+          'techProfile.name',
+          'techProfile.lastName',
+          'project.title',
+          'service.name',
+        ],
+      });
+      queryBuilder
+        .addSelect(relevance.expression, 'search_relevance')
+        .setParameters(relevance.params);
+    }
+
+    if (filterDto.rankByPrefix) {
+      queryBuilder
+        .orderBy('search_relevance', 'ASC')
+        .addOrderBy('task.createdAt', filterDto.order);
+    } else {
+      queryBuilder.orderBy('task.createdAt', filterDto.order);
+    }
+
+    queryBuilder.skip(filterDto.skip).take(filterDto.take);
 
     const itemCount = await queryBuilder.getCount();
     const { entities } = await queryBuilder.getRawAndEntities();

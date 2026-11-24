@@ -342,7 +342,11 @@ const TechnicianDashboard = () => {
           <ManageMemberModal
             open={manageMemberModalOpen}
             onOpenChange={setManageMemberModalOpen}
-            onSuccess={() => { setManageMemberModalOpen(false); queryClient.invalidateQueries({ queryKey: ["team_members"] }); }}
+            onSuccess={() => {
+              setManageMemberModalOpen(false);
+              queryClient.invalidateQueries({ queryKey: ["team_members"] });
+              queryClient.invalidateQueries({ queryKey: ["users", "stats"] });
+            }}
           />
           <CreateServiceModal
             open={createServiceModalOpen}

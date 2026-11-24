@@ -148,29 +148,29 @@ export class SearchService {
     const direction: Record<string, unknown> = order ? { order } : {};
 
     const projectQuery = Object.assign(new ProjectPageOptionsDto(), {
-      ...(q ? { q, matchRelations: true } : {}),
+      ...(q ? { q, matchRelations: true, rankByPrefix: true } : {}),
       take: limit,
       ...direction,
     });
     const taskQuery = Object.assign(new FilterTaskDto(), {
-      ...(q ? { q, matchRelations: true } : {}),
+      ...(q ? { q, matchRelations: true, rankByPrefix: true } : {}),
       take: limit,
       ...direction,
     });
     const customerQuery = Object.assign(new FindAllCustomersQueryDto(), {
-      ...(q ? { search: q } : {}),
+      ...(q ? { search: q, rankByPrefix: true } : {}),
       take: limit,
       includeContacts: false,
       ...direction,
     });
     const userQuery = Object.assign(new UserPageOptionsDto(), {
-      ...(q ? { q } : {}),
+      ...(q ? { q, rankByPrefix: true } : {}),
       // Pedimos más para poder descartar admins sin quedarnos cortos.
       take: visibility.hideAdmins ? Math.min(limit * 4, 100) : limit,
       ...direction,
     });
     const serviceQuery = Object.assign(new ServicePageOptionsDto(), {
-      ...(q ? { q } : {}),
+      ...(q ? { q, rankByPrefix: true } : {}),
       take: limit,
       ...direction,
     });

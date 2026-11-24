@@ -27,6 +27,7 @@ import {
   User,
   Key,
   CreditCard,
+  Building2,
   Settings2,
   Briefcase,
   Wrench,
@@ -77,6 +78,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
   const [phone, setPhone] = useState("");
   const [cedulaType, setCedulaType] = useState("V");
   const [cedula, setCedula] = useState("");
+  const [company, setCompany] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [activeAdmins, setActiveAdmins] = useState(0);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
       const tech = data.find((r) => r.name === "Technician");
       setRoleUuid(tech?.id || data[0]?.id || "");
     }).catch(() => {});
-    usersApi.getAll().then((data: any) => {
+    usersApi.getAll({ take: 100 }).then((data: any) => {
       const list = Array.isArray(data) ? data : data?.records || data?.data || [];
       const admins = list.filter(
         (u: any) => (u.role?.name === "Admin" || u.role_name === "Admin") && u.isActive !== false
@@ -104,7 +106,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
 
   const reset = () => {
     setEmail(""); setPassword(""); setFullName(""); setRoleName("Technician");
-    setPhone(""); setCedulaType("V"); setCedula("");
+    setPhone(""); setCedulaType("V"); setCedula(""); setCompany("");
     setAvatarPreview(null); setAvatarFile(null); setErrors({});
   };
 
@@ -158,6 +160,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
         roleName,
         phone: phoneValue || undefined,
         idCard: cedula ? `${cedulaType}-${cedula}` : undefined,
+        company: company.trim() || undefined,
         _fullName: fullName,
         _role: roleName,
       });
@@ -202,7 +205,7 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
             </span>
             <div>
               <h2 className="text-lg font-bold text-foreground">Nuevo Usuario</h2>
-              <p className="text-xs text-muted-foreground">Crea la cuenta de un nuevo miembro del equipo</p>
+              <p className="text-xs text-muted-foreground">Crea la cuenta de un nuevo usuario</p>
             </div>
           </div>
         </div>
@@ -353,6 +356,20 @@ export function AddUserModal({ open, onOpenChange, onSuccess }: AddUserModalProp
                 inputMode="numeric"
               />
             </div>
+          </div>
+
+          {/* Empresa */}
+          <div>
+            <Label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+              <Building2 className="h-3 w-3 text-[#0DA2E7]" />
+              Empresa
+            </Label>
+            <Input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Bytes Creativos o Gal Secure"
+              className="mt-1 h-9 rounded-lg bg-muted/20 border-border/60 text-sm"
+            />
           </div>
 
           {/* Info del rol seleccionado */}

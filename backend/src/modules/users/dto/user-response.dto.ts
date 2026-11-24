@@ -30,6 +30,14 @@ export class UserResponseDto {
   @Expose()
   isActive: boolean; // ✅ CAMBIADO de isActived a isActive
 
+  @ApiProperty({ description: 'Creation date of the user account' })
+  @Expose()
+  createdAt: Date;
+
+  @ApiProperty({ description: 'Last update date of the user account' })
+  @Expose()
+  updatedAt: Date;
+
   @Exclude()
   password: string;
 

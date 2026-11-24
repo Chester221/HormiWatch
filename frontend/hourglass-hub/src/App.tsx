@@ -24,6 +24,12 @@ const Auth = lazy(() => import("./pages/Auth"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AdminDashboard = lazy(() => import("@/pages/AdminDashboard"));
 
+/** Conserva los deep links antiguos (/team?member=...) durante el renombrado. */
+function LegacyTeamRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: "/users", search: location.search }} replace />;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -193,7 +199,8 @@ const App = () => (
                 <Route path="/clients" element={
                   <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Clients /></ProtectedRoute>
                 } />
-                <Route path="/team" element={
+                <Route path="/team" element={<LegacyTeamRedirect />} />
+                <Route path="/users" element={
                   <ProtectedRoute requiredRole={['Manager', 'Leader', 'Admin']}><Team /></ProtectedRoute>
                 } />
                 <Route path="/services" element={

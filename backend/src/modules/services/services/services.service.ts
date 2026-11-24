@@ -11,6 +11,7 @@ import { ServicePlatformService } from './service-platform.service';
 import { ServiceTypeService } from './service-type.service';
 import { PageDto } from '../../../common/pagination/pagination.dto';
 import { PageMeta } from '../../../common/pagination/metadata';
+import { buildRelevance } from '../../../common/search/relevance';
 import {
   ServicePageOptionsDto,
   ServiceOrderBy,
@@ -165,10 +166,30 @@ export class ServicesService {
         break;
     }
 
-    queryBuilder
-      .orderBy(orderField, pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+    if (pageOptionsDto.q && pageOptionsDto.rankByPrefix) {
+      const relevance = buildRelevance(pageOptionsDto.q, {
+        primary: 'service.name',
+        related: [
+          'service.description',
+          'category.name',
+          'platform.name',
+          'type.name',
+        ],
+      });
+      queryBuilder
+        .addSelect(relevance.expression, 'search_relevance')
+        .setParameters(relevance.params);
+    }
+
+    if (pageOptionsDto.rankByPrefix) {
+      queryBuilder
+        .orderBy('search_relevance', 'ASC')
+        .addOrderBy(orderField, pageOptionsDto.order);
+    } else {
+      queryBuilder.orderBy(orderField, pageOptionsDto.order);
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     // Execution
     const [entities, itemCount] = await queryBuilder.getManyAndCount();

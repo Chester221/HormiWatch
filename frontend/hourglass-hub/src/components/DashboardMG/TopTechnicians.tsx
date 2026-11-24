@@ -153,7 +153,7 @@ export function TopTechnicians({ technicians, tasks }: TopTechniciansProps) {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.05 }}
-              onClick={() => navigate(`/team?member=${tech.id}`)}
+              onClick={() => navigate(`/users?member=${tech.id}`)}
               className="group relative flex items-center gap-3 rounded-xl border border-border/30 p-3 transition-all duration-200 hover:border-[#0DA2E7]/40 hover:bg-muted/10 cursor-pointer"
             >
               {/* Ranking */}

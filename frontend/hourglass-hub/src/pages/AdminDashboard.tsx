@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import {
   Table, Grid3x3, KeyRound
 } from "lucide-react";
 import { usersApi, storageApi } from "@/lib/api";import { useAuth } from "@/hooks/useAuth";
+import { useUserStats, type UserStats } from "@/hooks/useUserStats";
 import { AddUserModal } from "@/components/team/AddUserModal";
 import { ResetPasswordModal } from "@/components/team/ResetPasswordModal";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
@@ -26,6 +28,8 @@ import { motion, AnimatePresence } from "framer-motion";
 const HORMI_BLUE = "#0DA2E7";
 
 export default function AdminDashboard() {
+  const queryClient = useQueryClient();
+  const statsQuery = useUserStats();
   const { profile } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [roleFilter, setRoleFilter] = useState("all");
@@ -68,7 +72,7 @@ export default function AdminDashboard() {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const data = await usersApi.getAll();
+      const data = await usersApi.getAll({ take: 100 });
       const list = Array.isArray(data) ? data : data?.records || data?.data || [];
       setUsers(
         list.map((u: any) => ({
@@ -90,6 +94,8 @@ export default function AdminDashboard() {
       console.error("Error fetching users:", error);
       toast.error("Error al cargar usuarios");
     }
+    // Toda recarga de usuarios refresca también las KPIs agregadas.
+    queryClient.invalidateQueries({ queryKey: ['users', 'stats'] });
     setIsLoading(false);
   };
 
@@ -121,12 +127,17 @@ export default function AdminDashboard() {
   // ═══════ LISTA COMPLETA (PARA SCROLL) ═══════
   const allUsers = sortedUsers;
 
-  const stats = {
+  const stats: UserStats = statsQuery.data ?? {
     total: users.length,
-      active: users.filter((u) => u.isActive !== false).length,
+    active: users.filter((u) => u.isActive !== false).length,
+    inactive: 0,
+    suspended: users.filter((u) => u.isActive === false).length,
     admins: users.filter((u) => u.role === "Admin").length,
     managers: users.filter((u) => u.role === "Manager").length,
     technicians: users.filter((u) => u.role === "Technician").length,
+    leaders: users.filter((u) => u.role === "Leader").length,
+    other: 0,
+    generatedAt: "",
   };
 
   const handleOpenEdit = useCallback((user: any) => {
@@ -301,7 +312,7 @@ const handleDeleteUser = async (user: any) => {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { icon: Users, label: "Total Usuarios", value: stats.total, sub: `${stats.active} activos` },
-            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${stats.total - stats.active} inactivos` },
+            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${stats.suspended} suspendidos` },
             { icon: Settings2, label: "Administradores", value: stats.admins, sub: "Acceso total" },
             { icon: Wrench, label: "Técnicos", value: stats.technicians, sub: "Miembros del equipo" },
           ].map((metric, i) => (

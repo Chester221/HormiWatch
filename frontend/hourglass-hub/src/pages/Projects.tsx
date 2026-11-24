@@ -475,7 +475,7 @@ export default function Projects() {
   
   const handleMemberClick = (memberId: string, e: React.MouseEvent) => { 
     e.stopPropagation(); 
-    navigate(`/team?member=${memberId}`); 
+    navigate(`/users?member=${memberId}`); 
   };
 
   const confirmDelete = () => {

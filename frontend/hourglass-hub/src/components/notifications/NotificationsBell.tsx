@@ -158,11 +158,11 @@ function getNotificationRoute(n: AppNotification): string | null {
   if ((n.category === 'customers' || n.category === 'clients') && clientId) {
     return `/clients?client=${clientId}`;
   }
-  if (n.category === 'users' && userId) return `/team?member=${userId}`;
+  if (n.category === 'users' && userId) return `/users?member=${userId}`;
   if (n.category === 'system' && serviceId) return `/services?service=${serviceId}`;
   if (taskId && !String(n.category || '').includes('project')) return `/tasks?task=${taskId}`;
   if (projectId) return `/projects?project=${projectId}`;
-  if (userId) return `/team?member=${userId}`;
+  if (userId) return `/users?member=${userId}`;
   if (clientId) return `/clients?client=${clientId}`;
   if (serviceId) return `/services?service=${serviceId}`;
   return null;

@@ -13,6 +13,7 @@ import { Project } from './entities/project.entity';
 import { ProjectPageOptionsDto } from './dto/project-page-options.dto';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { PageMeta } from '../../common/pagination/metadata';
+import { buildRelevance } from '../../common/search/relevance';
 import { User } from '../users/entities/user.entity';
 import { IActiveUser } from '../auth/interface/payload.interface';
 import { CustomerContact } from '../customers/entities/customer_contact.entity';
@@ -376,10 +377,31 @@ export class ProjectsService {
       }
     }
 
-    queryBuilder
-      .orderBy('project.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+    if (pageOptionsDto.q && pageOptionsDto.rankByPrefix) {
+      const relevance = buildRelevance(pageOptionsDto.q, {
+        primary: 'project.title',
+        related: [
+          'project.description',
+          'leaderProfile.full_name',
+          'leaderProfile.name',
+          'leaderProfile.lastName',
+          'customer.name',
+        ],
+      });
+      queryBuilder
+        .addSelect(relevance.expression, 'search_relevance')
+        .setParameters(relevance.params);
+    }
+
+    if (pageOptionsDto.rankByPrefix) {
+      queryBuilder
+        .orderBy('search_relevance', 'ASC')
+        .addOrderBy('project.createdAt', pageOptionsDto.order);
+    } else {
+      queryBuilder.orderBy('project.createdAt', pageOptionsDto.order);
+    }
+
+    queryBuilder.skip(pageOptionsDto.skip).take(pageOptionsDto.take);
 
     const itemCount = await queryBuilder.getCount();
     const { entities } = await queryBuilder.getRawAndEntities();

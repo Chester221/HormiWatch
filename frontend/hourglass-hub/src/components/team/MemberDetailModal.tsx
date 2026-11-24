@@ -8,6 +8,7 @@ import { motion } from "framer-motion";
 import {
   Mail, Phone, CreditCard, Calendar, Pencil, Trash2,
   Crown, Briefcase, Wrench, Shield, CheckCircle2, Ban,
+  Building2, MapPin, Clock, MessageCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -20,6 +21,13 @@ interface MemberLike {
   isActive?: boolean;
   phone?: string | null;
   cedula?: string | null;
+  idCard?: string | null;
+  position?: string | null;
+  department?: string | null;
+  deparment?: string | null;
+  company?: string | null;
+  whatsappPhone?: string | null;
+  lastConnection?: string | null;
   createdAt?: string;
   created_at?: string;
   role?: string | { name?: string };
@@ -28,6 +36,12 @@ interface MemberLike {
     lastName?: string;
     phone?: string;
     idCard?: string;
+    position?: string;
+    department?: string;
+    deparment?: string;
+    company?: string;
+    whatsappPhone?: string;
+    whatsapp_phone?: string;
     profilePicture?: string;
     avatar_url?: string;
     createdAt?: string;
@@ -66,6 +80,26 @@ const getAvatar = (m?: MemberLike | null) =>
 
 const getCreatedAt = (m?: MemberLike | null) => m?.createdAt || m?.created_at || m?.profile?.createdAt || null;
 
+const getPosition = (m?: MemberLike | null) =>
+  m?.position || m?.profile?.position || null;
+
+const getDepartment = (m?: MemberLike | null) =>
+  m?.department || m?.profile?.department || m?.profile?.deparment || m?.deparment || null;
+
+const getCompany = (m?: MemberLike | null) => m?.company || m?.profile?.company || null;
+
+const getWhatsapp = (m?: MemberLike | null) =>
+  m?.whatsappPhone || m?.profile?.whatsappPhone || m?.profile?.whatsapp_phone || null;
+
+const getLastConnection = (m?: MemberLike | null) => m?.lastConnection || null;
+
+const formatDate = (value: string | null, withTime = false): string => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "—";
+  return format(date, withTime ? "d MMM yyyy HH:mm" : "d MMM yyyy", { locale: es });
+};
+
 interface MemberDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -89,6 +123,11 @@ export function MemberDetailModal({
   const isActive = getIsActive(member);
   const phone = getPhone(member);
   const cedula = getCedula(member);
+  const position = getPosition(member);
+  const department = getDepartment(member);
+  const company = getCompany(member);
+  const whatsapp = getWhatsapp(member);
+  const lastConnection = getLastConnection(member);
   const createdAt = getCreatedAt(member);
   const avatar = getAvatar(member);
   const canManage = isAdmin || isManager;
@@ -96,7 +135,12 @@ export function MemberDetailModal({
   const rows = [
     { icon: Mail, label: "Email", value: member.email || "—" },
     { icon: Phone, label: "Teléfono", value: phone || "—" },
-    { icon: CreditCard, label: "Cédula", value: cedula ? `V-${cedula}` : "—" },
+    { icon: MessageCircle, label: "WhatsApp", value: whatsapp || "—" },
+    { icon: CreditCard, label: "Cédula", value: cedula || "—" },
+    { icon: Briefcase, label: "Cargo", value: position || "—" },
+    { icon: MapPin, label: "Departamento", value: department || "—" },
+    { icon: Building2, label: "Empresa", value: company || "—" },
+    { icon: Clock, label: "Última conexión", value: formatDate(lastConnection, true) },
   ];
 
   return (
@@ -123,7 +167,7 @@ export function MemberDetailModal({
               <span className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full ring-2 ring-background ${isActive ? "bg-emerald-400" : "bg-rose-400"}`} />
             </motion.div>
             <div>
-              <DialogDescription className="sr-only">Detalle del miembro del equipo</DialogDescription>
+              <DialogDescription className="sr-only">Detalle del usuario</DialogDescription>
               <h2 className="text-lg font-bold text-foreground tracking-tight">{fullName}</h2>
               <div className="flex items-center justify-center gap-2 mt-1.5 flex-wrap">
                 <Badge variant="outline" className={`gap-1 text-[11px] px-2.5 py-0.5 font-medium ${roleConfig.badge}`}>
@@ -178,13 +222,8 @@ export function MemberDetailModal({
                 <Calendar className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Miembro desde</p>
-                <p className="text-sm font-medium text-foreground truncate">
-                  {createdAt ? ((): string => {
-                    const d = new Date(createdAt);
-                    return isNaN(d.getTime()) ? "—" : format(d, "d MMM yyyy", { locale: es });
-                  })() : "—"}
-                </p>
+                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Usuario desde</p>
+                <p className="text-sm font-medium text-foreground truncate">{formatDate(createdAt)}</p>
               </div>
             </div>
           </div>

@@ -15,6 +15,7 @@ import { UpdateCustomerDto } from '../dto/update-customer.dto';
 import { FindAllCustomersQueryDto } from '../dto/find-all-customers-query.dto';
 import { PageDto } from 'src/common/pagination/pagination.dto';
 import { PageMeta } from 'src/common/pagination/metadata';
+import { buildRelevance } from '../../../common/search/relevance';
 import { NotificationEmitterService } from '../../notifications/services/notification-emitter.service';
 import { NotificationCategory } from '../../notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../../notifications/enums/notification-level.enum';
@@ -267,7 +268,8 @@ export class CustomersService {
   async findAllCustomers(
     query: FindAllCustomersQueryDto,
   ): Promise<PageDto<Customer>> {
-    const { search, withDeleted, includeContacts, skip, take } = query;
+    const { search, withDeleted, includeContacts, skip, take, rankByPrefix } =
+      query;
 
     const qb = this.customerRepository.createQueryBuilder('customer');
 
@@ -294,9 +296,31 @@ export class CustomersService {
       qb.withDeleted();
     }
 
+    if (search && rankByPrefix) {
+      const relevance = buildRelevance(search.trim(), {
+        primary: 'customer.name',
+        related: [
+          'customer.rif',
+          'customer.city',
+          'customer.country',
+          'customer.address',
+        ],
+      });
+      qb.addSelect(relevance.expression, 'search_relevance');
+      qb.setParameters(relevance.params);
+    }
+
+    if (rankByPrefix) {
+      qb.orderBy('search_relevance', 'ASC').addOrderBy(
+        'customer.createdAt',
+        'DESC',
+      );
+    } else {
+      qb.orderBy('customer.createdAt', 'DESC');
+    }
+
     qb.skip(skip);
     qb.take(take);
-    qb.orderBy('customer.createdAt', 'DESC');
 
     const [entities, itemCount] = await qb.getManyAndCount();
     const pageMetaDto = new PageMeta(query, itemCount);

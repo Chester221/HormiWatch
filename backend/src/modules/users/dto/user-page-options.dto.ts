@@ -14,6 +14,13 @@ export enum UserOrderBy {
   ROLE = 'role',
 }
 
+export enum UserStatusFilter {
+  ALL = 'all',
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  SUSPENDED = 'suspended',
+}
+
 export class UserPageOptionsDto extends PageOptionsDto {
   @ApiPropertyOptional({
     enum: UserOrderBy,
@@ -38,6 +45,16 @@ export class UserPageOptionsDto extends PageOptionsDto {
   readonly isActive?: boolean;
 
   @ApiPropertyOptional({
+    enum: UserStatusFilter,
+    default: UserStatusFilter.ALL,
+    description:
+      'Estado visible en el módulo de usuarios. "inactive" = activo sin conexión reciente.',
+  })
+  @IsOptional()
+  @IsEnum(UserStatusFilter)
+  readonly status?: UserStatusFilter = UserStatusFilter.ALL;
+
+  @ApiPropertyOptional({
     description: 'Include deleted users',
     default: false,
     type: Boolean,
@@ -54,4 +71,11 @@ export class UserPageOptionsDto extends PageOptionsDto {
   @IsOptional()
   @IsEnum(Role)
   readonly roleName?: Role;
+
+  /** Solo lo activa el buscador global: ordena por coincidencia de prefijo. */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  readonly rankByPrefix?: boolean;
 }

@@ -272,11 +272,11 @@ export function TechnicianDetails({
                 className="w-full gap-2"
                 onClick={() => {
                   onOpenChange(false);
-                  navigate("/team");
+                  navigate("/users");
                 }}
               >
                 <Users className="h-4 w-4" />
-                Ver perfil completo en el equipo
+                Ver perfil completo en Usuarios
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>

@@ -45,4 +45,11 @@ export class ProfileResponseDto {
 
   @Expose()
   whatsappPhone: string;
+
+  @Expose()
+  company: string;
+
+  /** Alias legible de `deparment`; se rellena en UsersService. */
+  @Expose()
+  department: string;
 }

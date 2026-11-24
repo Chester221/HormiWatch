@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsBoolean, IsString } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PageOptionsDto } from 'src/common/pagination/pagination-options.dto';
 
 export class FindAllCustomersQueryDto extends PageOptionsDto {
@@ -28,4 +28,11 @@ export class FindAllCustomersQueryDto extends PageOptionsDto {
   @Type(() => Boolean)
   @IsBoolean()
   includeContacts?: boolean = true;
+
+  /** Solo lo activa el buscador global: ordena por coincidencia de prefijo. */
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  rankByPrefix?: boolean;
 }

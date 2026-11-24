@@ -31,4 +31,11 @@ export class ProjectPageOptionsDto extends PageOptionsDto {
   @IsBoolean()
   @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
   matchRelations?: boolean;
+
+  /** Solo lo activa el buscador global: ordena por coincidencia de prefijo. */
+  @ApiProperty({ required: false, default: false })
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }: { value: unknown }) => value === true || value === 'true')
+  rankByPrefix?: boolean;
 }

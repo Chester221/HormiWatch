@@ -59,6 +59,12 @@ export class UpdateUserDto {
   @IsString()
   deparment?: string;
 
+  @ApiPropertyOptional({ description: 'User company' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  company?: string;
+
   @ApiPropertyOptional({ description: 'Role ID' })
   @IsOptional()
   @IsUUID()

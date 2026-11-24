@@ -37,7 +37,7 @@ const navigation: NavItem[] = [
   { name: "Clientes", href: "/clients", icon: Building2, roles: ["Manager", "Admin"] },
   { name: "Proyectos", href: "/projects", icon: FolderKanban, roles: ["Manager", "Admin", "Technician"] },
   { name: "Tareas", href: "/tasks", icon: CheckSquare, roles: ["Manager", "Admin", "Technician"] },
-  { name: "Equipo", href: "/team", icon: Users, roles: ["Manager", "Admin"] },
+  { name: "Usuarios", href: "/users", icon: Users, roles: ["Manager", "Admin"] },
   { name: "Servicios", href: "/services", icon: Wrench, roles: ["Manager", "Admin", "Technician"] },
 ];
 

@@ -13,10 +13,15 @@ import { toast } from "sonner";
 import {
   Users, Shield, Wrench, Briefcase, UserCog,
   Crown, CheckCircle, ChevronLeft, ChevronRight, Table, Grid3x3,
-  Pencil, TrendingUp, Eye,
+  Pencil, TrendingUp, Eye, Clock, Ban, Settings2, UserCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useTeamMembers, useUpdateTeamMember } from "@/hooks/useTeamMembers";
+import {
+  useTeamMembers,
+  useUpdateTeamMember,
+  type UserStatusFilterValue,
+} from "@/hooks/useTeamMembers";
+import { useUserStats, type UserStats } from "@/hooks/useUserStats";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -39,6 +44,16 @@ const getIsActive = (m?: Member | null) => m?.isActive !== false && m?.is_active
 
 const getAvatar = (m?: Member | null) =>
   m?.avatar_url || m?.profile?.profilePicture || null;
+
+const getPhone = (m?: Member | null) => m?.phone || m?.profile?.phone || null;
+
+const getPosition = (m?: Member | null) =>
+  m?.position || m?.profile?.position || null;
+
+const getDepartment = (m?: Member | null) =>
+  m?.department || m?.profile?.department || m?.profile?.deparment || m?.deparment || null;
+
+const getCompany = (m?: Member | null) => m?.company || m?.profile?.company || null;
 
 // ═══════════════ CONFIG ESTILOS COMÚN ═══════════════
 
@@ -96,7 +111,29 @@ function TableRow({
           {roleConfig.label}
         </Badge>
       </td>
-      <td className="p-4 text-muted-foreground text-xs">{member.email}</td>
+      <td className="p-4 text-muted-foreground text-xs">
+        <span className="block max-w-[140px] truncate" title={getPosition(member) || undefined}>
+          {getPosition(member) || "—"}
+        </span>
+      </td>
+      <td className="p-4 text-muted-foreground text-xs">
+        <span className="block max-w-[140px] truncate" title={getDepartment(member) || undefined}>
+          {getDepartment(member) || "—"}
+        </span>
+      </td>
+      <td className="p-4 text-muted-foreground text-xs">
+        <span className="block max-w-[140px] truncate" title={getCompany(member) || undefined}>
+          {getCompany(member) || "—"}
+        </span>
+      </td>
+      <td className="p-4 text-muted-foreground text-xs">
+        <span className="block max-w-[180px] truncate" title={member.email || undefined}>
+          {member.email || "—"}
+        </span>
+      </td>
+      <td className="p-4 text-muted-foreground text-xs">
+        {getPhone(member) || "—"}
+      </td>
       <td className="p-4">
         <Badge
           variant="outline"
@@ -136,7 +173,7 @@ function TableRow({
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Editar miembro</TooltipContent>
+              <TooltipContent>Editar usuario</TooltipContent>
             </Tooltip>
           )}
 
@@ -153,7 +190,7 @@ export default function Team() {
 
   // Filtros (se aplican automáticamente al seleccionar)
   const [roleFilter, setRoleFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilterValue>("all");
 
   // Modales
   const [manageMemberOpen, setManageMemberOpen] = useState(false);
@@ -170,7 +207,8 @@ export default function Team() {
   });
   const itemsPerPage = 12;
 
-  const { data: teamMembers = [], isLoading } = useTeamMembers();
+  const { data: teamMembers = [], isLoading } = useTeamMembers({ status: statusFilter });
+  const statsQuery = useUserStats();
   const updateMember = useUpdateTeamMember();
   const { profile } = useAuth();
   const canViewTeam = profile?.role === 'Admin' || profile?.role === 'Manager';
@@ -181,14 +219,10 @@ export default function Team() {
   const regularMembers = teamMembers.filter(m => getRoleName(m.role) !== 'Admin');
   const visibleMembers = isAdmin ? teamMembers : regularMembers;
 
-  // ✅ Filtros (rol + estado)
+  // ✅ El filtro de estado lo aplica el backend para que coincida con las KPI.
   const filteredMembers = visibleMembers.filter(m => {
     const roleName = getRoleName(m.role);
-    const matchesRole = roleFilter === "all" || roleName === roleFilter;
-    const matchesStatus = statusFilter === "all" ||
-      (statusFilter === "active" && getIsActive(m)) ||
-      (statusFilter === "suspended" && !getIsActive(m));
-    return matchesRole && matchesStatus;
+    return roleFilter === "all" || roleName === roleFilter;
   });
 
   // ✅ Orden: por rol y luego alfabético
@@ -214,17 +248,21 @@ export default function Team() {
     }
   }, [searchParams, isLoading, teamMembers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ✅ Estadísticas
-  const stats = {
-    total: regularMembers.length,
-    active: regularMembers.filter(m => getIsActive(m)).length,
-    leaders: teamMembers.filter(m => {
-      const roleName = getRoleName(m.role);
-      return roleName === 'Admin' || roleName === 'Manager';
-    }).length,
-    technicians: teamMembers.filter(m => getRoleName(m.role) === 'Technician').length,
-    suspended: regularMembers.filter(m => !getIsActive(m)).length,
+  // ✅ KPI en tiempo real: el backend calcula los conteos con un solo aggregate.
+  const stats: UserStats = statsQuery.data ?? {
+    total: visibleMembers.length,
+    active: visibleMembers.filter(m => getIsActive(m)).length,
+    inactive: 0,
+    suspended: visibleMembers.filter(m => !getIsActive(m)).length,
+    admins: 0,
+    managers: visibleMembers.filter(m => getRoleName(m.role) === 'Manager').length,
+    technicians: visibleMembers.filter(m => getRoleName(m.role) === 'Technician').length,
+    leaders: visibleMembers.filter(m => getRoleName(m.role) === 'Leader').length,
+    other: 0,
+    generatedAt: "",
   };
+  const pct = (value: number) =>
+    stats.total > 0 ? Math.round((value / stats.total) * 100) : 0;
 
   const activeFilterCount = (roleFilter !== "all" ? 1 : 0) + (statusFilter !== "all" ? 1 : 0);
 
@@ -252,12 +290,31 @@ export default function Team() {
     setEditOpen(true);
   };
 
-  const handleEditSubmit = async (data: { id?: string; name?: string; email?: string; phone?: string | null }) => {
+  const handleEditSubmit = async (data: {
+    id?: string;
+    name?: string;
+    email?: string;
+    phone?: string | null;
+    idCard?: string | null;
+    position?: string | null;
+    department?: string | null;
+    company?: string | null;
+    whatsappPhone?: string | null;
+  }) => {
     if (!data?.id) return;
     // ✅ UPDATE OPTIMISTA: se refleja al instante, sin esperar el refetch
     await updateMember.mutateAsync({
       id: data.id,
-      data: { name: data.name, email: data.email, phone: data.phone || null },
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone || null,
+        idCard: data.idCard || null,
+        position: data.position || null,
+        deparment: data.department || null,
+        company: data.company || null,
+        whatsappPhone: data.whatsappPhone || null,
+      },
     });
     setEditOpen(false);
   };
@@ -282,7 +339,7 @@ export default function Team() {
         <div className="flex flex-col items-center justify-center py-20">
           <Shield className="h-16 w-16 text-muted-foreground/30 mb-4" />
           <h2 className="text-xl font-semibold text-foreground">Acceso Restringido</h2>
-          <p className="text-muted-foreground mt-2">No tienes permisos para ver el equipo</p>
+          <p className="text-muted-foreground mt-2">No tienes permisos para ver los usuarios</p>
         </div>
       </DashboardLayout>
     );
@@ -303,19 +360,20 @@ export default function Team() {
       <div>
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
           <span className="bg-gradient-to-r from-[#0DA2E7] to-[#0B8BC7] bg-clip-text text-transparent">
-            Equipo
+            Usuarios
           </span>
           <Badge className="bg-[#0DA2E7]/20 text-[#0DA2E7] border-none text-xs font-medium px-3 py-0.5 rounded-full">
-            {stats.total} miembros
+            {stats.total} usuarios
           </Badge>
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
           <span className="h-1.5 w-1.5 rounded-full bg-[#0DA2E7]" />
           <span className="font-medium text-emerald-600">{stats.active}</span> activos ·
+          <span className="text-amber-600">{stats.inactive} inactivos</span> ·
           <span className="text-muted-foreground/60">{stats.suspended} suspendidos</span>
         </p>
         <p className="text-xs text-muted-foreground/70 mt-2 leading-relaxed">
-          Aquí podrás gestionar los roles de los usuarios y miembros del equipo.
+          Aquí podrás gestionar los usuarios, sus roles y su información.
         </p>
       </div>
     </div>
@@ -333,12 +391,16 @@ export default function Team() {
 </div>
 
         {/* KPI CARDS */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
           {[
-            { icon: Users, label: "Total Miembros", value: stats.total, sub: `${stats.active} activos` },
-            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% del equipo` },
-            { icon: Crown, label: "Leaders", value: stats.leaders, sub: `${stats.leaders} líderes` },
-            { icon: TrendingUp, label: "Técnicos", value: stats.technicians, sub: `${stats.technicians} en el equipo` },
+            { icon: Users, label: "Total usuarios", value: stats.total, sub: `${stats.active} activos · ${stats.suspended} suspendidos` },
+            { icon: CheckCircle, label: "Activos", value: stats.active, sub: `${pct(stats.active)}% del total` },
+            { icon: Clock, label: "Inactivos", value: stats.inactive, sub: `${pct(stats.inactive)}% sin conexión reciente` },
+            { icon: Ban, label: "Suspendidos", value: stats.suspended, sub: `${pct(stats.suspended)}% del total` },
+            ...(isAdmin ? [{ icon: Settings2, label: "Administradores", value: stats.admins, sub: "acceso total" }] : []),
+            { icon: Briefcase, label: "Managers", value: stats.managers, sub: "gestión de proyectos" },
+            { icon: TrendingUp, label: "Técnicos", value: stats.technicians, sub: "operación" },
+            { icon: UserCheck, label: "Líderes", value: stats.leaders, sub: "roles de liderazgo" },
           ].map((metric, i) => (
             <motion.div
               key={i}
@@ -378,7 +440,7 @@ export default function Team() {
 
             <div className="h-6 w-px bg-border/50" />
             <span className="text-xs text-muted-foreground whitespace-nowrap px-1.5">
-              {filteredMembers.length} miembro{filteredMembers.length !== 1 ? "s" : ""}
+              {filteredMembers.length} usuario{filteredMembers.length !== 1 ? "s" : ""}
             </span>
           </div>
 
@@ -448,7 +510,7 @@ export default function Team() {
             className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 py-20"
           >
             <Users className="h-16 w-16 text-muted-foreground/20 mb-4" />
-            <p className="text-lg font-medium text-foreground">No hay miembros</p>
+            <p className="text-lg font-medium text-foreground">No hay usuarios</p>
             <p className="text-sm text-muted-foreground mt-1">Ajusta los filtros para ver más resultados</p>
           </motion.div>
         ) : (
@@ -484,7 +546,11 @@ export default function Team() {
                         <tr>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Miembro</th>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Rol</th>
+                          <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Cargo</th>
+                          <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Departamento</th>
+                          <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Empresa</th>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Email</th>
+                          <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Teléfono</th>
                           <th className="text-left p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Estado</th>
                           <th className="text-right p-4 font-medium text-xs text-muted-foreground uppercase tracking-wider">Acciones</th>
                         </tr>

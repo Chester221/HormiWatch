@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import type { UserRole } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
+export type UserStatusFilterValue = 'all' | 'active' | 'inactive' | 'suspended'
+
 export interface TeamMember {
     id: string
     full_name: string | null
@@ -12,12 +14,27 @@ export interface TeamMember {
     role: UserRole
     phone?: string | null
     cedula?: string | null
+    idCard?: string | null
+    position?: string | null
+    department?: string | null
+    deparment?: string | null
+    company?: string | null
+    whatsappPhone?: string | null
+    lastConnection?: string | null
     is_active?: boolean
     profile?: {
         name: string
         lastName: string
         avatar_url?: string
         phone?: string
+        idCard?: string
+        position?: string
+        deparment?: string
+        department?: string
+        company?: string
+        whatsappPhone?: string
+        whatsapp_phone?: string
+        profilePicture?: string
     }
 }
 
@@ -50,8 +67,9 @@ const restorePrevious = (queryClient: ReturnType<typeof useQueryClient>, previou
 export const useTeamMembers = (options?: {
     role?: UserRole | 'all'
     searchQuery?: string
+    status?: UserStatusFilterValue
 }) => {
-    const { role = 'all', searchQuery } = options || {}
+    const { role = 'all', searchQuery, status = 'all' } = options || {}
     const { profile } = useAuth()
     const currentRole = profile?.role || 'Technician'
     const canSeeAllUsers = currentRole === 'Admin' || currentRole === 'Manager'
@@ -62,7 +80,10 @@ export const useTeamMembers = (options?: {
             // solo Managers + Técnicos (evita 403 de GET /users y no expone admins)
             let response: any;
             if (canSeeAllUsers) {
-                response = await usersApi.getAll();
+                response = await usersApi.getAll({
+                    take: 100,
+                    ...(status !== 'all' ? { status } : {}),
+                });
             } else {
                 const [managers, technicians] = await Promise.all([
                     usersApi.getManagers(),
@@ -81,6 +102,15 @@ export const useTeamMembers = (options?: {
                 full_name: getFullName(m),
                 role: getRoleName(m.role),
                 is_active: m.is_active ?? m.isActive ?? true,
+                phone: m.phone ?? m.profile?.phone ?? null,
+                idCard: m.idCard ?? m.profile?.idCard ?? null,
+                position: m.position ?? m.profile?.position ?? null,
+                department:
+                    m.department ?? m.profile?.department ?? m.profile?.deparment ?? null,
+                company: m.company ?? m.profile?.company ?? null,
+                whatsappPhone:
+                    m.whatsappPhone ?? m.profile?.whatsappPhone ?? m.profile?.whatsapp_phone ?? null,
+                lastConnection: m.lastConnection ?? null,
             }));
 
             if (role && role !== 'all') {
@@ -107,7 +137,7 @@ export const useTeamMembers = (options?: {
     }
 
     return useQuery({
-        queryKey: ['team_members', role, searchQuery],
+        queryKey: ['team_members', role, searchQuery, status],
         queryFn: fetchMembers,
         retry: false,
         staleTime: 30_000,
@@ -137,6 +167,8 @@ export const useCreateTeamMember = () => {
                 email: data.email || null,
                 role: data._role || 'Technician',
                 phone: data.phone || null,
+                company: data.company || null,
+                idCard: data.idCard || null,
                 is_active: true,
                 avatar_url: null,
             };
@@ -166,13 +198,16 @@ export const useCreateTeamMember = () => {
                             full_name: fullName,
                             email: variables.email || m.email,
                             role: variables._role || m.role,
+                            company: variables.company || m.company,
+                            idCard: variables.idCard || m.idCard,
                             is_active: true,
                         };
                     });
                 });
             }
             queryClient.invalidateQueries({ queryKey: TEAM_KEY });
-            toast.success('Miembro del equipo creado correctamente');
+            queryClient.invalidateQueries({ queryKey: ['users', 'stats'] });
+            toast.success('Usuario creado correctamente');
         },
         onError: (error: any, _vars, context) => {
             restorePrevious(queryClient, context?.previous ?? []);
@@ -207,6 +242,12 @@ export const useUpdateTeamMember = () => {
                     if (data.full_name !== undefined) patch.full_name = data.full_name;
                     if (data.email !== undefined) patch.email = data.email;
                     if (data.phone !== undefined) patch.phone = data.phone;
+                    if (data.idCard !== undefined) patch.idCard = data.idCard;
+                    if (data.position !== undefined) patch.position = data.position;
+                    if (data.department !== undefined) patch.department = data.department;
+                    if (data.company !== undefined) patch.company = data.company;
+                    if (data.whatsappPhone !== undefined) patch.whatsappPhone = data.whatsappPhone;
+                    if (data.lastConnection !== undefined) patch.lastConnection = data.lastConnection;
                     if (data.role !== undefined) patch.role = data.role;
                     if (data.isActive !== undefined || data.is_active !== undefined) {
                         patch.is_active = data.isActive ?? data.is_active;
@@ -233,6 +274,7 @@ export const useUpdateTeamMember = () => {
                 });
             }
             queryClient.invalidateQueries({ queryKey: TEAM_KEY });
+            queryClient.invalidateQueries({ queryKey: ['users', 'stats'] });
             toast.success('Miembro actualizado correctamente');
         },
         onError: (error: any, _vars, context) => {
@@ -266,6 +308,7 @@ export const useDeleteTeamMember = () => {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: TEAM_KEY });
+            queryClient.invalidateQueries({ queryKey: ['users', 'stats'] });
             toast.success('Miembro eliminado del equipo');
         },
         onError: (error: any, _vars, context) => {

@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Loader2, Pencil, Mail, Phone, User, Save, X, Lock,
-  Crown, Briefcase, Wrench,
+  Crown, Briefcase, Wrench, CreditCard, MapPin, Building2, MessageCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -22,6 +22,13 @@ interface MemberLike {
   full_name?: string | null;
   name?: string;
   phone?: string | null;
+  idCard?: string | null;
+  cedula?: string | null;
+  position?: string | null;
+  department?: string | null;
+  deparment?: string | null;
+  company?: string | null;
+  whatsappPhone?: string | null;
   avatar_url?: string | null;
   is_active?: boolean;
   isActive?: boolean;
@@ -30,15 +37,34 @@ interface MemberLike {
     name?: string;
     lastName?: string;
     phone?: string;
+    idCard?: string;
+    position?: string;
+    department?: string;
+    deparment?: string;
+    company?: string;
+    whatsappPhone?: string;
+    whatsapp_phone?: string;
     profilePicture?: string;
   };
 }
+
+type UserFormData = {
+  id?: string;
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  idCard?: string | null;
+  position?: string | null;
+  department?: string | null;
+  company?: string | null;
+  whatsappPhone?: string | null;
+};
 
 interface TeamMemberFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   member: MemberLike | null;
-  onSubmit: (data: { id?: string; name?: string; email?: string; phone?: string | null }) => void;
+  onSubmit: (data: UserFormData) => void;
 }
 
 // ✅ Funciones para normalizar datos del miembro
@@ -76,6 +102,11 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
     name: "",
     email: "",
     phone: "",
+    idCard: "",
+    position: "",
+    department: "",
+    company: "",
+    whatsappPhone: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -86,6 +117,13 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
         name: getFullName(member),
         email: member.email || "",
         phone: member.phone || member?.profile?.phone || "",
+        idCard: member.idCard || member.cedula || member.profile?.idCard || "",
+        position: member.position || member.profile?.position || "",
+        department:
+          member.department || member.profile?.department || member.profile?.deparment || member.deparment || "",
+        company: member.company || member.profile?.company || "",
+        whatsappPhone:
+          member.whatsappPhone || member.profile?.whatsappPhone || member.profile?.whatsapp_phone || "",
       });
     }
   }, [member, open]);
@@ -108,6 +146,11 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
         name: formData.name,
         email: formData.email,
         phone: formData.phone || null,
+        idCard: formData.idCard || null,
+        position: formData.position || null,
+        department: formData.department || null,
+        company: formData.company || null,
+        whatsappPhone: formData.whatsappPhone || null,
       });
       onOpenChange(false);
     } catch (error) {
@@ -140,12 +183,12 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
             </motion.div>
             <div className="min-w-0">
               <DialogTitle className="text-lg font-bold text-foreground">
-                {member?.id ? 'Editar Miembro' : 'Agregar Miembro'}
+                {member?.id ? 'Editar Usuario' : 'Agregar Usuario'}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5 truncate">
                 {member?.id
                   ? `Modificando el perfil de: ${getFullName(member)}`
-                  : "Completa los datos del nuevo miembro del equipo"}
+                  : "Completa los datos del nuevo usuario"}
               </DialogDescription>
             </div>
           </div>
@@ -244,6 +287,80 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
               className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
             />
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+                  <CreditCard className="h-3 w-3 text-primary" strokeWidth={2} />
+                </span>
+                Cédula
+              </Label>
+              <Input
+                placeholder="Ej. 12345678"
+                value={formData.idCard}
+                onChange={(e) => setFormData({ ...formData, idCard: e.target.value })}
+                className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+                  <MessageCircle className="h-3 w-3 text-primary" strokeWidth={2} />
+                </span>
+                WhatsApp
+              </Label>
+              <Input
+                placeholder="+58 412-1234567"
+                value={formData.whatsappPhone}
+                onChange={(e) => setFormData({ ...formData, whatsappPhone: e.target.value })}
+                className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+                  <Briefcase className="h-3 w-3 text-primary" strokeWidth={2} />
+                </span>
+                Cargo
+              </Label>
+              <Input
+                placeholder="Ej. Desarrollador"
+                value={formData.position}
+                onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
+              />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+                  <MapPin className="h-3 w-3 text-primary" strokeWidth={2} />
+                </span>
+                Departamento
+              </Label>
+              <Input
+                placeholder="Ej. Tecnología"
+                value={formData.department}
+                onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+              <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
+                <Building2 className="h-3 w-3 text-primary" strokeWidth={2} />
+              </span>
+              Empresa
+            </Label>
+            <Input
+              placeholder="Bytes Creativos o Gal Secure"
+              value={formData.company}
+              onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+              className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
+            />
+          </div>
         </div>
 
         {/* Footer */}
@@ -266,7 +383,7 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
             ) : (
               <Save className="h-4 w-4" strokeWidth={2} />
             )}
-            {member?.id ? 'Guardar Cambios' : 'Crear Miembro'}
+            {member?.id ? 'Guardar Cambios' : 'Crear Usuario'}
           </Button>
         </DialogFooter>
       </DialogContent>

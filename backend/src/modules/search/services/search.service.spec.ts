@@ -115,21 +115,36 @@ describe('SearchService', () => {
     ]);
 
     expect(projects.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3, matchRelations: true }),
+      expect.objectContaining({
+        q: 'andres',
+        take: 3,
+        matchRelations: true,
+        rankByPrefix: true,
+      }),
       user,
     );
     expect(tasks.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3, matchRelations: true }),
+      expect.objectContaining({
+        q: 'andres',
+        take: 3,
+        matchRelations: true,
+        rankByPrefix: true,
+      }),
       user,
     );
     expect(customers.findAllCustomers).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'andres', take: 3, includeContacts: false }),
+      expect.objectContaining({
+        search: 'andres',
+        take: 3,
+        includeContacts: false,
+        rankByPrefix: true,
+      }),
     );
     expect(users.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3 }),
+      expect.objectContaining({ q: 'andres', take: 3, rankByPrefix: true }),
     );
     expect(services.findAll).toHaveBeenCalledWith(
-      expect.objectContaining({ q: 'andres', take: 3 }),
+      expect.objectContaining({ q: 'andres', take: 3, rankByPrefix: true }),
     );
   });
 
@@ -274,8 +289,12 @@ describe('SearchService', () => {
   });
 
   it('valida longitud del término y rango del límite', async () => {
+    // El buscador estilo Railway empieza con una sola letra.
     expect(
       await validate(plainToInstance(GlobalSearchQueryDto, { q: 'a' })),
+    ).toHaveLength(0);
+    expect(
+      await validate(plainToInstance(GlobalSearchQueryDto, { q: '' })),
     ).not.toHaveLength(0);
     expect(
       await validate(plainToInstance(GlobalSearchQueryDto, { q: 'an', limit: '11' })),

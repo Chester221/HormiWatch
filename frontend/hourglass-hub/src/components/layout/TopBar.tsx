@@ -108,7 +108,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
       label: 'Usuarios',
       icon: Users,
       items: searchData.users,
-      to: (id) => `/team?member=${id}`,
+      to: (id) => `/users?member=${id}`,
     },
   ];
 
@@ -190,7 +190,7 @@ export function TopBar({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
                       <div className="py-10 text-center text-sm text-muted-foreground">
                         <Search className="mx-auto mb-3 h-10 w-10 opacity-20" />
                         <p className="font-medium">Buscar en HormiWatch</p>
-                        <p className="mt-1 text-xs">Escribe al menos 2 caracteres para ver resultados</p>
+                        <p className="mt-1 text-xs">Empieza a escribir para ver resultados</p>
                       </div>
                     )}
 

@@ -103,6 +103,16 @@ export class CreateUserDto {
   position?: string;
 
   @ApiProperty({
+    description: 'Company the user belongs to (Bytes Creativos, Gal Secure, ...)',
+    example: 'Bytes Creativos',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  company?: string;
+
+  @ApiProperty({
     description:
       'The password of the user. Must be at least 6 characters long, contain 1 lowercase, 1 uppercase, 1 number, and 1 symbol.',
     example: 'StrongP@ssw0rd!',

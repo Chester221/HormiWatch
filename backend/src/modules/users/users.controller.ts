@@ -26,6 +26,7 @@ import type { Express } from 'express';
 import { UserResponseDto } from './dto/user-response.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserPageOptionsDto } from './dto/user-page-options.dto';
+import { UserStatsDto } from './dto/user-stats.dto';
 import { PageDto } from '../../common/pagination/pagination.dto';
 import { RolesGuard } from '../auth/guard/authorization.guard';
 import { IActiveUser } from '../auth/interface/payload.interface';
@@ -68,6 +69,15 @@ export class UsersController {
     @Query() pageOptionsDto: UserPageOptionsDto,
   ): Promise<PageDto<UserResponseDto>> {
     return this.usersService.findAll(pageOptionsDto);
+  }
+
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(Role.admin, Role.manager)
+  @ApiOperation({ summary: 'Get real-time user KPIs' })
+  @ApiOkResponse({ type: UserStatsDto })
+  async getStats(@Req() req: { user: IActiveUser }): Promise<UserStatsDto> {
+    return this.usersService.getStats(req.user?.role);
   }
 
   @Get('managers')

@@ -384,6 +384,43 @@ describe('CustomersService - búsqueda parcial', () => {
       { term: '%Juan Alberto%' },
     );
   });
+
+  it('ordena por prefijo antes que por contiene cuando lo pide el buscador global', async () => {
+    const qb: Record<string, jest.Mock> = {
+      andWhere: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      setParameters: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+    };
+    const service = new CustomersService(
+      { createQueryBuilder: jest.fn().mockReturnValue(qb) } as never,
+      {} as never,
+      {} as never,
+    );
+
+    await service.findAllCustomers({
+      search: 'abe',
+      rankByPrefix: true,
+      skip: 0,
+      take: 5,
+    } as never);
+
+    expect(qb.addSelect).toHaveBeenCalledWith(
+      expect.stringContaining('customer.name ILIKE :prefix THEN 0'),
+      'search_relevance',
+    );
+    expect(qb.setParameters).toHaveBeenCalledWith({
+      prefix: 'abe%',
+      wordStart: '% abe%',
+      contains: '%abe%',
+    });
+    expect(qb.orderBy).toHaveBeenCalledWith('search_relevance', 'ASC');
+    expect(qb.addOrderBy).toHaveBeenCalledWith('customer.createdAt', 'DESC');
+  });
 });
 
 describe('CreateUserDto - teléfono libre de personas naturales', () => {
