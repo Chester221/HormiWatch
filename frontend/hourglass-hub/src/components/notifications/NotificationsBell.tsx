@@ -141,6 +141,17 @@ function formatRelative(iso?: string | null): string {
 
 function getNotificationRoute(n: AppNotification): string | null {
   const data = (n.data || {}) as Record<string, any>;
+
+  // Rutas explícitas (ej. "Mi Perfil") tienen prioridad sobre el mapeo por categoría.
+  const explicitRoute = data.route;
+  if (
+    typeof explicitRoute === "string" &&
+    explicitRoute.startsWith("/") &&
+    !explicitRoute.startsWith("//")
+  ) {
+    return explicitRoute;
+  }
+
   const taskId = data.taskId || data.task_id;
   const projectId = data.projectId || data.project_id;
   const clientId = data.clientId || data.client_id || data.customerId || data.customer_id;

@@ -18,7 +18,9 @@ import { MockWhatsAppProvider } from './providers/mock-whatsapp.provider';
 import { MetaWhatsAppProvider } from './providers/meta-whatsapp.provider';
 import { WHATSAPP_PROVIDER } from './providers/whatsapp-provider.interface';
 import { NotificationsScheduler } from './scheduler/notifications.scheduler';
+import { ProfileCompletenessService } from './services/profile-completeness.service';
 import { User } from '../users/entities/user.entity';
+import { Profile } from '../users/entities/profile.entity';
 import { Role } from '../role/entities/role.entity';
 import { Project } from '../projects/entities/project.entity';
 import { Task } from '../tasks/entities/task.entity';
@@ -32,6 +34,7 @@ import { ConfigModule } from '@nestjs/config';
       Notification,
       NotificationSetting,
       User,
+      Profile,
       Role,
       Project,
       Task,
@@ -48,6 +51,7 @@ import { ConfigModule } from '@nestjs/config';
     NotificationDispatcherService,
     NotificationRecipientsResolver,
     ContractThresholdsService,
+    ProfileCompletenessService,
     StaleDetectionService,
     DailyDigestService,
     DiscordService,
@@ -68,6 +72,7 @@ import { ConfigModule } from '@nestjs/config';
     NotificationEmitterService,
     NotificationDispatcherService,
     ContractThresholdsService,
+    ProfileCompletenessService,
   ],
 })
 export class NotificationsModule {}

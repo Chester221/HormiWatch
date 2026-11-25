@@ -94,10 +94,18 @@ const getWhatsapp = (m?: MemberLike | null) =>
 const getLastConnection = (m?: MemberLike | null) => m?.lastConnection || null;
 
 const formatDate = (value: string | null, withTime = false): string => {
-  if (!value) return "—";
+  if (!value) return "";
   const date = new Date(value);
-  if (isNaN(date.getTime())) return "—";
+  if (isNaN(date.getTime())) return "";
   return format(date, withTime ? "d MMM yyyy HH:mm" : "d MMM yyyy", { locale: es });
+};
+
+/** Vacío = "No registrado" en gris suave, nunca un guion. */
+const displayValue = (value?: string | null): { text: string; missing: boolean } => {
+  const text = value?.trim();
+  return text
+    ? { text, missing: false }
+    : { text: "No registrado", missing: true };
 };
 
 interface MemberDetailModalProps {
@@ -133,23 +141,25 @@ export function MemberDetailModal({
   const canManage = isAdmin || isManager;
 
   const rows = [
-    { icon: Mail, label: "Email", value: member.email || "—" },
-    { icon: Phone, label: "Teléfono", value: phone || "—" },
-    { icon: MessageCircle, label: "WhatsApp", value: whatsapp || "—" },
-    { icon: CreditCard, label: "Cédula", value: cedula || "—" },
-    { icon: Briefcase, label: "Cargo", value: position || "—" },
-    { icon: MapPin, label: "Departamento", value: department || "—" },
-    { icon: Building2, label: "Empresa", value: company || "—" },
+    { icon: Mail, label: "Email", value: member.email },
+    { icon: Phone, label: "Teléfono", value: phone },
+    { icon: MessageCircle, label: "WhatsApp", value: whatsapp },
+    { icon: CreditCard, label: "Cédula", value: cedula },
+    { icon: Briefcase, label: "Cargo", value: position },
+    { icon: MapPin, label: "Departamento", value: department },
+    { icon: Building2, label: "Empresa", value: company },
     { icon: Clock, label: "Última conexión", value: formatDate(lastConnection, true) },
+    { icon: Shield, label: "Rol", value: roleConfig.label },
+    { icon: Calendar, label: "Usuario desde", value: formatDate(createdAt) },
   ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md bg-card border-border p-0 rounded-2xl overflow-hidden shadow-2xl">
+      <DialogContent hideCloseButton className="flex flex-col gap-0 max-w-2xl max-h-[80vh] bg-card border-border p-0 rounded-2xl sm:rounded-2xl overflow-hidden shadow-2xl">
         {/* Título accesible: el header usa un <h2> visual; DialogTitle oculto para lectores de pantalla */}
         <DialogTitle className="sr-only">{fullName}</DialogTitle>
-        {/* Header */}
-        <div className="relative p-6 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-border/40">
+        {/* Header fijo */}
+        <div className="relative shrink-0 p-6 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-border/40">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-2xl" />
           <div className="relative flex flex-col items-center text-center gap-3">
             <motion.div
@@ -193,80 +203,71 @@ export function MemberDetailModal({
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-3">
-          {rows.map(({ icon: Icon, label, value }) => (
-            <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Icon className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">{label}</p>
-                <p className="text-sm font-medium text-foreground truncate">{value}</p>
-              </div>
-            </div>
-          ))}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Shield className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Rol</p>
-                <p className="text-sm font-medium text-foreground truncate">{roleConfig.label}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Calendar className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">Usuario desde</p>
-                <p className="text-sm font-medium text-foreground truncate">{formatDate(createdAt)}</p>
-              </div>
-            </div>
+        {/* Body con scroll interno */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {rows.map(({ icon: Icon, label, value }) => {
+              const display = displayValue(value);
+              return (
+                <div key={label} className="flex items-center gap-3 p-3 rounded-xl bg-muted/5 border border-border/40 min-w-0">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Icon className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">{label}</p>
+                    <p
+                      title={display.text}
+                      className={`text-sm truncate ${display.missing ? "font-normal text-muted-foreground/60" : "font-medium text-foreground"}`}
+                    >
+                      {display.text}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 
-        {/* Footer */}
-        <DialogFooter className="p-5 pt-0 gap-2 border-t border-border/40">
-          <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-lg h-10 px-3 text-sm flex-1 text-muted-foreground hover:text-foreground">
-            Cerrar
-          </Button>
-          {isAdmin && onToggleActive && (
-            <Button
-              variant="outline"
-              onClick={() => onToggleActive(member)}
-              className={`rounded-lg h-10 px-3 text-sm flex-1 border-border/60 ${isActive ? "hover:border-amber-300 hover:text-amber-600" : "hover:border-emerald-300 hover:text-emerald-600"}`}
-            >
-              {isActive ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-              {isActive ? "Desactivar" : "Activar"}
+        {/* Footer fijo: acciones + eliminación no se desplazan con el scroll */}
+        <div className="shrink-0 border-t border-border/40">
+          <DialogFooter className="px-5 pt-4 pb-3 gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="rounded-lg h-10 px-3 text-sm flex-1 text-muted-foreground hover:text-foreground">
+              Cerrar
             </Button>
-          )}
-          {canManage && onEdit && (
-            <Button
-              onClick={() => onEdit(member)}
-              className="rounded-lg h-10 px-3 gap-2 bg-primary text-white text-sm flex-1 transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25"
-            >
-              <Pencil className="h-4 w-4" />
-              Editar
-            </Button>
-          )}
-        </DialogFooter>
+            {isAdmin && onToggleActive && (
+              <Button
+                variant="outline"
+                onClick={() => onToggleActive(member)}
+                className={`rounded-lg h-10 px-3 text-sm flex-1 border-border/60 ${isActive ? "hover:border-amber-300 hover:text-amber-600" : "hover:border-emerald-300 hover:text-emerald-600"}`}
+              >
+                {isActive ? <Ban className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+                {isActive ? "Desactivar" : "Activar"}
+              </Button>
+            )}
+            {canManage && onEdit && (
+              <Button
+                onClick={() => onEdit(member)}
+                className="rounded-lg h-10 px-3 gap-2 bg-primary text-white text-sm flex-1 transition-all hover:bg-primary/90 hover:shadow-lg hover:shadow-primary/25"
+              >
+                <Pencil className="h-4 w-4" />
+                Editar
+              </Button>
+            )}
+          </DialogFooter>
 
-        {isAdmin && onDelete && (
-          <div className="px-5 pb-5 -mt-1">
-            <Button
-              variant="ghost"
-              onClick={() => onDelete(member)}
-              className="w-full rounded-lg h-10 gap-2 text-sm text-red-500 hover:bg-red-50 hover:text-red-600 border border-red-100"
-            >
-              <Trash2 className="h-4 w-4" />
-              Eliminar miembro
-            </Button>
-          </div>
-        )}
+          {isAdmin && onDelete && (
+            <div className="px-5 pb-4 -mt-1">
+              <Button
+                variant="ghost"
+                onClick={() => onDelete(member)}
+                className="w-full rounded-lg h-10 gap-2 text-sm text-red-500 hover:bg-red-50 hover:text-red-600 border border-red-100"
+              >
+                <Trash2 className="h-4 w-4" />
+                Eliminar miembro
+              </Button>
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

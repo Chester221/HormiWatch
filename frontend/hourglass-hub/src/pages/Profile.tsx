@@ -18,6 +18,10 @@ export default function Profile() {
 
     const [fullName, setFullName] = useState("");
     const [whatsappPhone, setWhatsappPhone] = useState("");
+    const [idCard, setIdCard] = useState("");
+    const [position, setPosition] = useState("");
+    const [department, setDepartment] = useState("");
+    const [company, setCompany] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
     // ✅ Sincronizar fullName cuando profile carga
@@ -29,6 +33,10 @@ export default function Profile() {
             setFullName(`${profile.name} ${profile.lastName || ''}`.trim());
         }
         setWhatsappPhone(profile?.whatsappPhone || "");
+        setIdCard(profile?.idCard || "");
+        setPosition(profile?.position || "");
+        setDepartment(profile?.department || profile?.deparment || "");
+        setCompany(profile?.company || "");
     }, [profile]);
 
     // Iniciales para el avatar
@@ -57,6 +65,10 @@ export default function Profile() {
                 if (user?.id) {
                     try {
                         await usersApi.update(user.id, {
+                            idCard: idCard.trim() || null,
+                            position: position.trim() || null,
+                            deparment: department.trim() || null,
+                            company: company.trim() || null,
                             whatsappPhone: whatsappPhone.trim() || null,
                         });
                     } catch (e: any) {
@@ -186,6 +198,66 @@ export default function Profile() {
                                     </div>
                                     <p className="text-xs text-muted-foreground">
                                         El correo electrónico no puede ser modificado
+                                    </p>
+                                </div>
+
+                                {/* Datos de identificación */}
+                                <div className="space-y-3">
+                                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                                        Datos de identificación
+                                    </p>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="idCard" className="text-xs font-semibold text-foreground">
+                                                Cédula
+                                            </Label>
+                                            <Input
+                                                id="idCard"
+                                                value={idCard}
+                                                onChange={(e) => setIdCard(e.target.value)}
+                                                placeholder="V-12345678"
+                                                className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="position" className="text-xs font-semibold text-foreground">
+                                                Cargo
+                                            </Label>
+                                            <Input
+                                                id="position"
+                                                value={position}
+                                                onChange={(e) => setPosition(e.target.value)}
+                                                placeholder="Tu cargo"
+                                                className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="department" className="text-xs font-semibold text-foreground">
+                                                Departamento
+                                            </Label>
+                                            <Input
+                                                id="department"
+                                                value={department}
+                                                onChange={(e) => setDepartment(e.target.value)}
+                                                placeholder="Tu departamento"
+                                                className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="company" className="text-xs font-semibold text-foreground">
+                                                Empresa
+                                            </Label>
+                                            <Input
+                                                id="company"
+                                                value={company}
+                                                onChange={(e) => setCompany(e.target.value)}
+                                                placeholder="Nombre de la empresa"
+                                                className="h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Completa estos datos junto con tu WhatsApp para finalizar tu perfil.
                                     </p>
                                 </div>
 

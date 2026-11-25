@@ -37,6 +37,7 @@ import { WelcomeMailEvent } from 'src/mails/events/welcome-mail.event';
 import { NotificationEmitterService } from '../notifications/services/notification-emitter.service';
 import { NotificationCategory } from '../notifications/enums/notification-category.enum';
 import { NotificationLevel } from '../notifications/enums/notification-level.enum';
+import { ProfileCompletenessService } from '../notifications/services/profile-completeness.service';
 
 const MAX_ACTIVE_ADMINS = 3;
 const DEFAULT_INACTIVITY_DAYS = 30;
@@ -58,6 +59,7 @@ export class UsersService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly eventEmitter: EventEmitter2,
     private readonly notifications: NotificationEmitterService,
+    private readonly profileCompleteness: ProfileCompletenessService,
   ) {}
 
   /** Usuarios activos sin conexión en este lapso cuentan como inactivos. */
@@ -254,7 +256,7 @@ export class UsersService {
 
       const sharedId = uuidv4();
 
-      return await this.userRepository.manager.transaction(async (tx) => {
+      const createdUser = await this.userRepository.manager.transaction(async (tx) => {
         if (role.name === 'Admin') {
           const activeAdminCount = await tx.count(User, {
             where: { role: { name: 'Admin' }, isActive: true },
@@ -322,6 +324,19 @@ export class UsersService {
 
         return savedUser;
       });
+
+      // Aviso inmediato en la campanita si el usuario quedó con datos pendientes.
+      try {
+        await this.profileCompleteness.notifyIfIncomplete(createdUser.id);
+      } catch (e) {
+        this.logger.warn(
+          `No se pudo notificar perfil incompleto a ${createdUser.id}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+
+      return createdUser;
     } catch (error) {
       if (uploadedFileKey) {
         try {
@@ -756,6 +771,17 @@ export class UsersService {
     }
 
     await this.cacheManager.del(`/users/${id}`);
+
+    // Si el perfil quedó completo, cerrar la alerta pendiente de la campanita.
+    try {
+      await this.profileCompleteness.markCompleteIfNeeded(id);
+    } catch (e) {
+      this.logger.warn(
+        `No se pudo actualizar la alerta de perfil de ${id}: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
 
     // Notificaciones multicanal por cambios de dominio de usuario
     if (oldRoleName && role?.name && oldRoleName !== role.name) {

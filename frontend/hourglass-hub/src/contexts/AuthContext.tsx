@@ -29,6 +29,12 @@ export interface UserProfile {
     task_reminders?: boolean
     weekly_summary?: boolean
     whatsappPhone?: string | null
+    phone?: string | null
+    idCard?: string | null
+    position?: string | null
+    department?: string | null
+    deparment?: string | null
+    company?: string | null
     is_active?: boolean
     created_at?: string
     updated_at?: string
@@ -141,6 +147,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 dark_mode: preferences.dark_mode ?? false,
                 preferences,
                 whatsappPhone: p.whatsappPhone ?? null,
+                phone: p.phone ?? null,
+                idCard: p.idCard ?? null,
+                position: p.position ?? null,
+                department: p.department ?? p.deparment ?? null,
+                deparment: p.deparment ?? p.department ?? null,
+                company: p.company ?? null,
                 created_at: data.created_at ?? data.createdAt ?? p.createdAt,
                 updated_at: data.updated_at ?? data.updatedAt ?? p.updatedAt,
             } as UserProfile;

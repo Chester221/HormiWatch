@@ -13,6 +13,7 @@ import {
 } from '../services/stale-detection.service';
 import { DailyDigestService } from '../services/daily-digest.service';
 import { ContractThresholdsService } from '../services/contract-thresholds.service';
+import { ProfileCompletenessService } from '../services/profile-completeness.service';
 import {
   DailyDigestReport,
   DailyDigestReportFlags,
@@ -31,6 +32,7 @@ export class NotificationsScheduler {
     private readonly staleDetection: StaleDetectionService,
     private readonly digest: DailyDigestService,
     private readonly contractThresholds: ContractThresholdsService,
+    private readonly profileCompleteness: ProfileCompletenessService,
     private mail: MailService,
   ) {}
 
@@ -192,5 +194,26 @@ export class NotificationsScheduler {
     this.logger.log(
       `Resumen diario procesado: ${sentIds.length} notificaciones, ${recipients.size} destinatario(s)`,
     );
+  }
+
+  /**
+   * Perfil incompleto (9:00 AM, hora de la app):
+   * chequeo diario con dedupe mensual; solo escribe en la campanita
+   * (no pasa por el dispatcher para no enviar Discord/email/WhatsApp).
+   */
+  @Cron('0 9 * * *', {
+    timeZone: process.env.APP_TIMEZONE || 'America/Caracas',
+  })
+  async checkIncompleteProfiles() {
+    try {
+      await this.profileCompleteness.notifyAllIncomplete();
+    } catch (e) {
+      this.logger.error(
+        `Chequeo de perfiles incompletos falló: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+        e instanceof Error ? e.stack : undefined,
+      );
+    }
   }
 }
