@@ -49,13 +49,13 @@ export class Profile {
   @Column({ type: 'varchar', length: 24, nullable: true })
   phone: string;
 
-  @Column({ type: 'varchar', length: 15, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   idCard: string;
 
-  @Column({ type: 'varchar', length: 40, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   position: string;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   deparment: string;
 
   /** Alias legible de `deparment` (el nombre de la columna queda intacto). */
@@ -71,14 +71,6 @@ export class Profile {
 
   @Column({ type: 'varchar', nullable: true })
   full_name: string;
-
-  @Column({
-    type: 'varchar',
-    length: 20,
-    nullable: true,
-    name: 'whatsapp_phone',
-  })
-  whatsappPhone: string | null;
 
   //entity relations
   @OneToOne(() => User, (u) => u.profile, {

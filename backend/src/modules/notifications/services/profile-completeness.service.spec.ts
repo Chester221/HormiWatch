@@ -18,7 +18,7 @@ const completeProfile = {
   deparment: 'Sistemas',
   company: 'Bytes Creativos',
   position: 'Desarrollador',
-  whatsappPhone: '+584120000000',
+  phone: '+584120000000',
 } as Profile;
 
 const incompleteProfile = {
@@ -26,7 +26,7 @@ const incompleteProfile = {
   deparment: '',
   company: null,
   position: 'Desarrollador',
-  whatsappPhone: null,
+  phone: null,
 } as unknown as Profile;
 
 function qbMock(rows: any[]) {

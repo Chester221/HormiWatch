@@ -122,7 +122,6 @@ export class AuthService {
             avatar_url: user.profile.avatar_url,
             phone: user.profile.phone,
             position: user.profile.position,
-            whatsappPhone: user.profile.whatsappPhone,
           }
         : null,
       created_at: user.createdAt,

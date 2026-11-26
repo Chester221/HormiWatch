@@ -156,7 +156,7 @@ export class NotificationDispatcherService {
         // WhatsApp inmediato solo para críticos, si el usuario tiene número.
         // Las alertas de sistema se excluyen (solo Discord + email).
         const waEnabled = s.channels?.whatsapp === true;
-        const phone = u.profile?.whatsappPhone;
+        const phone = u.profile?.phone;
         if (waEnabled && event.isCritical && phone && !isSystem) {
           try {
             await this.whatsapp.sendCriticalAlert(

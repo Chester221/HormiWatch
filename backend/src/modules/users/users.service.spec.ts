@@ -146,7 +146,6 @@ describe('UsersService - métricas y filtros del módulo de usuarios', () => {
       expect.arrayContaining([
         'user.preferences',
         'profile.company',
-        'profile.whatsappPhone',
       ]),
     );
   });

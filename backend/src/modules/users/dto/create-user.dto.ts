@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
-  IsMobilePhone,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -54,32 +53,13 @@ export class CreateUserDto {
   phone?: string;
 
   @ApiProperty({
-    description: 'WhatsApp phone number',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  @MaxLength(20)
-  @IsMobilePhone(undefined, { strictMode: true })
-  whatsappPhone?: string;
-
-  @ApiProperty({
-    description: 'WhatsApp phone number (alias)',
-    required: false,
-  })
-  @IsString()
-  @IsOptional()
-  @MaxLength(20)
-  whatsapp_phone?: string;
-
-  @ApiProperty({
     description: 'The ID card number or identifier',
     example: '123456789',
     required: false,
   })
   @IsString()
   @IsOptional()
-  @MaxLength(15)
+  @MaxLength(100)
   idCard?: string;
 
   @ApiProperty({
@@ -89,7 +69,7 @@ export class CreateUserDto {
   })
   @IsString()
   @IsOptional()
-  @MaxLength(40)
+  @MaxLength(100)
   deparment?: string;
 
   @ApiProperty({
@@ -99,7 +79,7 @@ export class CreateUserDto {
   })
   @IsString()
   @IsOptional()
-  @MaxLength(50)
+  @MaxLength(100)
   position?: string;
 
   @ApiProperty({

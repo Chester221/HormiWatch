@@ -8,7 +8,7 @@ import { motion } from "framer-motion";
 import {
   Mail, Phone, CreditCard, Calendar, Pencil, Trash2,
   Crown, Briefcase, Wrench, Shield, CheckCircle2, Ban,
-  Building2, MapPin, Clock, MessageCircle,
+  Building2, MapPin, Clock,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -26,7 +26,6 @@ interface MemberLike {
   department?: string | null;
   deparment?: string | null;
   company?: string | null;
-  whatsappPhone?: string | null;
   lastConnection?: string | null;
   createdAt?: string;
   created_at?: string;
@@ -40,8 +39,6 @@ interface MemberLike {
     department?: string;
     deparment?: string;
     company?: string;
-    whatsappPhone?: string;
-    whatsapp_phone?: string;
     profilePicture?: string;
     avatar_url?: string;
     createdAt?: string;
@@ -88,9 +85,6 @@ const getDepartment = (m?: MemberLike | null) =>
 
 const getCompany = (m?: MemberLike | null) => m?.company || m?.profile?.company || null;
 
-const getWhatsapp = (m?: MemberLike | null) =>
-  m?.whatsappPhone || m?.profile?.whatsappPhone || m?.profile?.whatsapp_phone || null;
-
 const getLastConnection = (m?: MemberLike | null) => m?.lastConnection || null;
 
 const formatDate = (value: string | null, withTime = false): string => {
@@ -134,7 +128,6 @@ export function MemberDetailModal({
   const position = getPosition(member);
   const department = getDepartment(member);
   const company = getCompany(member);
-  const whatsapp = getWhatsapp(member);
   const lastConnection = getLastConnection(member);
   const createdAt = getCreatedAt(member);
   const avatar = getAvatar(member);
@@ -143,7 +136,6 @@ export function MemberDetailModal({
   const rows = [
     { icon: Mail, label: "Email", value: member.email },
     { icon: Phone, label: "Teléfono", value: phone },
-    { icon: MessageCircle, label: "WhatsApp", value: whatsapp },
     { icon: CreditCard, label: "Cédula", value: cedula },
     { icon: Briefcase, label: "Cargo", value: position },
     { icon: MapPin, label: "Departamento", value: department },

@@ -44,9 +44,6 @@ export class ProfileResponseDto {
   avatar_url: string;
 
   @Expose()
-  whatsappPhone: string;
-
-  @Expose()
   company: string;
 
   /** Alias legible de `deparment`; se rellena en UsersService. */

@@ -47,16 +47,19 @@ export class UpdateUserDto {
   @ApiPropertyOptional({ description: 'User ID card' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   idCard?: string;
 
   @ApiPropertyOptional({ description: 'User position' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   position?: string;
 
   @ApiPropertyOptional({ description: 'User department' })
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   deparment?: string;
 
   @ApiPropertyOptional({ description: 'User company' })
@@ -112,14 +115,4 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   full_name?: string;
-
-  @ApiPropertyOptional({ description: 'WhatsApp phone number' })
-  @IsOptional()
-  @IsString()
-  whatsappPhone?: string;
-
-  @ApiPropertyOptional({ description: 'WhatsApp phone number (alias)' })
-  @IsOptional()
-  @IsString()
-  whatsapp_phone?: string;
 }

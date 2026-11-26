@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Loader2, Pencil, Mail, Phone, User, Save, X, Lock,
-  Crown, Briefcase, Wrench, CreditCard, MapPin, Building2, MessageCircle,
+  Crown, Briefcase, Wrench, CreditCard, MapPin, Building2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,7 +28,6 @@ interface MemberLike {
   department?: string | null;
   deparment?: string | null;
   company?: string | null;
-  whatsappPhone?: string | null;
   avatar_url?: string | null;
   is_active?: boolean;
   isActive?: boolean;
@@ -42,8 +41,6 @@ interface MemberLike {
     department?: string;
     deparment?: string;
     company?: string;
-    whatsappPhone?: string;
-    whatsapp_phone?: string;
     profilePicture?: string;
   };
 }
@@ -57,7 +54,6 @@ type UserFormData = {
   position?: string | null;
   department?: string | null;
   company?: string | null;
-  whatsappPhone?: string | null;
 };
 
 interface TeamMemberFormModalProps {
@@ -106,7 +102,6 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
     position: "",
     department: "",
     company: "",
-    whatsappPhone: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -122,8 +117,6 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
         department:
           member.department || member.profile?.department || member.profile?.deparment || member.deparment || "",
         company: member.company || member.profile?.company || "",
-        whatsappPhone:
-          member.whatsappPhone || member.profile?.whatsappPhone || member.profile?.whatsapp_phone || "",
       });
     }
   }, [member, open]);
@@ -150,7 +143,6 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
         position: formData.position || null,
         department: formData.department || null,
         company: formData.company || null,
-        whatsappPhone: formData.whatsappPhone || null,
       });
       onOpenChange(false);
     } catch (error) {
@@ -300,20 +292,6 @@ export function TeamMemberFormModal({ open, onOpenChange, member, onSubmit }: Te
                 placeholder="Ej. 12345678"
                 value={formData.idCard}
                 onChange={(e) => setFormData({ ...formData, idCard: e.target.value })}
-                className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
-              />
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
-                <span className="flex h-5 w-5 items-center justify-center rounded-md bg-primary/10">
-                  <MessageCircle className="h-3 w-3 text-primary" strokeWidth={2} />
-                </span>
-                WhatsApp
-              </Label>
-              <Input
-                placeholder="+58 412-1234567"
-                value={formData.whatsappPhone}
-                onChange={(e) => setFormData({ ...formData, whatsappPhone: e.target.value })}
                 className="h-11 text-sm bg-background border-border/60 rounded-xl focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 transition-all"
               />
             </div>

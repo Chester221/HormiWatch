@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Mail, UserRound, UserCircle, ContactRound, ShieldCheck, LifeBuoy, Save, CheckCircle, Phone } from "lucide-react";
+import { Loader2, Mail, UserRound, UserCircle, ContactRound, ShieldCheck, LifeBuoy, Save, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { usersApi } from "@/lib/api";
 import { toast } from "sonner";
@@ -17,7 +17,6 @@ export default function Profile() {
     const { user, profile, updateProfile, isManager, refreshProfile } = useAuth();
 
     const [fullName, setFullName] = useState("");
-    const [whatsappPhone, setWhatsappPhone] = useState("");
     const [idCard, setIdCard] = useState("");
     const [position, setPosition] = useState("");
     const [department, setDepartment] = useState("");
@@ -32,7 +31,6 @@ export default function Profile() {
             // Fallback: combinar name + lastName
             setFullName(`${profile.name} ${profile.lastName || ''}`.trim());
         }
-        setWhatsappPhone(profile?.whatsappPhone || "");
         setIdCard(profile?.idCard || "");
         setPosition(profile?.position || "");
         setDepartment(profile?.department || profile?.deparment || "");
@@ -69,7 +67,6 @@ export default function Profile() {
                             position: position.trim() || null,
                             deparment: department.trim() || null,
                             company: company.trim() || null,
-                            whatsappPhone: whatsappPhone.trim() || null,
                         });
                     } catch (e: any) {
                         toast.error(`Error al guardar WhatsApp: ${e?.message || "desconocido"}`);
@@ -257,29 +254,7 @@ export default function Profile() {
                                         </div>
                                     </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Completa estos datos junto con tu WhatsApp para finalizar tu perfil.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="whatsappPhone" className="text-xs font-semibold text-foreground">
-                                        Teléfono WhatsApp
-                                    </Label>
-                                    <div className="relative">
-                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                        <Input
-                                            id="whatsappPhone"
-                                            value={whatsappPhone}
-                                            onChange={(e) => setWhatsappPhone(e.target.value)}
-                                            placeholder="+58 412 000 0000"
-                                            autoComplete="tel"
-                                            className="pl-10 h-10 text-sm bg-background border-border/60 rounded-lg focus:border-[#0DA2E7]/50 transition-colors"
-                                        />
-                                    </div>
-                                    <p className="text-xs text-muted-foreground">
-                                        {isManagerOrAdmin
-                                            ? "Los administradores y líderes reciben alertas críticas por WhatsApp en este número."
-                                            : "Opcional. Se usará para alertas críticas si es necesario."}
+                                        Completa estos datos para finalizar tu perfil.
                                     </p>
                                 </div>
                             </div>

@@ -287,8 +287,6 @@ export class UsersService {
           position: userData.position,
           deparment: userData.deparment,
           company: userData.company,
-          whatsappPhone:
-            userData.whatsappPhone ?? userData.whatsapp_phone ?? undefined,
           profilePicture: profilePictureUrl,
           user: { id: savedUser.id },
           avatar_url: undefined,
@@ -384,7 +382,6 @@ export class UsersService {
       'profile.profilePicture',
       'profile.full_name',
       'profile.avatar_url',
-      'profile.whatsappPhone',
       'role.id',
       'role.name',
     ]);
@@ -738,10 +735,6 @@ export class UsersService {
         user.profile.avatar_url =
           userData.avatar_url ?? user.profile.avatar_url;
         user.profile.full_name = userData.full_name ?? user.profile.full_name;
-        if (userData.whatsappPhone !== undefined)
-          user.profile.whatsappPhone = userData.whatsappPhone;
-        if (userData.whatsapp_phone !== undefined)
-          user.profile.whatsappPhone = userData.whatsapp_phone;
 
         await manager.save(Profile, user.profile);
       });

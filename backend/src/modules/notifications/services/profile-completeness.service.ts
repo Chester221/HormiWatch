@@ -14,7 +14,7 @@ export const PROFILE_REQUIRED_FIELDS = [
   'deparment',
   'company',
   'position',
-  'whatsappPhone',
+  'phone',
 ] as const;
 
 export const PROFILE_INCOMPLETE_EVENT_PREFIX = 'profile.incomplete';
